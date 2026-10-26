@@ -452,8 +452,11 @@ export const helpEn: Help = {
         },
         {
           q: 'Why does an employee choose their own manager?',
-          a: 'Choosing a manager opens one\'s own tasks to them and gives them the right to score one\'s days, and gets nothing of '
-            + 'anyone else\'s. So the choice is for whoever the data belongs to. The chosen manager is notified, so no swap goes unseen.',
+          a: 'Choosing a manager opens to them what one sees oneself: one\'s own tasks, the tasks one takes part in and the tasks of '
+            + 'one\'s people. The manager gets nothing beyond that, except the right to score one\'s days and to dismiss one. So the '
+            + 'choice is for whoever opens their data. If managers took people themselves, there would have to be rules on who may '
+            + 'take whom, and a company structure someone keeps and checks. That is an administrator\'s job, and yartt has no '
+            + 'administrators. The chosen manager is notified, so no swap goes unseen.',
         },
         {
           q: "How do directors see each other's tasks?",
