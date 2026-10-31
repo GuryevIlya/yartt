@@ -8,7 +8,10 @@ export const helpEn: Help = {
   principles: [
     {
       title: 'A result has one owner',
-      text: 'When two people answer for a task, nobody does. So a task has one owner, and its deadline is their promise, not a wish.',
+      text: 'A task is the initiative of whoever started it: they need the result. They run the task, bring people in and may do '
+        + 'the work themselves, but only they decide whether it is done. If the doer understood the task differently, the last word '
+        + 'is with whoever needs the result. When two people answer for a task, nobody does, so a task has one owner, and its '
+        + 'deadline is their promise, not a wish.',
       instead: [
         { usual: 'A reporter and an assignee', yartt: 'An owner and participants', text: 'The owner decides when the task is done. Participants work in it but do not close it.' },
         { usual: 'Statuses', yartt: 'A deadline and "Finish"', text: 'A task is open until its owner finishes it. When the deadline passes with the task open, it is overdue, and yartt reminds the owner.' },
@@ -207,6 +210,32 @@ export const helpEn: Help = {
           ],
         },
         {
+          title: 'Find who will do it',
+          steps: [
+            'Not sure who will take it? The task stays yours anyway: you need the result. First find someone who knows the area.',
+            'Look up tasks with the same tags in Available tasks, the Closed tab too. Hover a task to see who worked in it.',
+            'In the Tags block, a tag\'s row unfolds who logged time on its tasks.',
+            'Found nobody? Bring in the manager of the team that fits as a participant and mention them in a comment with @: '
+              + '"Who of yours could take this?". They bring the right person in, and the task stays yours.',
+            'Hand the task over only if it is not really yours: say, a bug in another team\'s service, and whether it is fixed is '
+              + 'for that team to judge. You stay a participant and see the result.',
+            'Making the task public does not help here: everyone sees it, but nobody is notified of it. A task is made public when '
+              + 'it concerns everyone.',
+          ],
+        },
+        {
+          title: 'Hand out the work',
+          steps: [
+            'The task stays yours even when others do all the work: whether it is done is yours to decide. Bring people in as participants.',
+            'In a comment, tell each one what is needed and mention them with @: "@Ivan, will you do item 1?", "@Maria, could you '
+              + 'look at items 2 and 3?". The request lands in their Waiting for me, and you see the answer in Waiting for others.',
+            'Taking it up, a participant puts hours into "My plan" and says what they are for. Participants shows how much each '
+              + 'one has left, and the task\'s feed shows who took what.',
+            'If a part needs a deadline of its own, the participant makes a task of their own with "New task" under "Waits for" '
+              + '(the diagram above). When they close it, you learn of it in Waiting for me.',
+          ],
+        },
+        {
           title: 'Close a task',
           steps: [
             'Only the owner closes a task, with "Finish" on its page or in Waiting for me. It never closes by itself at its deadline.',
@@ -269,8 +298,6 @@ export const helpEn: Help = {
               + 'Waiting for me, and they close it with a reply or with "No reply needed".',
             'To tell everyone in the task something, pick "All participants" in the mention and, if need be, leave some out.',
             'Only those in the task can be mentioned; in a public task, anyone. Add the others first.',
-            'A participant plans their hours in this task. If they need a deadline of their own, they make a task of their own '
-              + 'with "New task" under "Waits for" on the task\'s page.',
           ],
         },
         {

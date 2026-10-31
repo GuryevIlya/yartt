@@ -21,6 +21,11 @@ test.describe('the guide', () => {
     await expect(page.getByRole('region', { name: 'Связи вместо иерархии' }).getByText('Зависимость «Ждёт»', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Почему задачу закрывает только владелец, а не срок?' }).click();
     await expect(page.getByText(/дедлайн не знает, сделана ли работа/)).toBeVisible();
+    // Handing out the work and finding who will do it are use cases of their own: the task stays the owner's.
+    await page.getByRole('button', { name: 'Раздать работу' }).click();
+    await expect(page.getByText(/«@Иван, сделаешь п. 1\?»/)).toBeVisible();
+    await page.getByRole('button', { name: 'Найти, кто сделает' }).click();
+    await expect(page.getByText(/Публичная задача здесь не поможет/)).toBeVisible();
 
     await sql`UPDATE employee SET locale = 'en' WHERE email = 'olga@example.com'`;
     await page.reload();
