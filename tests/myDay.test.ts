@@ -425,9 +425,11 @@ describe('history', () => {
   test('days without activity are skipped; earlier days are on further pages', async () => {
     const me = await createEmployee();
     const api = await client(me.id);
-    // Ten past days with a confirmed shift each, every other day.
+    // Ten past days with a confirmed shift each, every other day — at noon in UTC, the employee's
+    // time zone: an hour counted back from now would cross midnight when run late in the evening.
+    const noon = Math.floor(Date.now() / 86_400_000) * 86_400_000 + 12 * 3_600_000;
     for (let i = 1; i <= 10; i++) {
-      const startedAt = new Date(Date.now() - i * 2 * 86_400_000);
+      const startedAt = new Date(noon - i * 2 * 86_400_000);
       await api.Work.add({ startedAt, endedAt: new Date(startedAt.getTime() + 3_600_000), about: null });
     }
     const first = await api.MyDay.history({ page: 1 });
