@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Mentionable, People, Period, Person } from '#shared/observer.ts';
-import { sql } from '../pg.ts';
+import { sql, type Sql } from '../pg.ts';
 import { assertCanSee } from './Task.ts';
 
 export const PAGE_SIZE = 10;
@@ -99,14 +99,20 @@ export async function list(viewerId: number, taskId: number, page: number): Prom
 }
 
 /** Whom a comment may mention: a private task's active participants, or anyone in a public one. */
-export async function mentionable(viewerId: number, taskId: number): Promise<Mentionable> {
-  await assertCanSee(taskId, viewerId);
-  const [pub] = Bool.array().parse(await sql`SELECT is_public(${taskId}) AS value`);
-  if (pub!.value) return { everyone: true, ids: [] };
-  const rows = z.object({ id: z.number() }).array().parse(await sql`
+export async function mentionable(viewerId: number, taskId: number, db: Sql = sql): Promise<Mentionable> {
+  await assertCanSee(taskId, viewerId, db);
+  const [pub] = Bool.array().parse(await db`SELECT is_public(${taskId}) AS value`);
+  const rows = z.object({ id: z.number() }).array().parse(await db`
     SELECT value AS id FROM observer WHERE task_id = ${taskId} AND added_at IS NOT NULL AND deleted_at IS NULL
   `);
-  return { everyone: false, ids: rows.map((r) => r.id) };
+  // Everyone in the task, or everyone working in a public one: people, not bots (decision 95).
+  const people = z.object({ id: z.number() }).array().parse(await db`
+    SELECT id FROM employee
+     WHERE kind = 'human' AND dismissed_at IS NULL
+       AND (${pub!.value} OR id = ANY(${rows.map((r) => r.id)}))
+     ORDER BY id
+  `);
+  return { everyone: pub!.value, ids: pub!.value ? [] : rows.map((r) => r.id), people: people.map((r) => r.id) };
 }
 
 export async function add(actorId: number, taskId: number, employeeId: number): Promise<void> {

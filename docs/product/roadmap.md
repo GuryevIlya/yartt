@@ -30,17 +30,7 @@ it is decided. Proposals wait for a decision in their own section.
 
 In this order after stage 6 (S — a day, M — a few days, L — a week or more).
 
-- [ ] **Mentions closed without a reply, accepted by their author, and
-  for everyone** (decision 95), M. Migration `0.5-0.6`: `mention.created_at`
-  and `accepted_at`, the close trigger no longer asks for a reply, the
-  author adds mentions to a comment later and deletes one until its first
-  reaction; "No reply needed" for the mentioned, "Accepted" (one per
-  comment) and the closed ones in Waiting for others for the author;
-  "All participants" with exceptions (every employee in a public task),
-  "all but …" in the feed; the reaction in My team from `created_at` to
-  the first reply or the closing; no copy to a manager mentioned in the
-  same comment. The guide and the demo data in both languages.
-
+Nothing approved is waiting.
 
 ## Decided against
 

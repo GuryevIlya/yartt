@@ -44,7 +44,7 @@ export type DayStats = z.infer<typeof DayStats>;
 export const MemberDay = DayStats.extend({
   /** The day's shifts: from a shift's end to its record. */
   recordDelayMinutes: z.number().nullable(),
-  /** Mentions of the day: working minutes to the first reply. */
+  /** Mentions of the day: working minutes to the first reaction. */
   replyMinutes: z.number().nullable(),
   /** As a manager: the reports' scores of this day, from its end to the score. */
   scoreWaitMinutes: z.number().nullable(),
@@ -76,7 +76,8 @@ export const Member = z.object({
   recordDelayMinutes: z.number().nullable(),
   /**
    * The median of their working minutes (shifts only) from a mention to
-   * their first reply in the task; NULL — none answered, or no timesheet.
+   * their first reaction — a reply or the closing, whichever came first
+   * (decision 95); NULL — none reacted to, or no timesheet.
    */
   replyMinutes: z.number().nullable(),
   /** As a manager: the median of minutes from the end of a report's day to their score of it; NULL — scored none. */
@@ -85,7 +86,7 @@ export const Member = z.object({
   backlogMinutes: z.number().int(),
   /** How the backlog changed over the range (now minus its start): planned work growing or melting. */
   backlogGrowthMinutes: z.number().int(),
-  /** Mentions of them in the range with no reply yet. */
+  /** Mentions of them in the range with no reaction yet: neither a reply nor the closing. */
   unanswered: z.number().int(),
   /**
    * When they were last active — opened a screen or used a session —

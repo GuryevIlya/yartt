@@ -127,7 +127,7 @@ export const helpEn: Help = {
           title: 'Work through Waiting for me',
           steps: [
             'Everything that needs your reaction sits under the line of its task. The tasks go by deadline: the overdue and the nearest on top.',
-            'A mention: reply and press "Done".',
+            'A mention: reply and press "Done". If there is nothing to say, press "No reply needed": the author sees you closed it without a reply.',
             'An access request to your task: approve or reject it.',
             'Whatever is new in your task is one block: comments, new links, tasks it waits for that are done, and its '
               + 'deadline a day ahead. The same block is on top of the task\'s page.',
@@ -137,6 +137,8 @@ export const helpEn: Help = {
             'Your task\'s deadline has passed: what to do is under "Close a task".',
             'Waiting for others, below, is the other way round: your requests and mentions waiting for others. The longest waiting '
               + 'on top; a request can be withdrawn right there.',
+            'A mention stays in Waiting for others until you press "Accepted": you see whether the person replied or closed it '
+              + 'without a reply. If something more is needed, mention them again, and the earlier mention is accepted by itself.',
           ],
         },
         {
@@ -223,6 +225,8 @@ export const helpEn: Help = {
             'A comment is formatted text with images and files. # attaches a task, @ mentions a participant, and #12 in the text becomes a link.',
             'After "Send" a comment can be pulled back into editing for a few seconds. Then it is never changed or deleted.',
             '"Reply" starts a thread under a comment; the feed keeps a mark at the moment of the reply.',
+            'Forgot to mention someone? The @ under your comment adds them. A mention can be taken back until the person has '
+              + 'replied to it or closed it.',
             'An unfinished comment, form or edit stays as a draft when you leave the page.',
           ],
         },
@@ -261,8 +265,9 @@ export const helpEn: Help = {
           steps: [
             'Any participant adds participants, like a copy in an email. The owner removes whoever is not needed.',
             'A participant gets access, not an order: they see the task and are not notified of comments.',
-            'Need an answer or an action? Mention the person (@) and say what is needed. The request lands in their Waiting for me '
-              + 'and is closed by their reply and "Done".',
+            'Need an answer or an action? Mention the person in a comment with @ and say what is needed. The request lands in their '
+              + 'Waiting for me, and they close it with a reply or with "No reply needed".',
+            'To tell everyone in the task something, pick "All participants" in the mention and, if need be, leave some out.',
             'Only those in the task can be mentioned; in a public task, anyone. Add the others first.',
             'A participant plans their hours in this task. If they need a deadline of their own, they make a task of their own '
               + 'with "New task" under "Waits for" on the task\'s page.',
@@ -433,10 +438,10 @@ export const helpEn: Help = {
             + 'and notified of it. The owner removes whoever is not needed, so a task never spreads quietly.',
         },
         {
-          q: 'Why can a mention not be closed without a reply?',
-          a: 'Whoever mentioned must know the request reached the person. "Done" without a reply leaves them guessing: read or not, '
-            + 'taken up or not. A short reply is enough: "got it, I will look on Thursday". To only let someone know, add them as '
-            + 'a participant without a mention.',
+          q: 'Why press "Accepted" if the person has closed the mention already?',
+          a: 'A mention is a request, and whoever asked should learn what came of it. The person mentioned may close it without a '
+            + 'reply: sometimes a message only needs reading. So a closed mention does not vanish; it waits in Waiting for others, '
+            + 'marked whether there was a reply. If there was none and one is needed, mention the person again.',
         },
         {
           q: 'How does "Done" differ from "No intervention needed"?',

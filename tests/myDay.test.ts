@@ -11,7 +11,7 @@ const comment = (taskId: number, html: string, mentionIds: number[] = []) =>
   ({ taskId, html, replyToId: null, files: [], mentionIds, taskIds: [] });
 
 describe('waiting', () => {
-  test('my requests not answered and my open mentions of others, the longest waiting first, with their answers', async () => {
+  test('my requests not answered and my mentions of others not accepted, the longest waiting first, with their answers', async () => {
     const me = await createEmployee();
     const owner = await createEmployee();
     const helper = await createEmployee();
@@ -24,15 +24,16 @@ describe('waiting', () => {
     const asked = await api.Comment.create(comment(mine, '<p>Can you check?</p>', [helper.id]));
     expect(await api.MyDay.waiting()).toMatchObject([
       { kind: 'request', task: { id: theirs } },
-      { kind: 'mention', task: { id: mine }, commentId: asked, employeeId: helper.id, excerpt: 'Can you check?', replies: [] },
+      { kind: 'mention', task: { id: mine }, commentId: asked, excerpt: 'Can you check?', people: [{ employeeId: helper.id, closedAt: null, replies: [] }] },
     ]);
 
-    // Answered: it stays until they press "Done"; the request is gone once withdrawn.
+    // Answered and closed: it stays until I accept it (decision 95); the request is gone once withdrawn.
     const helperApi = await client(helper.id);
     const answer = await helperApi.Comment.create({ ...comment(mine, '<p>Checked</p>'), replyToId: asked });
     await api.Observer.withdraw({ taskId: theirs });
-    expect(await api.MyDay.waiting()).toMatchObject([{ kind: 'mention', replies: [{ id: answer, excerpt: 'Checked' }] }]);
     await helperApi.Comment.closeMention({ taskId: mine, commentId: asked });
+    expect(await api.MyDay.waiting()).toMatchObject([{ kind: 'mention', people: [{ closedAt: expect.any(Date), replies: [{ id: answer, excerpt: 'Checked' }] }] }]);
+    await api.Comment.acceptMentions({ taskId: mine, commentId: asked });
     expect(await api.MyDay.waiting()).toEqual([]);
   });
 });
@@ -134,7 +135,7 @@ describe('todo', () => {
     expect((await api.MyDay.current({ tab: 'closed', page: 1 })).items.filter((t) => t.id === task)).toEqual([]);
   });
 
-  test('an open mention stays until "Done"', async () => {
+  test('an open mention stays until "Done" or "No reply needed"', async () => {
     const owner = await createEmployee();
     const helper = await createEmployee();
     const id = await createTask(owner.id);
@@ -145,10 +146,9 @@ describe('todo', () => {
     expect(await api.MyDay.todo()).toMatchObject([
       { kind: 'mention', task: { id }, commentId, authorId: owner.id, excerpt: 'Please look', replies: [] },
     ]);
-    // A comment elsewhere in the task is not an answer: "Done" still waits.
+    // A comment elsewhere in the task is not an answer.
     await api.Comment.create(comment(id, '<p>Something else</p>'));
     expect(await api.MyDay.todo()).toMatchObject([{ kind: 'mention', replies: [] }]);
-    await expect(api.Comment.closeMention({ taskId: id, commentId })).rejects.toMatchObject({ message: 'mention_needs_reply' });
     // Every reply to it shows inside the mention, oldest first.
     const first = await api.Comment.create({ ...comment(id, '<p>On it</p>'), replyToId: commentId });
     const second = await api.Comment.create({ ...comment(id, '<p>Done, see the file</p>'), replyToId: commentId });

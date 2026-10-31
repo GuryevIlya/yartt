@@ -74,7 +74,7 @@ persona goal it serves. Status: **now** — stage one, **next** — stage two,
 |---|---|---|
 | Comments in rich text with images, never edited or deleted, with a few seconds to take one back | everyone: a reliable record | now (done) |
 | Reply to a comment; replies live in a thread under the first comment, a line in the feed marks each | everyone: keep threads readable | now (done) |
-| Attach a colleague (mention) — a participant of a private task, anyone in a public one; it stays in their TODO until they close it | Pavel: ask the right person | now (done) |
+| Attach a colleague (mention) — a participant of a private task, anyone in a public one, or all participants at once; it stays in their TODO until they close it, with a reply or without one, and in the author's Waiting for others until the author accepts it | Pavel: ask the right person; Marina: tell the whole task and know who read it | now (done) |
 | Attach another task | everyone: link related work without dependencies | now (done) |
 | Attachments with deduplication | everyone: share files where the discussion is | now (done) |
 | Notifications and sign-in links by email, in each person's language | everyone: works right after installation | now (done) |
@@ -95,7 +95,7 @@ its manager wants that.
 | Timesheet: a shift suggested from the first and last activity, confirmed with one click | Pavel: log the day in seconds | now (done) |
 | Log own time to a task for a day | Marina: see where effort goes | now (done) |
 | Own time left per task, next to the time spent, with what is left to do in one's words | Marina: compare plans with reality | now (done) |
-| My day: TODO, what I wait for from others (my requests, my open mentions), current tasks (mine and others), today and the last day before it — the ribbon of shifts, visits and what was done, every task once; all days in History | Pavel: know what to do next; log the day in seconds | now (done) |
+| My day: TODO, what I wait for from others (my requests, my mentions not accepted yet), current tasks (mine and others), today and the last day before it — the ribbon of shifts, visits and what was done, every task once; all days in History | Pavel: know what to do next; log the day in seconds | now (done) |
 | Employee page: their days and scores, seen by the employee and managers above | Marina: honest feedback with facts | now (done) |
 | Score a past day of a direct report on their page, 0–100, with an optional reason; correct it later, every version is emailed | Marina: honest feedback with facts | now (done) |
 | Workload and weighted score for any period, with a chart by day or week | Marina, Oleg: workload and quality side by side | now (done) |

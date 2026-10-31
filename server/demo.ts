@@ -74,12 +74,14 @@ async function todayAgo(employeeId: number, minutes: number): Promise<Date> {
 }
 const daysAhead = (days: number) => new Date(Date.now() + days * 86_400_000);
 
-const comment = (taskId: number, html: string, extra: { mentionIds?: number[]; taskIds?: number[]; replyToId?: number; files?: { id: number; name: string }[] } = {}) => ({
+const comment = (taskId: number, html: string, extra: { mentionIds?: number[]; everyone?: boolean; taskIds?: number[]; replyToId?: number; files?: { id: number; name: string }[] } = {}) => ({
   taskId,
   html,
   replyToId: extra.replyToId ?? null,
   files: extra.files ?? [],
   mentionIds: extra.mentionIds ?? [],
+  everyone: extra.everyone ?? false,
+  exceptIds: [],
   taskIds: extra.taskIds ?? [],
 });
 
@@ -322,6 +324,9 @@ export async function seedDemo(lang: DemoLanguage): Promise<void> {
   const mockup = await P.Comment.create(comment(site, c.mockup(`/api/attachments/${image}`), { files: [{ id: file, name: c.csvName }] }));
   await I.Comment.create(comment(site, c.carouselAsk, { replyToId: mockup }));
   await P.Comment.create(comment(site, c.carouselDone, { mentionIds: [marina] }));
+  // I tell everyone in the task; Pavel closes it without a reply, and it waits in my Waiting for others for "Accepted".
+  const moved = await I.Comment.create(comment(site, c.demoMoved, { everyone: true }));
+  await P.Comment.closeMention({ taskId: site, commentId: moved });
   await P.Comment.create(comment(auth, c.auth, { taskIds: [site] }));
 
   await M.Comment.create(comment(stock, c.stockSign, { mentionIds: [me] }));

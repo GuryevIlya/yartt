@@ -3,6 +3,7 @@ import type { Comment, CommentBase, CreateCommentInput, Feed, FeedFilter, FeedIt
 import { AppError } from '../errors.ts';
 import { cleanHtml, plainText } from '../html.ts';
 import { sql, type Sql } from '../pg.ts';
+import { mentionable } from './Observer.ts';
 import { assertCanSee, assertReadable, headers } from './Task.ts';
 
 export const PAGE_SIZE = 20;
@@ -37,7 +38,9 @@ const FileRow = z.object({ id: z.number(), size: z.number(), mime: z.string(), p
 const MentionRow = z.object({
   commentId: z.number(),
   value: z.number(),
+  createdAt: z.date(),
   closedAt: z.date().nullable(),
+  acceptedAt: z.date().nullable(),
 });
 const ReplyRow = z.object({ taskId: z.number(), commentId: z.number(), employeeId: z.number(), id: z.number(), createdAt: z.date(), value: z.string() });
 const TaskMentionRow = z.object({ commentId: z.number(), value: z.number() });
@@ -245,7 +248,7 @@ async function load(viewerId: number, taskId: number, ids: number[]): Promise<Ma
     FileRow.array().parse(await sql`SELECT id, size, mime, purged_at, uploaded_by, held_by @> ARRAY[${viewerId}::int] AS kept FROM attachment WHERE id = ANY(${fileIds})`).map((f) => [f.id, f]),
   );
   const mentions = MentionRow.array().parse(await sql`
-    SELECT m.comment_id, m.value, m.closed_at
+    SELECT m.comment_id, m.value, m.created_at, m.closed_at, m.accepted_at
       FROM mention m
      WHERE m.task_id = ${taskId} AND m.comment_id = ANY(${ids}) ORDER BY m.value
   `);
@@ -270,7 +273,9 @@ async function load(viewerId: number, taskId: number, ids: number[]): Promise<Ma
     }),
     mentions: mentions.filter((m) => m.commentId === r.id).map((m) => ({
       employeeId: m.value,
+      createdAt: m.createdAt,
       closedAt: m.closedAt,
+      acceptedAt: m.acceptedAt,
       replies: answers.get(replyKey(taskId, m.commentId, m.value)) ?? [],
     })),
     tasks: taskMentions.filter((m) => m.commentId === r.id).flatMap((m) => tasks.get(m.value) ?? []),
@@ -279,9 +284,11 @@ async function load(viewerId: number, taskId: number, ids: number[]): Promise<Ma
 }
 
 /**
- * Leaves a comment. Mentions in a private task make the mentioned employees
- * observers (trigger). Notifies the owner, the mentioned employees and the
- * owners of attached tasks — never the author.
+ * Leaves a comment. Notifies the owner, the mentioned employees and the
+ * owners of attached tasks — never the author. "All participants" mentions
+ * every person in the task but the author and the exceptions (decision 95);
+ * someone away is copied to their manager unless the manager is mentioned
+ * here too.
  */
 export async function create(authorId: number, input: CreateCommentInput): Promise<number> {
   const clean = cleanHtml(input.html);
@@ -301,10 +308,13 @@ export async function create(authorId: number, input: CreateCommentInput): Promi
     `);
     const commentId = row!.id;
 
-    const mentionIds = [...new Set(input.mentionIds)];
+    const everyone = input.everyone ? (await mentionable(authorId, input.taskId, db)).people : [];
+    const mentionIds = [...new Set([...input.mentionIds, ...everyone.filter((id) => id !== authorId && !input.exceptIds.includes(id))])];
     for (const employeeId of mentionIds) {
       await db`INSERT INTO mention (task_id, comment_id, value) VALUES (${input.taskId}, ${commentId}, ${employeeId})`;
-      await db`SELECT notify(${employeeId}, ${input.taskId}, ${db.json({ kind: 'mention', by: authorId, commentId })})`;
+    }
+    for (const employeeId of mentionIds) {
+      await db`SELECT notify(${employeeId}, ${input.taskId}, ${db.json({ kind: 'mention', by: authorId, commentId })}, ${mentionIds}::int[])`;
     }
 
     for (const taskId of new Set(input.taskIds)) {
@@ -323,7 +333,45 @@ export async function create(authorId: number, input: CreateCommentInput): Promi
   });
 }
 
-/** "Done": the mentioned employee closes their own mention, once they replied (trigger). */
+/** The comment, if it is the author's: only they add, delete and accept its mentions. */
+async function assertAuthor(authorId: number, taskId: number, commentId: number, db: Sql = sql): Promise<void> {
+  await assertCanSee(taskId, authorId, db);
+  const rows = z.object({ createdBy: z.number() }).array().parse(await db`
+    SELECT created_by FROM comment WHERE task_id = ${taskId} AND id = ${commentId}
+  `);
+  if (rows.length === 0) throw new AppError('not_found');
+  if (rows[0]!.createdBy !== authorId) throw new AppError('forbidden');
+}
+
+/** The author mentions someone in a comment already left: counted from now, notified as usual. */
+export async function addMention(authorId: number, taskId: number, commentId: number, employeeId: number): Promise<void> {
+  await sql.begin(async (tx) => {
+    const db = tx as unknown as Sql;
+    await assertAuthor(authorId, taskId, commentId, db);
+    await db`INSERT INTO mention (task_id, comment_id, value) VALUES (${taskId}, ${commentId}, ${employeeId})`;
+    await db`SELECT notify(${employeeId}, ${taskId}, ${db.json({ kind: 'mention', by: authorId, commentId })})`;
+  });
+}
+
+/** The author takes a mention back, until its first reaction (trigger). */
+export async function removeMention(authorId: number, taskId: number, commentId: number, employeeId: number): Promise<void> {
+  await sql.begin(async (tx) => {
+    const db = tx as unknown as Sql;
+    await assertAuthor(authorId, taskId, commentId, db);
+    const rows = await db`
+      DELETE FROM mention WHERE task_id = ${taskId} AND comment_id = ${commentId} AND value = ${employeeId} RETURNING value
+    `;
+    if (rows.length === 0) throw new AppError('not_found');
+  });
+}
+
+/** "Accepted": the author accepts every mention of the comment with a reaction (db.sql, accept_mentions). */
+export async function acceptMentions(authorId: number, taskId: number, commentId: number): Promise<void> {
+  await assertCanSee(taskId, authorId);
+  await sql`SELECT accept_mentions(${taskId}, ${commentId}, ${authorId})`;
+}
+
+/** "Done" or "No reply needed": the mentioned employee closes their own mention, a reply or not (decision 95). */
 export async function closeMention(employeeId: number, taskId: number, commentId: number): Promise<void> {
   const rows = await sql`
     UPDATE mention SET closed_at = NOW()
@@ -337,7 +385,7 @@ export const replyKey = (taskId: number, commentId: number, employeeId: number) 
 
 /**
  * The answers of each mention, oldest first: the replies to the mentioning
- * comment by the person mentioned. Keyed by replyKey().
+ * comment by the person mentioned, since they were mentioned. Keyed by replyKey().
  */
 export async function mentionReplies(keys: { taskId: number; commentId: number; employeeId: number }[]): Promise<Map<string, MentionReply[]>> {
   if (keys.length === 0) return new Map();
@@ -345,7 +393,9 @@ export async function mentionReplies(keys: { taskId: number; commentId: number; 
     SELECT m.task_id, m.comment_id, m.employee_id, r.id, r.created_at, r.value
       FROM unnest(${keys.map((k) => k.taskId)}::int[], ${keys.map((k) => k.commentId)}::int[], ${keys.map((k) => k.employeeId)}::int[])
            AS m(task_id, comment_id, employee_id)
+      JOIN mention mm ON mm.task_id = m.task_id AND mm.comment_id = m.comment_id AND mm.value = m.employee_id
       JOIN comment r ON r.task_id = m.task_id AND r.reply_to_id = m.comment_id AND r.created_by = m.employee_id
+                    AND r.created_at >= mm.created_at
      ORDER BY r.id
   `);
   const result = new Map<string, MentionReply[]>();

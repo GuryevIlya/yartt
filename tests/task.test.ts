@@ -10,7 +10,7 @@ async function createTask(ownerId: number): Promise<number> {
 }
 
 async function notifications(employeeId: number) {
-  return (await sql<{ payload: { kind: string; by?: number } }[]>`
+  return (await sql<{ payload: { kind: string; by?: number; for?: number } }[]>`
     SELECT payload FROM notification WHERE employee_id = ${employeeId} ORDER BY id
   `).map((n) => n.payload);
 }
@@ -139,13 +139,13 @@ describe('mentions', () => {
     await expect(api.Comment.create(comment(id, '<p>Help?</p>', [colleague.id])))
       .rejects.toMatchObject({ message: 'mention_not_participant' });
     expect(await (await client(colleague.id)).Task.get({ id })).toMatchObject({ access: 'none' });
-    expect(await api.Observer.mentionable({ taskId: id })).toEqual({ everyone: false, ids: [owner.id] });
+    expect(await api.Observer.mentionable({ taskId: id })).toEqual({ everyone: false, ids: [owner.id], people: [owner.id] });
     await api.Observer.add({ taskId: id, employeeId: colleague.id });
     await api.Comment.create(comment(id, '<p>Help?</p>', [colleague.id]));
     expect((await api.Observer.mentionable({ taskId: id })).ids.sort()).toEqual([owner.id, colleague.id].sort());
 
     await api.Task.makePublic({ id });
-    expect(await api.Observer.mentionable({ taskId: id })).toEqual({ everyone: true, ids: [] });
+    expect(await api.Observer.mentionable({ taskId: id })).toMatchObject({ everyone: true, ids: [] });
     const outsider = await createEmployee();
     await api.Comment.create(comment(id, '<p>You too</p>', [outsider.id]));
     expect(await (await client(outsider.id)).Task.get({ id })).toMatchObject({ access: 'public', isPublic: true });
@@ -195,14 +195,115 @@ describe('mentions', () => {
       .toEqual(['deadline', 'comment', 'comment']);
 
     await expect(api.Comment.closeMention({ taskId: id, commentId: asked })).rejects.toMatchObject({ message: 'not_found' });
-    // No "Done" without a word: the mentioned one replies first.
     const devApi = await client(dev.id);
-    await expect(devApi.Comment.closeMention({ taskId: id, commentId: asked })).rejects.toMatchObject({ message: 'mention_needs_reply' });
     await devApi.Comment.create({ ...comment(id, '<p>Checked</p>'), replyToId: asked });
     const mention = (await devApi.Comment.list({ taskId: id, filter: 'mentions', page: 1 })).items[0];
     expect(mention?.kind === 'comment' && mention.mentions[0]).toMatchObject({ employeeId: dev.id, replies: [{ excerpt: expect.any(String) }] });
     await devApi.Comment.closeMention({ taskId: id, commentId: asked });
     expect((await api.Comment.list({ taskId: id, filter: 'mentions', page: 1 })).items).toEqual([]);
+  });
+});
+
+describe('mentions closed and accepted (decision 95)', () => {
+  const waitingFor = async (api: Awaited<ReturnType<typeof client>>) =>
+    (await api.MyDay.waiting()).flatMap((i) => (i.kind === 'mention' ? [i] : []));
+
+  test('closed without a reply, it waits for the author\'s "Accepted"', async () => {
+    const owner = await createEmployee();
+    const a = await createEmployee();
+    const b = await createEmployee();
+    const id = await createTask(owner.id);
+    const api = await client(owner.id);
+    for (const e of [a, b]) await api.Observer.add({ taskId: id, employeeId: e.id });
+    const asked = await api.Comment.create(comment(id, '<p>Plan changed</p>', [a.id, b.id]));
+
+    await (await client(a.id)).Comment.closeMention({ taskId: id, commentId: asked });
+    await (await client(b.id)).Comment.create({ ...comment(id, '<p>Seen</p>'), replyToId: asked });
+    expect(await waitingFor(api)).toMatchObject([{
+      commentId: asked,
+      people: [{ employeeId: a.id, closedAt: expect.any(Date), replies: [] }, { employeeId: b.id, closedAt: null, replies: [{ excerpt: 'Seen' }] }],
+    }]);
+    await expect((await client(a.id)).Comment.acceptMentions({ taskId: id, commentId: asked })).rejects.toMatchObject({ message: 'forbidden' });
+
+    // One "Accepted" takes both: the closed one and the answered one, which it closes.
+    await api.Comment.acceptMentions({ taskId: id, commentId: asked });
+    expect(await waitingFor(api)).toEqual([]);
+    expect(await (await client(b.id)).MyDay.todo()).toEqual([]);
+    const [item] = (await api.Comment.list({ taskId: id, filter: 'all', page: 1 })).items.filter((i) => i.kind === 'comment' && i.id === asked);
+    expect(item?.kind === 'comment' && item.mentions.every((m) => m.acceptedAt && m.closedAt)).toBe(true);
+  });
+
+  test('a new mention of the person accepts the earlier one with a reaction', async () => {
+    const owner = await createEmployee();
+    const dev = await createEmployee();
+    const id = await createTask(owner.id);
+    const api = await client(owner.id);
+    await api.Observer.add({ taskId: id, employeeId: dev.id });
+    const first = await api.Comment.create(comment(id, '<p>Can you?</p>', [dev.id]));
+    const unanswered = await api.Comment.create(comment(id, '<p>And this?</p>', [dev.id]));
+    await (await client(dev.id)).Comment.create({ ...comment(id, '<p>Tomorrow</p>'), replyToId: first });
+
+    const again = await api.Comment.create(comment(id, '<p>Tomorrow is late, today please</p>', [dev.id]));
+    // The answered one is accepted; the one with no reaction yet stays open.
+    expect((await waitingFor(api)).map((i) => i.commentId)).toEqual([unanswered, again]);
+  });
+
+  test('the author adds a mention later and takes it back until a reaction', async () => {
+    const owner = await createEmployee();
+    const dev = await createEmployee();
+    const other = await createEmployee();
+    const id = await createTask(owner.id);
+    const api = await client(owner.id);
+    for (const e of [dev, other]) await api.Observer.add({ taskId: id, employeeId: e.id });
+    const said = await api.Comment.create(comment(id, '<p>Release on Friday</p>'));
+
+    await expect((await client(other.id)).Comment.addMention({ taskId: id, commentId: said, employeeId: dev.id }))
+      .rejects.toMatchObject({ message: 'forbidden' });
+    await api.Comment.addMention({ taskId: id, commentId: said, employeeId: dev.id });
+    expect(await (await client(dev.id)).MyDay.todo()).toMatchObject([{ kind: 'mention', commentId: said }]);
+    expect((await notifications(dev.id)).filter((n) => n.kind === 'mention')).toHaveLength(1);
+    await api.Comment.removeMention({ taskId: id, commentId: said, employeeId: dev.id });
+    expect(await (await client(dev.id)).MyDay.todo()).toEqual([]);
+
+    // A reply made before the mention does not answer it; one after does, and it can no longer be taken back.
+    await (await client(other.id)).Comment.create({ ...comment(id, '<p>Earlier</p>'), replyToId: said });
+    await api.Comment.addMention({ taskId: id, commentId: said, employeeId: other.id });
+    expect((await waitingFor(api))[0]?.people).toMatchObject([{ employeeId: other.id, replies: [] }]);
+    await (await client(other.id)).Comment.create({ ...comment(id, '<p>Fine</p>'), replyToId: said });
+    await expect(api.Comment.removeMention({ taskId: id, commentId: said, employeeId: other.id }))
+      .rejects.toMatchObject({ message: 'mention_answered' });
+  });
+
+  test('"All participants" mentions the people of the task but the author, the exceptions and bots', async () => {
+    const owner = await createEmployee();
+    const a = await createEmployee();
+    const b = await createEmployee();
+    const c = await createEmployee();
+    const id = await createTask(owner.id);
+    const api = await client(owner.id);
+    for (const e of [a, b, c]) await api.Observer.add({ taskId: id, employeeId: e.id });
+    const { id: botId } = await api.Bot.create({ fullName: 'CI', pronoun: null, about: null, permissions: ['comment'], webhookUrl: null });
+    await api.Observer.add({ taskId: id, employeeId: botId });
+
+    const all = await (await client(a.id)).Comment.create({ ...comment(id, '<p>Everyone: moved to Monday</p>'), everyone: true, exceptIds: [c.id] });
+    const [item] = await waitingFor(await client(a.id));
+    expect(item).toMatchObject({ commentId: all });
+    expect(item!.people.map((p) => p.employeeId).sort()).toEqual([owner.id, b.id].sort());
+  });
+
+  test('a manager mentioned in the same comment gets no copy for a report away', async () => {
+    const lead = await createEmployee();
+    const dev = await createEmployee({ managerId: lead.id });
+    const owner = await createEmployee();
+    const id = await createTask(owner.id);
+    const api = await client(owner.id);
+    await api.Observer.add({ taskId: id, employeeId: dev.id });
+    await sql`UPDATE human SET next_day = CURRENT_DATE + 7 WHERE employee_id = ${dev.id}`;
+
+    await api.Comment.create(comment(id, '<p>Both of you</p>', [dev.id, lead.id]));
+    expect((await notifications(lead.id)).filter((n) => n.kind === 'mention')).toEqual([expect.not.objectContaining({ for: dev.id })]);
+    await api.Comment.create(comment(id, '<p>Only you</p>', [dev.id]));
+    expect((await notifications(lead.id)).filter((n) => n.kind === 'mention' && n.for === dev.id)).toHaveLength(1);
   });
 });
 

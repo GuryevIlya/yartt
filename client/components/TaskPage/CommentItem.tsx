@@ -10,6 +10,7 @@ import { useTRPC } from '#client/hooks/trpc.ts';
 import { attachmentUrl } from '#client/hooks/upload.ts';
 import EmployeeAvatar from '../App/EmployeeAvatar.tsx';
 import RichView from '../App/RichView.tsx';
+import Mentions from './Mentions.tsx';
 import TaskLine from './TaskLine.tsx';
 
 /**
@@ -30,7 +31,6 @@ export default function CommentItem(p: {
   const format = useFormat();
   const employees = useEmployees();
   const refresh = useTaskRefresh();
-  const close = useMutation(trpc.Comment.closeMention.mutationOptions({ onSuccess: refresh }));
   const keep = useMutation(trpc.Attachment.keep.mutationOptions({ onSuccess: refresh }));
   const c = p.comment;
   const author = employees.get(c.authorId);
@@ -62,32 +62,9 @@ export default function CommentItem(p: {
           </Typography>
         )}
         <RichView html={c.html} />
-        {(c.mentions.length > 0 || c.files.length > 0) && (
+        {(c.mentions.length > 0 || c.files.length > 0 || c.authorId === me.id) && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
-            {c.mentions.map((m) => (
-              <Stack key={m.employeeId} direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                <Chip
-                  size="small"
-                  color={m.closedAt ? 'default' : 'primary'}
-                  variant={m.closedAt ? 'outlined' : 'filled'}
-                  label={`@${name(m.employeeId)} · ${m.closedAt ? t('task.feed.closed') : t('task.feed.open')}`}
-                />
-                {m.employeeId === me.id && !m.closedAt && (
-                  <Tooltip title={m.replies.length ? '' : t('task.feed.replyFirst')}>
-                    <span>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        disabled={!m.replies.length || close.isPending}
-                        onClick={() => close.mutate({ taskId: p.taskId, commentId: c.id })}
-                      >
-                        {t('task.feed.done')}
-                      </Button>
-                    </span>
-                  </Tooltip>
-                )}
-              </Stack>
-            ))}
+            <Mentions taskId={p.taskId} comment={c} />
             {c.files.map((f) => (f.purgedAt ? (
               // Deleted to free space (decision 84): whoever uploaded it brings it back by uploading it again.
               <Tooltip

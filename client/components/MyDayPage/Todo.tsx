@@ -372,18 +372,20 @@ function Item(p: { item: Exclude<TodoItem, TodoReview>; readOnly?: boolean }) {
     actions = (
       <>
         <Button size="small" onClick={() => setReplying((v) => !v)}>{t('task.feed.reply')}</Button>
-        <Tooltip title={item.replies.length ? '' : t('task.feed.replyFirst')}>
-          <span>
-            <Button
-              size="small"
-              variant="contained"
-              disabled={!item.replies.length || closeMention.isPending}
-              onClick={() => closeMention.mutate({ taskId: item.task.id, commentId: item.commentId })}
-            >
-              {t('task.feed.done')}
+        {/* After a reply "Done"; without one "No reply needed" — the author sees which (decision 95). */}
+        {item.replies.length ? (
+          <Button size="small" variant="contained" disabled={closeMention.isPending}
+            onClick={() => closeMention.mutate({ taskId: item.task.id, commentId: item.commentId })}>
+            {t('task.feed.done')}
+          </Button>
+        ) : (
+          <Tooltip title={t('task.feed.noReplyHint')} describeChild>
+            <Button size="small" variant="contained" disabled={closeMention.isPending}
+              onClick={() => closeMention.mutate({ taskId: item.task.id, commentId: item.commentId })}>
+              {t('task.feed.noReply')}
             </Button>
-          </span>
-        </Tooltip>
+          </Tooltip>
+        )}
       </>
     );
   } else if (item.kind === 'remind') {

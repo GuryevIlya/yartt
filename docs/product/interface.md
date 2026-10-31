@@ -61,11 +61,11 @@ tags, the hour budgets and the bots (decision 83):
     whatever came later stays. A task handed to me and not accepted yet
     shows only "The task was handed to you" with "Accept"; accepted, what
     came after the handover is its review;
-  - mentions of me that are still open. A mention closes only explicitly
-    ("Done"): a reply alone does not mean the request is handled — but
-    "Done" needs a reply: until I reply to the mentioning comment
-    ("Reply"; a comment elsewhere in the task does not count) the button
-    waits, so whoever asked always gets an answer. Every reply shows
+  - mentions of me that are still open. A mention closes only explicitly:
+    a reply alone does not mean the request is handled. Before I reply
+    to the mentioning comment ("Reply"; a comment elsewhere in the task
+    does not count) the button is "No reply needed", after it "Done";
+    whoever asked sees which (decision 95). Every reply shows
     inside the mention ("My reply: …"), oldest first. This is
     the only way a task I merely take part in gets here — its other comments
     stay quiet;
@@ -80,9 +80,13 @@ tags, the hour budgets and the bots (decision 83):
   scoring is never required, it lives on the employee's page.
 - **Waiting for others** — a list of its own under TODO, shown only when
   there is something: my access requests the owner has not answered yet,
-  with "Withdraw", and my open mentions of people — whom, when, the
-  beginning of my comment and their answers so far, "Answered — waiting
-  for Done" or "No answer yet"; the longest waiting on top (decision 67).
+  with "Withdraw", and my comments with mentions I have not accepted —
+  the beginning of the comment, and under it each person: "no reply",
+  "replied", "replied, closed" or "closed without a reply", with their
+  answers. One "Accepted" takes every mention of the comment that has a
+  reaction (an answered open one is closed by it); mentioning the person
+  again in the task accepts the earlier one by itself. The longest
+  waiting on top (decisions 67, 95).
 - **Available tasks** — every open task I see (no deadline, or a deadline
   ahead), in tabs: **My open** (I answer for them, or I have time planned
   on them — "my plan 4h" on the line, decision 85), for a manager **Team
@@ -225,7 +229,14 @@ Left, top to bottom:
   editing" and then goes out. Replies live in threads (decision 46): under
   the first comment, oldest first, replies to replies too (those quote
   what they answer). Anyone may reply; a mention counts as answered only
-  by a reply of the person mentioned. By default the feed shows only the
+  by a reply of the person mentioned, made after they were mentioned.
+  Under a comment its mentions show their state; the author adds
+  someone later with @ under it, takes a mention back (✕) until it has a
+  reaction, and presses "Accepted". The composer's mention picker offers
+  "All participants": every person in the task, or everyone working in
+  a public one, bots aside, with exceptions picked after it; when more
+  than half of the people are mentioned, the comment shows "@everyone
+  but …", unfolded by a click (decision 95). By default the feed shows only the
   threads with an open mention — what still waits for someone, with its
   answers; "All events" shows every thread and event, with pages. Events
   appear between the comments as grey lines: a reply at its moment
@@ -269,7 +280,7 @@ Exactly what the owner sees — header, context, dependencies, feed,
 participants with their time — but as text, without the requests, "Add",
 "Hide" and "Bring back". A participant writes comments, logs their
 own time and sets their own time left; nothing else (decision 15). Their
-own open mention is shown in the header with "Done". They can leave the
+own open mention is shown in the header with "Done" or "No reply needed". They can leave the
 task.
 
 ### Access

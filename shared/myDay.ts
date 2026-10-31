@@ -5,7 +5,7 @@ import { TaskHeader, TaskHours } from './task.ts';
 
 // My day (docs/product/interface.md, 1): TODO, current tasks, history of my days.
 
-/** An open mention of me: closed only by "Done". */
+/** An open mention of me: closed by "Done" after a reply, or by "No reply needed". */
 export const TodoMention = z.object({
   kind: z.literal('mention'),
   task: TaskHeader,
@@ -14,7 +14,7 @@ export const TodoMention = z.object({
   at: z.date(),
   /** The beginning of the comment as plain text. */
   excerpt: z.string(),
-  /** My answers, oldest first; empty — none yet. With one "Done" is allowed. */
+  /** My answers, oldest first; empty — none yet: then it is closed by "No reply needed". */
   replies: MentionReply.array(),
 });
 export type TodoMention = z.infer<typeof TodoMention>;
@@ -108,18 +108,31 @@ export const WaitingRequest = z.object({
 });
 export type WaitingRequest = z.infer<typeof WaitingRequest>;
 
-/** My open mention of someone: it waits for their answer and their "Done". */
+/** Someone I mentioned, not accepted yet: open, or closed with or without a reply. */
+export const WaitingPerson = z.object({
+  employeeId: Id,
+  /** When I mentioned them. */
+  at: z.date(),
+  /** NULL — open. */
+  closedAt: z.date().nullable(),
+  /** Their answers, oldest first; empty — none yet. */
+  replies: MentionReply.array(),
+});
+export type WaitingPerson = z.infer<typeof WaitingPerson>;
+
+/**
+ * My comment with mentions I have not accepted (decision 95): one
+ * "Accepted" takes every one with a reaction — closed, or answered.
+ */
 export const WaitingMention = z.object({
   kind: z.literal('mention'),
   task: TaskHeader,
   commentId: Id,
-  /** Whom I mentioned. */
-  employeeId: Id,
+  /** The earliest of them: the longest waiting first. */
   at: z.date(),
   /** The beginning of my comment as plain text. */
   excerpt: z.string(),
-  /** Their answers, oldest first; empty — none yet. */
-  replies: MentionReply.array(),
+  people: WaitingPerson.array().min(1),
 });
 export type WaitingMention = z.infer<typeof WaitingMention>;
 

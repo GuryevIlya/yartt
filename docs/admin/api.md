@@ -17,8 +17,11 @@ instead of a browser session. People have no API keys.
    - **Its tasks** (`task`) — create tasks and run its own: tags,
      priority, context, deadline, dependencies, public or private;
    - **Hand over tasks** (`task.transfer`) — give its tasks to people;
-   - **Comments** (`comment`) — comment, mention, close its mentions,
-     upload files for comments;
+   - **Comments** (`comment`) — comment, mention (everyone too:
+     `everyone`, `exceptIds`), close its mentions with or without a reply,
+     add a mention to its comment later, take one back until it has a
+     reaction, accept them (`Comment.acceptMentions`), upload files for
+     comments;
    - **Participants** (`observers`) — add and remove participants of its tasks,
      ask for access to others'.
    A bot never keeps a timesheet, logs time, scores, invites or manages

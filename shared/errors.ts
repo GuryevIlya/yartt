@@ -57,7 +57,7 @@ export const ERROR_CODES = [
   'attachment_in_use',
   'self_mention',
   'mention_not_participant',
-  'mention_needs_reply',
+  'mention_answered',
 
   // reminders
   'remind_in_past',

@@ -19,9 +19,9 @@ test.describe('My day', () => {
 
     const mention = todo.locator('div').filter({ hasText: /^Марина Соколова упомянула вас/ }).first();
     await expect(mention).toBeVisible();
-    const item = todo.locator('.MuiStack-root').filter({ hasText: 'Нужна ваша подпись' }).filter({ has: page.getByRole('button', { name: 'Готово' }) }).last();
-    // No "Done" without a reply: answer right here, then close.
-    await expect(item.getByRole('button', { name: 'Готово' })).toBeDisabled();
+    const item = todo.locator('.MuiStack-root').filter({ hasText: 'Нужна ваша подпись' }).filter({ has: page.getByRole('button', { name: 'Ответить' }) }).last();
+    // Without a reply it is closed by "No reply needed"; answered right here, by "Done".
+    await expect(item.getByRole('button', { name: 'Ответ не нужен' })).toBeVisible();
     await item.getByRole('button', { name: 'Ответить' }).click();
     await editable(page).click();
     await page.keyboard.type('Подпишу сегодня');
@@ -201,6 +201,18 @@ test('Waiting for others: my request not answered yet, withdrawn from there', as
   await expect(block.getByText(tag)).toBeVisible();
   await block.getByRole('button', { name: 'Отозвать заявку' }).click();
   await expect(block.getByText(tag)).toHaveCount(0);
+});
+
+test('Waiting for others: a mention closed without a reply waits for "Accepted"', async ({ page }) => {
+  await signIn(page);
+  const block = page.getByRole('region', { name: 'Жду ответа' });
+  const item = block.locator('.MuiStack-root').filter({ hasText: 'Показ заказчику' })
+    .filter({ has: page.getByRole('button', { name: 'Принято' }) }).last();
+  await expect(item.getByText(/Павел Орлов · закрыто без ответа/)).toBeVisible();
+  await item.getByRole('button', { name: 'Принято' }).click();
+  // Pavel is accepted; Marina has not reacted yet and stays.
+  await expect(block.getByText(/Павел Орлов · /)).toHaveCount(0);
+  await expect(block.getByText(/Марина Соколова · ответа нет/)).toBeVisible();
 });
 
 test('what was done, a dot on the ribbon, opens its task', async ({ page }) => {

@@ -20,12 +20,15 @@ type Draft = {
   html: string;
   files: { id: number; name: string }[];
   mentions: Employee[];
+  /** "All participants" (decision 95): everyone in the task but `except`. Absent in drafts kept before it. */
+  everyone?: boolean;
+  except?: Employee[];
   taskIds: number[];
 };
 
 export type ReplyTo = { id: number; authorId: number };
 
-const EMPTY: Draft = { html: '', files: [], mentions: [], taskIds: [] };
+const EMPTY: Draft = { html: '', files: [], mentions: [], everyone: false, except: [], taskIds: [] };
 
 /**
  * New comment. After "Send" it waits a few seconds with "Back to editing"
@@ -54,6 +57,10 @@ export default function (p: {
 
   const [draft, setDraft, clearDraft] = useDraft<Draft>(`comment:${p.taskId}`, EMPTY);
   const { files, mentions, taskIds } = draft;
+  const everyone = draft.everyone ?? false;
+  const except = draft.except ?? [];
+  const setEveryone = (on: boolean) => setDraft((d) => ({ ...d, everyone: on, except: [] }));
+  const setExcept = (next: Employee[]) => setDraft((d) => ({ ...d, except: next }));
   const setFiles = (next: (prev: Draft['files']) => Draft['files']) => setDraft((d) => ({ ...d, files: next(d.files) }));
   const setMentions = (next: Employee[]) => setDraft((d) => ({ ...d, mentions: next }));
   const setTaskIds = (next: number[]) => setDraft((d) => ({ ...d, taskIds: next }));
@@ -113,6 +120,8 @@ export default function (p: {
     replyToId: draft.replyTo?.id ?? null,
     files: draft.files,
     mentionIds: draft.mentions.map((m) => m.id),
+    everyone: draft.everyone ?? false,
+    exceptIds: (draft.except ?? []).map((e) => e.id),
     taskIds: draft.taskIds,
   }, { onSuccess: () => onSent.current?.(), onError: () => restore(draft) });
   useEffect(() => () => {
@@ -133,7 +142,7 @@ export default function (p: {
 
   const send = () => {
     if (!editor.current || editor.current.isEmpty() || uploading > 0) return;
-    const next = { html: editor.current.getHtml(), files, mentions, taskIds, replyTo: p.replyTo, seconds: HOLD_SECONDS };
+    const next = { html: editor.current.getHtml(), files, mentions, everyone, except, taskIds, replyTo: p.replyTo, seconds: HOLD_SECONDS };
     // Set at once: if the composer unmounts before rendering again, the
     // unmount still finds the held comment and sends it.
     heldRef.current = next;
@@ -150,7 +159,7 @@ export default function (p: {
   };
 
   const restore = (held: Draft) => {
-    setDraft({ html: held.html, files: held.files, mentions: held.mentions, taskIds: held.taskIds });
+    setDraft({ html: held.html, files: held.files, mentions: held.mentions, everyone: held.everyone, except: held.except, taskIds: held.taskIds });
     setEditorKey((k) => k + 1);
   };
 
@@ -159,6 +168,7 @@ export default function (p: {
   // A private task: its participants only — who takes part is the owner's decision.
   const candidates = [...employees.values()].filter((e) => e.dismissedAt === null && e.id !== me.id
     && (mentionable.data?.everyone || mentionable.data?.ids.includes(e.id)));
+  const people = new Set(mentionable.data?.people ?? []);
 
   return (
     <Stack ref={root} spacing={1.5} sx={{ scrollMarginTop: 16 }}>
@@ -190,8 +200,15 @@ export default function (p: {
           onSubmit={send}
           onChange={(html) => setDraft((d) => ({ ...d, html }))}
         />
-        {(files.length > 0 || mentions.length > 0 || taskIds.length > 0 || uploading > 0) && (
+        {(files.length > 0 || mentions.length > 0 || everyone || taskIds.length > 0 || uploading > 0) && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+            {everyone && (
+              <Chip size="small" color="primary" label={t('task.composer.everyone')} onDelete={() => setEveryone(false)} />
+            )}
+            {except.map((e) => (
+              <Chip key={`x${e.id}`} size="small" variant="outlined" label={t('task.composer.except', { name: e.fullName })}
+                onDelete={() => setExcept(except.filter((x) => x.id !== e.id))} />
+            ))}
             {mentions.map((m) => (
               <Chip key={`m${m.id}`} size="small" color="primary" variant="outlined" label={`@${m.fullName}`}
                 onDelete={() => setMentions(mentions.filter((x) => x.id !== m.id))} />
@@ -206,16 +223,37 @@ export default function (p: {
           </Box>
         )}
         {showMention && (
-          <Autocomplete
-            options={candidates.filter((e) => !mentions.some((m) => m.id === e.id))}
-            getOptionLabel={(e) => e.fullName}
-            renderOption={(props, e) => employeeOption(props, e)}
-            filterOptions={employeeFilter}
-            onChange={(_e, value) => { if (value) setMentions([...mentions, value]); setShowMention(false); }}
-            onBlur={() => setShowMention(false)}
-            renderInput={(params) => <TextField {...params} autoFocus placeholder={t('task.composer.mention')} helperText={t(mentionable.data?.everyone ? 'task.composer.mentionHintPublic' : 'task.composer.mentionHint')} />}
-            openOnFocus
-          />
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+            {/* With "All participants" on, a pick is an exception. */}
+            <Autocomplete
+              sx={{ flexGrow: 1 }}
+              options={everyone
+                ? candidates.filter((e) => people.has(e.id) && !except.some((x) => x.id === e.id))
+                : candidates.filter((e) => !mentions.some((m) => m.id === e.id))}
+              getOptionLabel={(e) => e.fullName}
+              renderOption={(props, e) => employeeOption(props, e)}
+              filterOptions={employeeFilter}
+              onChange={(_e, value) => {
+                if (value) {
+                  if (everyone) setExcept([...except, value]);
+                  else setMentions([...mentions, value]);
+                }
+                setShowMention(false);
+              }}
+              onBlur={() => setShowMention(false)}
+              renderInput={(params) => (
+                <TextField {...params} autoFocus placeholder={t(everyone ? 'task.composer.exceptWho' : 'task.composer.mention')}
+                  helperText={t(mentionable.data?.everyone ? 'task.composer.mentionHintPublic' : 'task.composer.mentionHint')} />
+              )}
+              openOnFocus
+            />
+            {!everyone && (
+              // onMouseDown: pressed before the field's blur closes it.
+              <Button sx={{ mt: 1 }} onMouseDown={(e) => { e.preventDefault(); setEveryone(true); setShowMention(false); }}>
+                {t('task.composer.everyone')}
+              </Button>
+            )}
+          </Stack>
         )}
         {taskInput !== null && (
           <TextField

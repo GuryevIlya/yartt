@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Current, CurrentTab, DayHistory, History, TodoItem, WaitingItem } from '#shared/myDay.ts';
+import type { Current, CurrentTab, DayHistory, History, TodoItem, WaitingItem, WaitingMention } from '#shared/myDay.ts';
 import { plainText } from '../html.ts';
 import { sql } from '../pg.ts';
 import { mentionReplies, replyKey } from './Comment.ts';
@@ -213,14 +213,16 @@ const MyMentionRow = z.object({
   commentId: z.number(),
   employeeId: z.number(),
   createdAt: z.date(),
+  closedAt: z.date().nullable(),
   value: z.string(),
 });
 
 /**
  * What I wait for from others (decision 67): my access requests not
- * answered yet, then my open mentions of people — the longest waiting
- * first, with whether they have answered. A mention in a task I no longer
- * see is not shown.
+ * answered yet, then my comments with mentions I have not accepted
+ * (decision 95) — open, or closed with or without a reply — the longest
+ * waiting first, with their answers. A mention in a task I no longer see
+ * is not shown.
  */
 export async function waiting(me: number, viewerId: number = me): Promise<WaitingItem[]> {
   const requests = z.object({ taskId: z.number() }).array().parse(await sql`
@@ -229,29 +231,35 @@ export async function waiting(me: number, viewerId: number = me): Promise<Waitin
      ORDER BY id
   `);
   const mentions = MyMentionRow.array().parse(await sql`
-    SELECT m.task_id, m.comment_id, m.value AS employee_id, c.created_at, c.value
+    SELECT m.task_id, m.comment_id, m.value AS employee_id, m.created_at, m.closed_at, c.value
       FROM mention m
       JOIN comment c ON c.task_id = m.task_id AND c.id = m.comment_id
-     WHERE c.created_by = ${me} AND m.closed_at IS NULL AND can_see(m.task_id, ${me}) AND can_see(m.task_id, ${viewerId})
-     ORDER BY c.created_at, m.value
+     WHERE c.created_by = ${me} AND m.accepted_at IS NULL AND can_see(m.task_id, ${me}) AND can_see(m.task_id, ${viewerId})
+     ORDER BY m.created_at, m.task_id, m.comment_id, m.value
   `);
   const answers = await mentionReplies(mentions.map((m) => ({ taskId: m.taskId, commentId: m.commentId, employeeId: m.employeeId })));
   const tasks = new Map((await headers(me, [...new Set([...requests, ...mentions].map((r) => r.taskId))])).map((h) => [h.id, h]));
+  const comments = new Map<string, WaitingMention>();
+  for (const m of mentions) {
+    const task = tasks.get(m.taskId);
+    if (!task) continue;
+    const key = `${m.taskId}/${m.commentId}`;
+    const item = comments.get(key) ?? {
+      kind: 'mention' as const, task, commentId: m.commentId, at: m.createdAt,
+      excerpt: plainText(m.value).slice(0, EXCERPT), people: [],
+    };
+    item.people.push({
+      employeeId: m.employeeId, at: m.createdAt, closedAt: m.closedAt,
+      replies: answers.get(replyKey(m.taskId, m.commentId, m.employeeId)) ?? [],
+    });
+    comments.set(key, item);
+  }
   return [
     ...requests.flatMap((r) => {
       const task = tasks.get(r.taskId);
       return task ? [{ kind: 'request' as const, task }] : [];
     }),
-    ...mentions.flatMap((m) => {
-      const task = tasks.get(m.taskId);
-      return task
-        ? [{
-            kind: 'mention' as const, task, commentId: m.commentId, employeeId: m.employeeId, at: m.createdAt,
-            excerpt: plainText(m.value).slice(0, EXCERPT),
-            replies: answers.get(replyKey(m.taskId, m.commentId, m.employeeId)) ?? [],
-          }]
-        : [];
-    }),
+    ...comments.values(),
   ];
 }
 

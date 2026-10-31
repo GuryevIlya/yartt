@@ -18,7 +18,7 @@ export const FileRef = z.object({
 });
 export type FileRef = z.infer<typeof FileRef>;
 
-/** An answer to a mention: a reply to the mentioning comment by the mentioned employee. Shown inside the mention. */
+/** An answer to a mention: a reply to the mentioning comment by the mentioned employee, after they were mentioned. Shown inside the mention. */
 export const MentionReply = z.object({
   id: Id,
   at: z.date(),
@@ -27,11 +27,19 @@ export const MentionReply = z.object({
 });
 export type MentionReply = z.infer<typeof MentionReply>;
 
+/**
+ * A mention goes open → closed by the mentioned (after a reply, or "No
+ * reply needed") → accepted by the comment's author (decision 95).
+ */
 export const Mention = z.object({
   employeeId: Id,
+  /** When they were mentioned: later than the comment if its author added them afterwards. */
+  createdAt: z.date(),
   /** NULL — open. */
   closedAt: z.date().nullable(),
-  /** Oldest first; empty — not answered yet. With an answer "Done" is allowed. */
+  /** NULL — the author has not accepted it yet. */
+  acceptedAt: z.date().nullable(),
+  /** Oldest first; empty — not answered. A closed one without replies was closed without a reply. */
   replies: MentionReply.array(),
 });
 export type Mention = z.infer<typeof Mention>;
@@ -160,6 +168,9 @@ export const CreateCommentInput = z.object({
   replyToId: Id.nullable(),
   files: z.object({ id: Id, name: z.string().trim().min(1).max(255) }).array().max(50),
   mentionIds: Id.array().max(50),
+  /** "All participants": a mention of every person in the task (Observer.mentionable, `people`) but the author and `exceptIds`. */
+  everyone: z.boolean().default(false),
+  exceptIds: Id.array().max(1000).default([]),
   taskIds: Id.array().max(50),
 });
 export type CreateCommentInput = z.infer<typeof CreateCommentInput>;

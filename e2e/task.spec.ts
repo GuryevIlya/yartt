@@ -68,8 +68,19 @@ test.describe.serial('a task from creation to hand-over', () => {
     await page.getByRole('option', { name: 'Павел Орлов' }).click();
     await editable(page).fill('Павел, посмотри');
     await page.getByRole('button', { name: 'Отправить' }).click();
-    await expect(page.getByText('@Павел Орлов · открыто')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('@Павел Орлов · ответа нет')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Упомянут — остаётся/)).toBeVisible(); // an open mention keeps him, and says why
+
+    // "All participants": everyone in the task but me.
+    await page.getByRole('button', { name: 'Упомянуть сотрудника' }).click();
+    await page.getByRole('button', { name: 'Все участники' }).click();
+    await expect(page.getByText('Все участники')).toBeVisible();
+    await editable(page).fill('Всем: смотрим в пятницу');
+    await page.getByRole('button', { name: 'Отправить' }).click();
+    // Pavel and his manager Marina: more than half of the people, folded until clicked.
+    await page.getByText('@все участники').click({ timeout: 15_000 });
+    await expect(page.getByText('@Павел Орлов · ответа нет')).toHaveCount(2);
+    await expect(page.getByText('@Марина Соколова · ответа нет')).toBeVisible();
 
     await page.getByRole('button', { name: 'Ответить' }).first().click();
     await expect(page.getByText(/Ответ на комментарий/)).toBeVisible();

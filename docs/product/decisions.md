@@ -1820,3 +1820,16 @@ told already.
 *Changes decision 9:* a reply is no longer required to close a mention;
 the "Noted" without a reply once decided against is now "No reply
 needed", and the author's "Accepted" is what keeps the asker informed.
+
+"All participants" leaves bots out, in a private task as in a public
+one: a bot is mentioned by name, for what it is there to do, and a
+mention it never closes would sit in the author's Waiting for others.
+A reply made before the person was mentioned does not answer the
+mention. Mentions closed before 0.6 needed a reply and left the author's
+list, so the migration accepts them.
+
+*Implemented:* `mention.created_at`, `accepted_at`, `mention_reaction()`,
+`accept_mentions()` and the triggers `mention_close`,
+`mention_delete_check`, `mention_accept_earlier` (`db.sql`, migration
+`0.5-0.6`); `notify(…, p_told)`; `Comment.addMention`, `removeMention`,
+`acceptMentions`; `client/components/TaskPage/Mentions.tsx`.

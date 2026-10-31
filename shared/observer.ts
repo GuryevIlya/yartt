@@ -82,5 +82,11 @@ export const Mentionable = z.object({
   everyone: z.boolean(),
   /** A private task: its active participants. */
   ids: Id.array(),
+  /**
+   * Whom "All participants" mentions (decision 95), the author left out:
+   * the active people of the task — every working person in a public one.
+   * Bots are not among them: a bot is mentioned by name.
+   */
+  people: Id.array(),
 });
 export type Mentionable = z.infer<typeof Mentionable>;

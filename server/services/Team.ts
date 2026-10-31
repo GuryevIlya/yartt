@@ -167,15 +167,13 @@ async function delaysByDay(ids: number[], from: string, to: string): Promise<z.i
             GROUP BY 1, 2
          ),
          rep AS (
-           SELECT m.value AS employee_id, (c.created_at AT TIME ZONE e.time_zone)::date AS day,
-                  percentile_cont(0.5) WITHIN GROUP (ORDER BY working_minutes(m.value, c.created_at, r.replied_at)) AS minutes
+           SELECT m.value AS employee_id, (m.created_at AT TIME ZONE e.time_zone)::date AS day,
+                  percentile_cont(0.5) WITHIN GROUP (ORDER BY working_minutes(m.value, m.created_at, r.replied_at)) AS minutes
              FROM mention m
-             JOIN comment c ON c.task_id = m.task_id AND c.id = m.comment_id
              JOIN e ON e.id = m.value
-             CROSS JOIN LATERAL (SELECT min(r.created_at) AS replied_at FROM comment r
-                                  WHERE r.task_id = m.task_id AND r.reply_to_id = m.comment_id AND r.created_by = m.value) r
+             CROSS JOIN LATERAL (SELECT mention_reaction(m.task_id, m.comment_id, m.value) AS replied_at) r
             WHERE r.replied_at IS NOT NULL
-              AND c.created_at >= (${from}::date - 2)::timestamptz AND c.created_at < (${to}::date + 2)::timestamptz
+              AND m.created_at >= (${from}::date - 2)::timestamptz AND m.created_at < (${to}::date + 2)::timestamptz
               AND EXISTS (SELECT 1 FROM work w WHERE w.employee_id = m.value)
             GROUP BY 1, 2
          ),
@@ -237,13 +235,12 @@ export async function summary(viewerId: number, from: string, to: string): Promi
             GROUP BY 1
          ),
          asked AS (
-           SELECT m.value AS employee_id, c.created_at AS asked_at,
-                  (SELECT min(r.created_at) FROM comment r
-                    WHERE r.task_id = m.task_id AND r.reply_to_id = m.comment_id AND r.created_by = m.value) AS replied_at
+           -- The reaction: the first reply or the closing, from when they were mentioned (decision 95).
+           SELECT m.value AS employee_id, m.created_at AS asked_at,
+                  mention_reaction(m.task_id, m.comment_id, m.value) AS replied_at
              FROM mention m
-             JOIN comment c ON c.task_id = m.task_id AND c.id = m.comment_id
              JOIN e ON e.id = m.value
-            WHERE (c.created_at AT TIME ZONE e.time_zone)::date BETWEEN ${from}::date AND ${to}::date
+            WHERE (m.created_at AT TIME ZONE e.time_zone)::date BETWEEN ${from}::date AND ${to}::date
          ),
          -- The reaction counts only the person's working time: hours off are not theirs to answer for.
          replies AS (
