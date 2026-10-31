@@ -91,7 +91,7 @@ reminder would turn it into a duty. From Team the manager opens a
 person's page and sees their days; only the direct manager scores, the
 managers above only look.
 
-### 9. A mention is closed only explicitly
+### 9. A mention is closed only explicitly — changed by 95
 
 A reply to the comment does not close the mention: answering is not the
 same as doing what was asked. The mentioned employee presses "Done" —
@@ -1094,7 +1094,7 @@ it.
 `notify_dependents()` (`late`) — migration `0.2-0.3`; `TaskHeader.late`,
 `.delays`; `Dependencies`, `RiskChip`.
 
-### 67. What I wait for from others is a list of its own
+### 67. What I wait for from others is a list of its own — changed by 95
 
 TODO shows what waits for me; what I wait for from others was nowhere:
 an access request I filed, or a person I mentioned and who has not
@@ -1769,3 +1769,54 @@ review from then on.
 `MyDay.todo` (the `review` item, `taskId`), `Comment.unreviewed`,
 `Task.close` with `reviewedUntil`; `Review` in
 `client/components/MyDayPage/Todo.tsx`, shown in `TaskPage/Sheet.tsx` too.
+
+### 95. A mention can be closed without a reply, and waits for its author's "Accepted"
+
+Decision 9 let a mention be closed only after a reply, so whoever asked
+would see the answer. In practice two needs did not fit. Some comments
+are for everyone in a task (a change of plan, a date that moved), and
+participants are not notified of comments (decision 82): the author had
+to mention each of them, and each had to write something only to close
+it. And once a mention was closed it simply left the author's Waiting
+for others (decision 67): a reply or not, the author could miss that
+anything had happened.
+
+Now a mention goes through three steps:
+
+- **Open.** In the mentioned person's TODO, as before.
+- **Closed** by the mentioned person: after a reply, or with "No reply
+  needed". It leaves their TODO and stays in the author's Waiting for
+  others, marked "replied" or "closed without a reply", so the author
+  sees whether the request got an answer.
+- **Accepted** by the author: "Accepted" ends it, or the author answers
+  with a new mention of the person, and the old one is accepted by
+  itself. A comment with many mentions has one "Accepted" for all of
+  them closed so far. If the author is a bot or dismissed, nobody is
+  there to accept: closing accepts too.
+
+The author adds a mention to a comment at any time; the time it was added
+is kept, and the reaction is counted from it. The author deletes a
+mention only until its first reaction (a reply by the mentioned person
+or its closing): a mistake is corrected, an answered request is not
+erased. After a reaction the author can accept a mention still open —
+the reply was enough — and that closes it too.
+
+**Everyone.** Mentions offer "All participants" with a list of
+exceptions; it makes an ordinary mention for each person, the author
+left out. In a private task "all" are the active participants; in a
+public one — every active employee: a public task concerns everyone
+(decision 14). Anyone who can comment may mention everyone. The feed
+shows the names when half of the participants or fewer are mentioned,
+and "all but …" otherwise; the share is taken against the participants
+now, so nothing about the comment is stored apart.
+
+A mention for everyone is still a request to react, and the team's
+reaction time counts it like any other: the reaction is the first reply
+or the closing, whichever came first, from the moment the mention was
+added. If the mentioned person is away, the copy to their manager is
+not sent when the manager is mentioned in the same comment — they were
+told already.
+
+*Changes decision 9:* a reply is no longer required to close a mention;
+the "Noted" without a reply once decided against is now "No reply
+needed", and the author's "Accepted" is what keeps the asker informed.
