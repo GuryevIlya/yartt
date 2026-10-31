@@ -7,9 +7,6 @@ it is decided. Proposals wait for a decision in their own section.
 
 ## Now — stage 6: ready for 1.0
 
-- [ ] **Delivery check.** Build the Docker image from scratch, start it
-  against an empty PostgreSQL ([install guide](../admin/install.md)), sign
-  in through a test SMTP, check the webhook signature on a real receiver.
 - [ ] **A manual pass in English** and a check that every error code
   reachable from the interface shows its message.
 - [ ] **Contributions with a signed assignment.** Once the repository is
@@ -20,7 +17,10 @@ it is decided. Proposals wait for a decision in their own section.
   signed copies. Before the first outside pull request a lawyer in
   Kazakhstan checks both agreements, in particular that signing through
   GitHub counts as the written form (CONTRIBUTING.md).
-- [ ] **Release 1.0.** After the delivery check, tag `1.0.0` and push it —
+- [ ] **Release 1.0.** The delivery check passed (2026-11-01: the image
+  built from scratch, an empty PostgreSQL 17, sign-in through a test
+  SMTP, emails in each recipient's language, every webhook signature
+  verified on a receiver, a restart left the data alone). Tag `1.0.0` and push it —
   the release workflow publishes the image
   ([release.md](../engineering/release.md)). The schema is already
   frozen: 0.0.0, the first published image, released schema 0.0, so
