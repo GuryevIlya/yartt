@@ -90,13 +90,14 @@ test.describe.serial('a task from creation to hand-over', () => {
     await expect(page.getByText('Потратил 1ч 30м')).toBeVisible();
 
     await page.getByRole('button', { name: 'Мой план' }).click();
-    await page.getByLabel('Сколько ещё планирую потратить').fill('2ч');
+    await page.getByLabel('Сколько ещё планирую потратить').fill('1д');
     await page.getByRole('dialog').getByRole('button', { name: 'Сохранить' }).click();
-    await expect(page.getByText('В плане ещё 2ч').filter({ visible: true }).first()).toBeVisible();
+    // A day is a working day, 8 hours.
+    await expect(page.getByText('В плане ещё 8ч').filter({ visible: true }).first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Все события', exact: true }).click();
     await expect(page.getByText(/Алексей Громов: списано 1ч 30м/)).toBeVisible();
-    await expect(page.getByText(/Алексей Громов: в плане ещё 2ч/)).toBeVisible();
+    await expect(page.getByText(/Алексей Громов: в плане ещё 8ч/)).toBeVisible();
   });
 
   test('participants: add, hide, public and private again', async () => {

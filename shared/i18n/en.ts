@@ -562,7 +562,7 @@ export const en: Translation = {
       planAbout: 'What is left to do',
       planAboutHint: 'Optional: so the owner and the others know what these hours are for',
       clearPlan: 'Clear the plan',
-      timeHint: 'For example 1h 30m or 90',
+      timeHint: 'For example 1d 2h, 1h 30m or 90. A day is 8 hours',
       today: 'Today {{time}}',
       dayMinutes: 'For the whole day',
       dayHint: 'All the time on the task that day: it replaces what was there. 0 removes the entry.',

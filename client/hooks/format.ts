@@ -56,13 +56,17 @@ export function useFormat() {
   return { minutes, date, dateTime, time, day, relative };
 }
 
-/** "1h 30m", "1ч30м", "2д 4ч", "90" -> minutes; null when it does not parse. `allowZero` — for a lag. */
+/**
+ * "1h 30m", "1ч30м", "2д 4ч", "90" -> minutes; null when it does not parse.
+ * A day is a working day, 8 hours: plans and entries are work, not calendar
+ * time. `allowZero` — for a lag.
+ */
 export function parseMinutes(text: string, allowZero = false): number | null {
   const s = text.trim().toLowerCase().replace(',', '.');
   if (/^\d+$/.test(s)) return Number(s) || (allowZero ? 0 : null);
   const match = /^(?:(\d+(?:\.\d+)?)\s*[dд])?\s*(?:(\d+(?:\.\d+)?)\s*[hч])?\s*(?:(\d+)\s*[mм])?$/.exec(s);
   if (!match || (!match[1] && !match[2] && !match[3])) return null;
-  const total = Math.round(Number(match[1] ?? 0) * 1440 + Number(match[2] ?? 0) * 60) + Number(match[3] ?? 0);
+  const total = Math.round(Number(match[1] ?? 0) * 480 + Number(match[2] ?? 0) * 60) + Number(match[3] ?? 0);
   return total > 0 || allowZero ? total : null;
 }
 
