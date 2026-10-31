@@ -68,7 +68,7 @@ function Item(p: { item: WaitingItem }) {
               <Typography variant="body2">
                 {t(readOnly ? 'myDay.waiting.mentionOf' : 'myDay.waiting.mention')} · {format.relative(item.at)}
               </Typography>
-              {item.excerpt && <Typography variant="body2" sx={{ color: 'text.secondary' }}>«{item.excerpt}»</Typography>}
+              {item.excerpt && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('common.quote', { text: item.excerpt })}</Typography>}
               <Stack spacing={0.5} sx={{ mt: 0.5 }}>
                 {item.people.map((person) => (
                   <Stack key={person.employeeId} spacing={0.5}>

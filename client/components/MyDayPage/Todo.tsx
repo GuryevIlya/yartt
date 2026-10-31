@@ -187,7 +187,7 @@ function Review(p: { item: TodoReview; readOnly?: boolean }) {
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               {t('myDay.todo.plansLeft', {
                 plans: deadline.plans
-                  .map((x) => t('myDay.todo.planOf', { name: name(x.employeeId), time: format.minutes(x.minutes) }) + (x.about ? ` («${x.about}»)` : ''))
+                  .map((x) => t('myDay.todo.planOf', { name: name(x.employeeId), time: format.minutes(x.minutes) }) + (x.about ? ` (${t('common.quote', { text: x.about })})` : ''))
                   .join(', '),
               })}
             </Typography>
@@ -361,7 +361,7 @@ function Item(p: { item: Exclude<TodoItem, TodoReview>; readOnly?: boolean }) {
           {t(p.readOnly ? 'myDay.todo.mentionOf' : 'myDay.todo.mention', { name: name(item.authorId), ...pronoun(item.authorId) })}
           {' · '}{format.relative(item.at)}
         </Typography>
-        {item.excerpt && <Typography variant="body2" sx={{ color: 'text.secondary' }}>«{item.excerpt}»</Typography>}
+        {item.excerpt && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('common.quote', { text: item.excerpt })}</Typography>}
         {item.replies.length > 0 && (
           <Stack spacing={0.5} sx={{ mt: 0.5 }}>
             {item.replies.map((r) => <MentionReply key={r.id} who={t(p.readOnly ? 'myDay.todo.reply' : 'myDay.todo.myReply')} reply={r} />)}
@@ -410,7 +410,7 @@ function Item(p: { item: Exclude<TodoItem, TodoReview>; readOnly?: boolean }) {
     text = (
       <>
         <Typography variant="body2">{t('myDay.todo.planLeft', { time: format.minutes(item.minutes), at: format.dateTime(item.at) })}</Typography>
-        {item.about && <Typography variant="body2" sx={{ color: 'text.secondary' }}>«{item.about}»</Typography>}
+        {item.about && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('common.quote', { text: item.about })}</Typography>}
         {!p.readOnly && <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('myDay.todo.planLeftHint')}</Typography>}
       </>
     );

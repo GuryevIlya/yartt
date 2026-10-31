@@ -33,6 +33,7 @@ export const en: Translation = {
     close: 'Close',
     saved: 'Saved',
     loading: 'Loading…',
+    quote: '“{{text}}”',
     explain: 'Explanation',
   },
   away: {
@@ -766,7 +767,7 @@ export const en: Translation = {
     observed: 'takes part in: {{count}}',
     activity: 'In the range',
     activityHint: 'Comments and people mentioned in the range; below, how many of its tasks closed',
-    activityLine: '{{comments}} comm. · {{mentions}} ment.',
+    activityLine: 'comments: {{comments}} · mentions: {{mentions}}',
     closed: 'tasks closed: {{count}}',
     requests: 'Requests',
     requestsHint: 'API calls in the range. Refusals: the bot asked for what it has no permission or access for — it is set up wrong or broken. Below, deliveries to its webhook',

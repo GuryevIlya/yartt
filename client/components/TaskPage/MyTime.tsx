@@ -61,7 +61,7 @@ export default function (p: { taskId: number }) {
         </Stack>
       )}
       {mine.data?.leftAbout && (
-        <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap' }}>«{mine.data.leftAbout}»</Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap' }}>{t('common.quote', { text: mine.data.leftAbout })}</Typography>
       )}
       <Stack direction="row" spacing={1}>
         <Button variant="outlined" onClick={() => setDialog('log')}>{t('task.myTime.log')}</Button>

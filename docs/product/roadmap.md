@@ -7,8 +7,6 @@ it is decided. Proposals wait for a decision in their own section.
 
 ## Now — stage 6: ready for 1.0
 
-- [ ] **A manual pass in English** and a check that every error code
-  reachable from the interface shows its message.
 - [ ] **Contributions with a signed assignment.** Once the repository is
   on GitHub: install CLA Assistant, give it [legal/CAA-individual.md](../../legal/CAA-individual.md)
   as the agreement and check on a test pull request that it blocks
