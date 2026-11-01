@@ -18,6 +18,8 @@ const SSO_PENDING_MAX_AGE_MS = 60 * 60 * 1000;
 const LOGIN_BROWSER_COOKIE = 'yartt_login';
 const LOGIN_BROWSER_MAX_AGE_MS = 15 * 60 * 1000;
 
+const CHANGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export type Context = {
   employeeId: number | null;
   /** A bot's permissions when its key signed the request; NULL — a person or nobody. */
@@ -29,6 +31,8 @@ export type Context = {
   ssoPending: string | null;
   setSsoPendingCookie: (token: string) => void;
   clearSsoPendingCookie: () => void;
+  /** The id the interface gave this change (X-Yartt-Change): sent again, it is not applied twice. */
+  changeId: string | null;
   /** The key of the browser that asked for sign-in links (Auth.requestLogin). */
   loginBrowser: string | null;
   setLoginBrowserCookie: (key: string) => void;
@@ -59,6 +63,7 @@ export default async function ctx(req: Request, res: Response): Promise<Context>
     ssoPending: bearer ? null : cookies[SSO_PENDING_COOKIE] ?? null,
     setSsoPendingCookie: (token) => res.cookie(SSO_PENDING_COOKIE, token, { ...cookieOptions, maxAge: SSO_PENDING_MAX_AGE_MS }),
     clearSsoPendingCookie: () => res.clearCookie(SSO_PENDING_COOKIE, cookieOptions),
+    changeId: CHANGE_ID.exec(String(req.headers['x-yartt-change'] ?? ''))?.[0] ?? null,
     loginBrowser: bearer ? null : cookies[LOGIN_BROWSER_COOKIE] ?? null,
     setLoginBrowserCookie: (key) => res.cookie(LOGIN_BROWSER_COOKIE, key, { ...cookieOptions, maxAge: LOGIN_BROWSER_MAX_AGE_MS }),
   };

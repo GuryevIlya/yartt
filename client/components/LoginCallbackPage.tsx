@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { errorMessage } from '#client/i18n/errors.ts';
-import { clearOfflineData } from '#client/hooks/offline.ts';
+import { clearOfflineCache } from '#client/hooks/offline.ts';
 
 export default function () {
   const { t } = useTranslation();
@@ -20,7 +20,7 @@ export default function () {
       meta: { quiet: true },
       onSuccess: async () => {
         // Possibly someone else now: what the previous person had saved here goes.
-        clearOfflineData();
+        clearOfflineCache();
         await queryClient.invalidateQueries();
         void navigate('/', { replace: true });
       },

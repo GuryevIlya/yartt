@@ -25,6 +25,7 @@ export async function client(employeeId: number | null = null, sessionToken: str
     ssoPending: null,
     setSsoPendingCookie: () => {},
     clearSsoPendingCookie: () => {},
+    changeId: null,
     get loginBrowser() { return browser.value; },
     setLoginBrowserCookie: (key) => { browser.value = key; },
   };

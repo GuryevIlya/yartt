@@ -8,7 +8,8 @@
 -- midnight; time is logged and scored by shift (decision 100). A
 -- sign-in link works only in the browser that asked for it (decision 101).
 -- A notification that cannot be delivered no longer holds the queue
--- (decision 102).
+-- (decision 102). A change sent again by the browser's outbox is not
+-- applied twice (decision 103).
 
 ALTER TABLE mention ADD COLUMN created_at TIMESTAMPTZ;
 UPDATE mention m SET created_at = c.created_at
@@ -1082,6 +1083,36 @@ outgoing webhook (WEBHOOK_URL), whose receiver picks other channels
 (Telegram, Slack, ...); a bot gets its own webhook only.';
 
 
+-- A change sent again by the browser's outbox is not applied twice
+-- (decision 103).
+CREATE TABLE sent_change (
+    id UUID PRIMARY KEY,
+    employee_id INT NOT NULL REFERENCES employee(id),
+    at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_sent_change_at ON sent_change(at);
+
+COMMENT ON TABLE sent_change IS
+'Changes the interface sent, by the id the browser gave each one
+(decision 103). A change whose answer was lost on the way waits in the
+browser''s outbox and is sent again; its id here says it was applied,
+so it is not applied twice (a second task, a second comment). Written
+before the change runs and removed if it fails, so a refused change can
+be sent again. Bots send no id. Cron deletes ids older than 90 days:
+an outbox does not wait that long.';
+
+COMMENT ON COLUMN sent_change.id IS
+'The id the browser gave the change (the X-Yartt-Change header).';
+
+COMMENT ON COLUMN sent_change.employee_id IS
+'Who sent it.';
+
+COMMENT ON COLUMN sent_change.at IS
+'When it was applied.';
+
+COMMENT ON INDEX idx_sent_change_at IS
+'For the cron cleanup of old ids.';
+
 -- The specification (COMMENT ON SCHEMA) as of this version.
 COMMENT ON SCHEMA public IS
 'yartt — a task tracker without projects, subtasks or assignments.
@@ -1684,6 +1715,7 @@ CRON JOBS (outside SQL)
                    WHERE used_at < NOW() - INTERVAL ''1 day''
                      AND NOT attachment_in_use(a.id);
   - every day:    DELETE FROM visit WHERE at < NOW() - INTERVAL ''1 year'';
+  - every day:    DELETE FROM sent_change WHERE at < NOW() - INTERVAL ''90 days'';
   - every day:    DELETE FROM bot_usage WHERE day < CURRENT_DATE - 366;
   - every hour:   ask the identity provider about people last checked a
                   day ago or more (human.idp_refresh_token); a refusal ->

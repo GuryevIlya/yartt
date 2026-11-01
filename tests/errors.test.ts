@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import api from '../server/api.ts';
+import { sql } from '../server/pg.ts';
 import { client, createEmployee } from './helpers.ts';
 
 describe('error codes', () => {
@@ -59,6 +61,30 @@ describe('error format over HTTP', () => {
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ appCode: 'unauthorized' });
     expect(pulled).toBeLessThan(1000);
+  });
+
+  test('a change sent again with its id is applied once; a refused one may be sent again', async () => {
+    const me = await createEmployee();
+    const [session] = await sql<{ s: string }[]>`SELECT start_session(${me.id}) AS s`;
+    const change = async (path: string, input: unknown, id: string) => {
+      const response = await fetch(`${url}/${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: `yartt_session=${session!.s}`, 'x-yartt-change': id },
+        body: JSON.stringify({ json: input }),
+      });
+      const body = (await response.json()) as { error?: { json: { message: string } } };
+      return body.error?.json.message ?? 'ok';
+    };
+    const tag = `once-${randomUUID()}`;
+    const id = randomUUID();
+    expect(await change('Task.create', { tags: [tag] }, id)).toBe('ok');
+    expect(await change('Task.create', { tags: [tag] }, id)).toBe('change_applied');
+    expect(await sql`SELECT 1 FROM task k JOIN tag t ON t.id = ANY(k.tag_ids) WHERE t.name = ${tag}`).toHaveLength(1);
+
+    // Refused (the tag set is taken): its id is not kept, so it is judged again.
+    const refused = randomUUID();
+    expect(await change('Task.create', { tags: [tag] }, refused)).toBe('tag_set_taken');
+    expect(await change('Task.create', { tags: [tag] }, refused)).toBe('tag_set_taken');
   });
 
   test('validation issues come without server-side messages', async () => {

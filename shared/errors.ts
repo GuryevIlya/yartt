@@ -10,6 +10,7 @@ export const ERROR_CODES = [
   'not_found',
   'forbidden',
   'unauthorized',
+  'change_applied',
 
   // authentication
   'invalid_token',

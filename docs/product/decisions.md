@@ -2038,3 +2038,32 @@ someone's program may be down for days).
 *Implemented:* `notification_failure`, `fail_notification()` (`db.sql`,
 migration `0.5-0.6`); `deliverNotifications()` in `server/worker.ts`,
 `DeliveryError` in `server/delivery.ts`; `server/admin.ts deliveries`.
+
+### 103. A change sent again is applied once, and waits for its person
+
+The outbox (decision 43) sent again any change the server did not answer.
+But "no answer" also happens when the server took the change and the
+answer was lost on the way back: the change was applied twice, a second
+task, a second comment. And a change the server refused for an ended
+session (a day with the identity provider) was dropped like any refused
+one: whoever worked offline longer than their session lost their work.
+
+Now every change carries an id the browser gives it (X-Yartt-Change).
+The server keeps the ids it applied (sent_change) and answers a second
+one with change_applied, which the outbox takes as sent. The id is kept
+before the change runs and removed if it fails, so a refused change is
+judged again. Mutations go one per request for that; queries still go
+in batches.
+
+A change also remembers who made it. Signed out, the outbox waits; once
+that person signs in again it goes. If someone else signs in in this
+browser, it is dropped unsent: on a shared computer nobody sends another
+person's changes. Signing in no longer clears the outbox; logging out
+still does.
+
+The key of a new bot, shown once, is never queued: offline it is
+refused like signing in.
+
+*Implemented:* `sent_change` (`db.sql`, migration `0.5-0.6`), the last
+middleware of `authedProcedure` (`server/trpc.ts`); `client/hooks/offline.ts`,
+the split link in `client/main.tsx`.

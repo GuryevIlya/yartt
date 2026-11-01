@@ -865,6 +865,7 @@ export const en: Translation = {
     not_found: 'Not found — it may have been changed or removed.',
     forbidden: 'You are not allowed to do this.',
     unauthorized: 'Your session has ended — please sign in again.',
+    change_applied: 'This change has already been saved.',
     invalid_token: 'The link is invalid: it works once and not for long. Request a new one.',
     too_many_requests: 'Too many emails in a row — try again in 15 minutes.',
     sso_only: 'Here you sign in, and people come in, only with the company account.',

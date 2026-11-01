@@ -55,6 +55,7 @@ const t = initTRPC.context<Context>().meta<Meta>().create({
 });
 
 const EmailRow = z.object({ email: z.string().nullable() });
+const Recorded = z.object({ id: z.string() });
 
 function toTrpcError(cause: AppError): TRPCError {
   const code =
@@ -118,4 +119,16 @@ export const authedProcedure = procedure.use(({ ctx, meta, type, next }) => {
     if (outsideDomains(row?.email ?? null)) throw new AppError('email_outside_domains');
   }
   return next();
+}).use(async ({ ctx, type, next }) => {
+  // A change the outbox sends again, its answer lost on the way, is applied
+  // once (decision 103): its id is kept before it runs, dropped if it fails.
+  if (type !== 'mutation' || ctx.changeId === null) return next();
+  const recorded = Recorded.array().parse(await sql`
+    INSERT INTO sent_change (id, employee_id) VALUES (${ctx.changeId}, ${ctx.employeeId})
+    ON CONFLICT (id) DO NOTHING RETURNING id
+  `);
+  if (recorded.length === 0) throw new AppError('change_applied');
+  const result = await next();
+  if (!result.ok) await sql`DELETE FROM sent_change WHERE id = ${ctx.changeId}`;
+  return result;
 });

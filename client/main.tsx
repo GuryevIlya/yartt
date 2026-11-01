@@ -1,6 +1,6 @@
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createTRPCClient, createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
+import { createTRPCClient, createTRPCUntypedClient, httpBatchLink, httpLink, splitLink } from '@trpc/client';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
@@ -13,7 +13,17 @@ import { TRPCProvider } from './hooks/trpc.ts';
 import './i18n/index.ts';
 import theme from './theme.ts';
 
-const http = () => httpBatchLink({ url: '/api/trpc', transformer: superjson });
+// Queries go in batches. A change goes alone, with its id: sent again by the
+// outbox, the server knows it applied it already (decision 103).
+const http = () => splitLink<AppRouter>({
+  condition: (op) => op.type === 'mutation',
+  true: httpLink({
+    url: '/api/trpc',
+    transformer: superjson,
+    headers: ({ op }) => (typeof op.context.changeId === 'string' ? { 'x-yartt-change': op.context.changeId } : {}),
+  }),
+  false: httpBatchLink({ url: '/api/trpc', transformer: superjson }),
+});
 // Offline, a change goes to the outbox and is sent later by the plain client (decision 43).
 const trpcClient = createTRPCClient<AppRouter>({ links: [offlineLink(), http()] });
 // The outbox sends by path, so it needs the untyped client.

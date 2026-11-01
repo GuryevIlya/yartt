@@ -63,6 +63,11 @@ const JOBS: { name: string; every: number; run: (sql: Sql) => Promise<unknown> }
     run: (sql) => sql`DELETE FROM visit WHERE at < NOW() - INTERVAL '1 year'`,
   },
   {
+    name: 'sent_change_cleanup',
+    every: DAY,
+    run: (sql) => sql`DELETE FROM sent_change WHERE at < NOW() - INTERVAL '90 days'`,
+  },
+  {
     name: 'tag_cleanup',
     every: DAY,
     run: (sql) => sql`

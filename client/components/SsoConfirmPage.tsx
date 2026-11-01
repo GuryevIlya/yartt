@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
-import { clearOfflineData } from '#client/hooks/offline.ts';
+import { clearOfflineCache } from '#client/hooks/offline.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { errorMessage } from '#client/i18n/errors.ts';
 
@@ -21,7 +21,7 @@ export default function () {
       // The page itself explains a bad link; no snackbar on top.
       meta: { quiet: true },
       onSuccess: async () => {
-        clearOfflineData();
+        clearOfflineCache();
         await queryClient.invalidateQueries();
         void navigate('/', { replace: true });
       },

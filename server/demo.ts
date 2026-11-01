@@ -29,7 +29,7 @@ const createCaller = createCallerFactory(trpc);
 const as = (employeeId: number, bot: Context['bot'] = null) => {
   const ctx: Context = { employeeId, bot, sessionToken: null, setSessionCookie: () => {}, clearSessionCookie: () => {},
     ssoPending: null, setSsoPendingCookie: () => {}, clearSsoPendingCookie: () => {},
-    loginBrowser: null, setLoginBrowserCookie: () => {},
+    changeId: null, loginBrowser: null, setLoginBrowserCookie: () => {},
   };
   return createCaller(ctx);
 };
