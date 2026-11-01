@@ -35,7 +35,12 @@ it is decided. Proposals wait for a decision in their own section.
 - [ ] **Release 1.0.** The delivery check passed (2026-11-01: the image
   built from scratch, an empty PostgreSQL 17, sign-in through a test
   SMTP, emails in each recipient's language, every webhook signature
-  verified on a receiver, a restart left the data alone). Tag `1.0.0` and push it —
+  verified on a receiver, a restart left the data alone). Since then the
+  signature covers a timestamp, a sign-in link works only in the browser
+  that asked for it, and files may go to an object storage: check again
+  the webhook signature on a receiver, a sign-in link through a real
+  mail server and a corporate mail scanner, and the move of files to a
+  real bucket (Yandex Object Storage or MinIO). Tag `1.0.0` and push it —
   the release workflow publishes the image
   ([release.md](../engineering/release.md)). The schema is already
   frozen: 0.0.0, the first published image, released schema 0.0, so
