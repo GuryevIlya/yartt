@@ -20,8 +20,18 @@ it is decided. Proposals wait for a decision in their own section.
   day, a person's page, My team and a task's feed as an owner, a manager
   at the top and a participant; read the plans of the slowest queries
   (`at_risk()`, `can_see()`, `mention_reaction()` called per row) and fix
-  what takes more than a few hundred milliseconds. Before 1.0: a slow
-  interface is what people leave Jira for.
+  what takes more than a few hundred milliseconds. Count the polling too:
+  every open tab asks for 5–7 queries each 30 seconds, `MyDay.todo` with
+  `at_risk()` among them (hidden tabs do not poll); if it weighs, a light
+  "what changed since" query in place of re-reading, and `can_see()`
+  as a join rather than a call per row. Before 1.0: a slow interface is
+  what people leave Jira for.
+- [ ] **The image scanned before it is published.** The release workflow
+  builds the image and scans it (Trivy) for high and critical advisories
+  of the base image and its packages, and stops the release on one. The
+  action is pinned by the commit SHA of a checked version, not a tag:
+  tags of popular actions have been moved to malicious code. Server
+  dependencies are checked already, on every CI run (`npm audit`).
 - [ ] **Release 1.0.** The delivery check passed (2026-11-01: the image
   built from scratch, an empty PostgreSQL 17, sign-in through a test
   SMTP, emails in each recipient's language, every webhook signature
@@ -35,7 +45,45 @@ it is decided. Proposals wait for a decision in their own section.
 
 In this order after stage 6 (S — a day, M — a few days, L — a week or more).
 
-Nothing approved is waiting.
+- [ ] **Deadlines in the calendar** (S). A personal secret link to an
+  ICS feed of one's own deadlines and reminders, for Outlook, Google
+  or any calendar: nothing to set up in yartt, the calendar asks it.
+  The link can be replaced, like a bot's key.
+- [ ] **Search that knows Russian word forms** (M). Search by text in
+  contexts and comments (trigrams now) also matches other forms of the
+  same word ("задача", "задачи", "задачу"): a `tsvector` with the
+  dictionary of the text's language beside the trigrams.
+- [ ] **Who opened and who was let in, for the security officer** (M).
+  A task's history of access: who was added, removed, approved, made it
+  public, and who opened it when (the visits are there already). For the
+  companies that keep data on their own servers, the reason they chose
+  yartt.
+- [ ] **A first day that is not empty** (S). A new person's My day shows
+  the first steps in place, from the guide, until they make their first
+  task.
+- [ ] **Push notifications from the installed app** (M). yartt installs
+  as an app already and works offline; a push to it is a channel that
+  needs no webhook receiver.
+- [ ] **Logs a log system reads** (S). One JSON line per event with its
+  level, instead of plain text, and the queue's length and the age of
+  its oldest notification in them, so a monitoring system can raise an
+  alarm.
+
+### Separate projects, after 1.0
+
+They live in repositories of their own, on the public API and the
+webhook (docs/admin/api.md), so yartt stays one image with nothing to
+configure.
+
+- [ ] **Receivers of the webhook** (M each): Telegram, Mattermost,
+  Slack, Pachca. Each a small image that takes the company's webhook,
+  checks its signature and sends the message to a person by their email
+  or their own link to the bot. Telegram first: the first market lives
+  in it.
+- [ ] **Bots, with examples** (M). A description of the API for bots
+  (OpenAPI from the procedures) and a few working bots: CI reporting a
+  failed build into its task, a reminder from a calendar, an import of
+  emails as comments.
 
 ## Decided against
 
