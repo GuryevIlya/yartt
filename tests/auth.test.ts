@@ -4,19 +4,36 @@ import type { Message } from '../server/delivery.ts';
 import { client, clientBySession, createEmployee, type TestClient } from './helpers.ts';
 
 const sent: Message[] = [];
+/** How long sending a message takes, as a slow mail server would. */
+let sendingMs = 0;
 vi.mock('../server/delivery.ts', () => ({
-  deliver: async (message: Message) => { sent.push(message); },
+  deliver: async (message: Message) => {
+    await new Promise((resolve) => setTimeout(resolve, sendingMs));
+    sent.push(message);
+  },
 }));
 
-beforeEach(() => { sent.length = 0; });
+beforeEach(() => {
+  sent.length = 0;
+  sendingMs = 0;
+});
 
 /** The token of a sign-in link asked for in this browser. */
 async function loginLink(email: string, browser: TestClient): Promise<string> {
+  const before = sent.length;
   await browser.Auth.requestLogin({ email });
-  const message = sent.findLast((m) => m.payload.kind === 'login' && m.to.email?.toLowerCase() === email.toLowerCase());
-  const url = message?.payload.kind === 'login' ? message.payload.url : '';
+  // The link goes after the answer (Auth.requestLogin).
+  const message = await vi.waitFor(() => {
+    const found = sent.slice(before).findLast((m) => m.payload.kind === 'login' && m.to.email?.toLowerCase() === email.toLowerCase());
+    if (!found) throw new Error('no link yet');
+    return found;
+  });
+  const url = message.payload.kind === 'login' ? message.payload.url : '';
   return url.slice(url.lastIndexOf('/') + 1);
 }
+
+/** Long enough for a link that was going to be sent to be sent. */
+const settled = () => new Promise((resolve) => setTimeout(resolve, 200));
 
 describe('auth', () => {
   test('magic link -> session -> me', async () => {
@@ -75,7 +92,18 @@ describe('auth', () => {
 
   test('unknown email: same answer, nothing sent', async () => {
     await (await client()).Auth.requestLogin({ email: 'nobody@yartt.test' });
+    await settled();
     expect(sent).toHaveLength(0);
+  });
+
+  test('the answer does not wait for the link: a known address takes as long as an unknown one', async () => {
+    const { email } = await createEmployee();
+    sendingMs = 1000;
+    const started = Date.now();
+    await (await client()).Auth.requestLogin({ email });
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(sent).toHaveLength(0);
+    await vi.waitFor(() => expect(sent).toHaveLength(1), { timeout: 2000 });
   });
 
   test('dismissed employee cannot log in', async () => {
@@ -83,6 +111,7 @@ describe('auth', () => {
     const { id, email } = await createEmployee({ managerId: boss.id });
     await sql`SELECT dismiss_employee(${id}, ${boss.id})`;
     await (await client()).Auth.requestLogin({ email });
+    await settled();
     expect(sent).toHaveLength(0);
   });
 

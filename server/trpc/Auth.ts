@@ -29,7 +29,7 @@ export default router({
     .mutation(({ input, ctx }) => {
       const browser = ctx.loginBrowser ?? Auth.newBrowserKey();
       ctx.setLoginBrowserCookie(browser);
-      return Auth.requestLogin(input.email, browser);
+      Auth.requestLogin(input.email, browser);
     }),
 
   /**

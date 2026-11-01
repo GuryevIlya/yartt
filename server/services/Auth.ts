@@ -21,11 +21,17 @@ export const newBrowserKey = () => randomBytes(32).toString('hex');
  * Sends a sign-in link (email and/or webhook) right away, not through the
  * notification queue: the token must not lie in the database in plain text.
  * The link works only in the browser with this key (decision 101). Does
- * nothing for unknown or dismissed emails, so the caller cannot tell
- * whether the email exists.
+ * nothing for unknown or dismissed emails, and answers before anything is
+ * looked up or sent: neither the answer nor how long it takes tells the
+ * caller whether the email exists.
+ * @throws sso_only
  */
-export async function requestLogin(email: string, browser: string): Promise<void> {
+export function requestLogin(email: string, browser: string): void {
   if (env.OIDC_ISSUER) throw new AppError('sso_only');
+  sendLoginLink(email, browser).catch((error: unknown) => console.error('[auth] a sign-in link was not sent:', error));
+}
+
+async function sendLoginLink(email: string, browser: string): Promise<void> {
   const [token] = Token.array().parse(await sql`SELECT issue_token(${email}, ${browser}) AS token`);
   if (!token?.token) return;
 
