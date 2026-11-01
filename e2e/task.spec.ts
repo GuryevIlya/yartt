@@ -170,6 +170,8 @@ test.describe.serial('a task from creation to hand-over', () => {
     await expect(page.getByRole('button', { name: 'Завершить' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Сделать публичной' })).toHaveCount(0);
     await expect(page.getByText('Марина Соколова').filter({ visible: true }).first()).toBeVisible();
+    // The handover stays in the feed (decision 96).
+    await expect(page.getByText('Новый владелец: Марина Соколова (прежний: Алексей Громов)')).toBeVisible();
   });
 });
 

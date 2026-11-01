@@ -526,6 +526,11 @@ export const en: Translation = {
       spentDays: '{{name}} logged {{time}} over {{count}} days ({{from}} — {{to}})',
       plan: '{{name}} plans {{time}} more',
       planCleared: '{{name}} cleared their plan',
+      owner: 'New owner: {{to}} (previously {{from}})',
+      ownerBy: '{{by}}: new owner {{to}} (previously {{from}})',
+      ownerTaken: 'New owner: {{to}} (the task had no owner)',
+      ownerTo: 'New owner: {{to}}',
+      ownerLeft: 'The task was left without an owner (previously {{from}})',
     },
     composer: {
       placeholder: 'Comment… (c to jump here, Ctrl+Enter to send)',

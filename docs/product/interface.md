@@ -242,8 +242,9 @@ Left, top to bottom:
   appear between the comments as grey lines: a reply at its moment
   ("Pavel → Marina: «…»", a click unfolds the thread in place), deadline
   moves, a comment of another task attaching this one ("Mentioned in
-  #7"), time logged ("Pavel logged 2h for Oct 14") and time left set or
-  cleared. Time entries of one person in a row, with nothing else between
+  #7"), time logged ("Pavel logged 2h for Oct 14"), time left set or
+  cleared, and a change of the owner ("New owner: Ivan (previously
+  Pavel)", with who made it when it was the owner's manager, decision 96). Time entries of one person in a row, with nothing else between
   them, are one line ("logged 16h over 8 days, Oct 5 — Oct 14"); a click
   shows the days. Who read a comment is not
   shown: in a public task that would be the whole company.

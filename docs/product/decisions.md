@@ -1833,3 +1833,27 @@ list, so the migration accepts them.
 `mention_delete_check`, `mention_accept_earlier` (`db.sql`, migration
 `0.5-0.6`); `notify(…, p_told)`; `Comment.addMention`, `removeMention`,
 `acceptMentions`; `client/components/TaskPage/Mentions.tsx`.
+
+### 96. Every change of the owner is kept
+
+A handover overwrote task.owner_id, and its only trace was the
+notifications, deleted after a year: the task's feed did not say that
+it had changed hands, nor who handed it over. That broke "the data never
+lies" in the one place where responsibility moves.
+
+Now every change of the owner is a row of owner_change: the moment, the
+previous owner, the new one and who made it — the owner handing it over,
+their manager, whoever took an ownerless task, the manager of someone
+dismissed. A trigger writes it, and refuses a change whose author is not
+named, so the history has no holes. The feed shows each change among
+its events: "New owner: Ivan (previously Pavel)", and who made it when
+that was not the previous owner.
+
+The creation of a task is not a row: when a task was created is still
+not stored (philosophy), so a task never handed over has no history.
+Changes before 0.6 are restored from their notifications; the last one
+is task.handed_at, and what nothing recorded is shown without its author.
+
+*Implemented:* `owner_change`, `trg_task_owner_reset_review()` with
+`yartt.actor` (`db.sql`, migration `0.5-0.6`); `setActor()` in
+`server/services/Task.ts`; the `owner` event of the feed.

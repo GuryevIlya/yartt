@@ -1,4 +1,4 @@
-import { Check, Event, ExpandLess, ExpandMore, HourglassBottom, Link as LinkIcon, Reply as ReplyIcon, TaskAlt } from '@mui/icons-material';
+import { Check, Event, ExpandLess, ExpandMore, HourglassBottom, Link as LinkIcon, Reply as ReplyIcon, SwapHoriz, TaskAlt } from '@mui/icons-material';
 import { Box, Button, ButtonBase, Chip, Pagination, Paper, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -16,8 +16,8 @@ const PAGE_SIZE = 20;
 
 /**
  * The feed: open mentions by default — what still waits for someone; "All
- * events" shows every comment, deadline move, mention in another task and
- * time logged or planned, with pages.
+ * events" shows every comment, deadline move, mention in another task,
+ * time logged or planned and change of the owner, with pages.
  */
 export default function (p: { taskId: number }) {
   const { t } = useTranslation();
@@ -186,6 +186,16 @@ function EventLine(p: { taskId: number; item: Exclude<FeedItem, { kind: 'comment
         ? t('task.feed.planCleared', { name: name(item.employeeId) })
         : t('task.feed.plan', { name: name(item.employeeId), time: format.minutes(item.minutes) }) + (item.about ? `: ${t('common.quote', { text: item.about })}` : '');
       break;
+    case 'owner': {
+      icon = <SwapHoriz fontSize="small" />;
+      const names = { from: item.fromId === null ? '' : name(item.fromId), to: item.toId === null ? '' : name(item.toId), by: item.byId === null ? '' : name(item.byId) };
+      // Who made the change is said only when it is not the previous owner handing it over.
+      text = item.toId === null ? t('task.feed.ownerLeft', names)
+        : item.fromId === null ? t(item.byId === null ? 'task.feed.ownerTo' : 'task.feed.ownerTaken', names)
+        : item.byId === null || item.byId === item.fromId ? t('task.feed.owner', names)
+        : t('task.feed.ownerBy', names);
+      break;
+    }
   }
 
   return (

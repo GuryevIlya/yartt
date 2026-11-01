@@ -204,7 +204,7 @@ export const helpEn: Help = {
           steps: [
             'The owner changes the tags, description, priority and deadline right on the task\'s page.',
             'Participants and Opened it show who opened the task and when, how much each spent and how much they plan.',
-            '"Hand over" gives the whole task to another owner, and you stay a participant. A manager can hand over their report\'s task too.',
+            '"Hand over" gives the whole task to another owner, and you stay a participant. A manager can hand over their report\'s task too. Every handover stays in the task\'s feed, so whose it was before is always seen.',
             'Anyone may "Leave the task" except its owner, and a manager while their report takes part.',
             'A task without an owner (they left and had no manager) any participant can "Take it".',
           ],

@@ -591,6 +591,11 @@ export const ru = {
       spentDays: '{{name}}: списано {{time}} за {{count}} дн. ({{from}} — {{to}})',
       plan: '{{name}}: в плане ещё {{time}}',
       planCleared: '{{name}}: план убран',
+      owner: 'Новый владелец: {{to}} (прежний: {{from}})',
+      ownerBy: '{{by}}: новый владелец {{to}} (прежний: {{from}})',
+      ownerTaken: 'Новый владелец: {{to}} (у задачи не было владельца)',
+      ownerTo: 'Новый владелец: {{to}}',
+      ownerLeft: 'Задача осталась без владельца (прежний: {{from}})',
     },
     composer: {
       placeholder: 'Комментарий… (c — сюда, Ctrl+Enter — отправить)',

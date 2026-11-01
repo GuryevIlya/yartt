@@ -3,7 +3,8 @@
 -- A mention is closed without a reply too, and waits for its author's
 -- "Accepted" (decision 95). The author adds mentions to a comment later and
 -- deletes one until its first reaction; mentioning everyone leaves no copy
--- to a manager mentioned in the same comment.
+-- to a manager mentioned in the same comment. Every change of a task's
+-- owner is kept and shown in its feed (decision 96).
 
 ALTER TABLE mention ADD COLUMN created_at TIMESTAMPTZ;
 UPDATE mention m SET created_at = c.created_at
@@ -211,6 +212,158 @@ available one is found — once round a ring of managers at most. Copies carry
 for = the original recipient. p_told — those told of the same thing
 already (mentioned in the same comment): the copies stop before them.';
 
+-- Every change of a task's owner is kept (decision 96).
+CREATE TABLE owner_change (
+    id SERIAL PRIMARY KEY,
+    task_id INT NOT NULL REFERENCES task(id),
+    at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    from_id INT REFERENCES employee(id),
+    to_id INT REFERENCES employee(id),
+    by INT REFERENCES employee(id)
+);
+CREATE INDEX idx_owner_change_task ON owner_change(task_id, at);
+
+COMMENT ON TABLE owner_change IS
+'Ownership history: one row per change of task.owner_id, written by a
+trigger (decision 96). task.owner_id is the current owner and
+task.handed_at the moment of the last row. The creation of a task is not
+a row: when a task was created is not stored (philosophy).
+The rows are never changed or deleted. The task''s feed shows each one.';
+
+COMMENT ON COLUMN owner_change.id IS
+'Row id.';
+
+COMMENT ON COLUMN owner_change.task_id IS
+'Which task.';
+
+COMMENT ON COLUMN owner_change.at IS
+'When the owner changed.';
+
+COMMENT ON COLUMN owner_change.from_id IS
+'The previous owner. NULL — the task had none, or, with by NULL, it is
+not known.';
+
+COMMENT ON COLUMN owner_change.to_id IS
+'The new owner. NULL — the task was left without one.';
+
+COMMENT ON COLUMN owner_change.by IS
+'Who changed it: the owner who handed it over, their manager, whoever
+took an ownerless task, the manager of a dismissed owner. NULL — not
+known: a change made before 0.6, restored from its notifications.';
+
+-- Before 0.6 a change of the owner was kept only in its notifications (a
+-- year of them): the changes are restored from them. A handover by a
+-- manager told the previous owner (owner_handed) with who did it; any other
+-- told the new owner (owner_change), made by the previous owner or, if that
+-- one was dismissed then, by the new owner, their manager. The last change,
+-- whatever it was, is task.handed_at.
+WITH n AS (
+    SELECT task_id, added_at AS at, employee_id, payload
+      FROM notification
+     WHERE payload->>'kind' IN ('owner_change', 'owner_handed') AND NOT payload ? 'for' AND task_id IS NOT NULL
+),
+handed AS (
+    SELECT task_id, at, employee_id AS from_id, (payload->>'employeeId')::int AS to_id, (payload->>'by')::int AS "by"
+      FROM n WHERE payload->>'kind' = 'owner_handed'
+),
+changed AS (
+    SELECT n.task_id, n.at, (n.payload->>'from')::int AS from_id, n.employee_id AS to_id,
+           CASE WHEN e.dismissed_at = n.at THEN n.employee_id ELSE (n.payload->>'from')::int END AS "by"
+      FROM n LEFT JOIN employee e ON e.id = (n.payload->>'from')::int
+     WHERE n.payload->>'kind' = 'owner_change'
+       AND NOT EXISTS (SELECT 1 FROM handed h WHERE h.task_id = n.task_id AND h.at = n.at)
+)
+INSERT INTO owner_change (task_id, at, from_id, to_id, "by")
+SELECT task_id, at, from_id, to_id, "by" FROM handed
+UNION ALL
+SELECT task_id, at, from_id, to_id, "by" FROM changed
+ORDER BY at, task_id;
+
+INSERT INTO owner_change (task_id, at, from_id, to_id, "by")
+SELECT k.id, k.handed_at, NULL, k.owner_id, NULL
+  FROM task k
+ WHERE k.handed_at IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM owner_change o WHERE o.task_id = k.id AND o.at = k.handed_at)
+ ORDER BY k.handed_at, k.id;
+
+COMMENT ON COLUMN task.handed_at IS
+'When the task last came to its current owner (trigger on owner_id): the
+moment of its last owner_change.
+Until they accept it (reviewed_at NULL, mark_reviewed()) their review
+shows the handover alone; accepted, reviewed_at is handed_at, and only
+what came after it is new to them. NULL — never handed over: the creator
+owns it.';
+
+CREATE OR REPLACE FUNCTION trg_task_owner_reset_review()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_by TEXT := current_setting('yartt.actor', TRUE);
+BEGIN
+    IF COALESCE(v_by, '') = '' THEN
+        RAISE EXCEPTION 'the owner of task % changed without yartt.actor', NEW.id;
+    END IF;
+    NEW.reviewed_at := NULL;
+    NEW.handed_at := NOW();
+    INSERT INTO owner_change (task_id, from_id, to_id, "by")
+    VALUES (NEW.id, OLD.owner_id, NEW.owner_id, v_by::int);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION trg_task_owner_reset_review() IS
+'reviewed_at = NULL and handed_at = NOW() when the owner changes: the
+new owner is shown only what came after the handover (decision 94). The
+change is kept in owner_change with who made it: whoever changes
+owner_id first sets yartt.actor (set_config(..., TRUE), for the
+transaction); without it the change is refused.';
+
+CREATE OR REPLACE FUNCTION dismiss_employee(p_employee_id INT, p_actor_id INT)
+RETURNS VOID AS $$
+DECLARE
+    v_dismissed_at TIMESTAMPTZ;
+    v_manager_id INT;
+    v_task_id INT;
+BEGIN
+    SELECT dismissed_at, manager_id INTO v_dismissed_at, v_manager_id
+      FROM employee WHERE id = p_employee_id
+       FOR UPDATE;
+
+    IF NOT FOUND OR v_dismissed_at IS NOT NULL THEN
+        RAISE EXCEPTION 'employee % is unknown or already dismissed', p_employee_id
+            USING HINT = 'not_found';
+    END IF;
+    IF v_manager_id IS DISTINCT FROM p_actor_id THEN
+        RAISE EXCEPTION 'only the direct manager can dismiss employee %', p_employee_id
+            USING HINT = 'not_manager',
+                  DETAIL = json_build_object('employeeId', p_employee_id)::text;
+    END IF;
+
+    -- The direct manager is the heir: they are active, they are acting.
+    PERFORM set_config('yartt.actor', p_actor_id::text, TRUE);
+    FOR v_task_id IN
+        UPDATE task SET owner_id = v_manager_id
+         WHERE owner_id = p_employee_id
+        RETURNING id
+    LOOP
+        PERFORM notify(v_manager_id, v_task_id, jsonb_build_object(
+            'kind', 'owner_change', 'from', p_employee_id));
+    END LOOP;
+
+    -- The leaver knew their bots' keys: the bots move on with keys nobody knows.
+    UPDATE bot SET key_hash = digest(new_bot_key(), 'sha256'), key_issued_at = NOW()
+     WHERE employee_id IN (SELECT id FROM employee WHERE manager_id = p_employee_id AND kind = 'bot');
+    -- In a ring the dismissing manager may be a report too: they are left without one.
+    UPDATE employee SET manager_id = NULLIF(v_manager_id, id) WHERE manager_id = p_employee_id;
+
+    UPDATE employee SET dismissed_at = NOW() WHERE id = p_employee_id;
+    UPDATE human SET next_day = NULL WHERE employee_id = p_employee_id;
+
+    DELETE FROM token WHERE employee_id = p_employee_id;
+    DELETE FROM session WHERE employee_id = p_employee_id;
+    DELETE FROM remind WHERE employee_id = p_employee_id;
+END;
+$$ LANGUAGE plpgsql;
+
 -- The specification (COMMENT ON SCHEMA) as of this version.
 COMMENT ON SCHEMA public IS
 'yartt — a task tracker without projects, subtasks or assignments.
@@ -258,7 +411,8 @@ Key principles:
   - Ownership can be transferred by the owner or by the owner''s direct
     manager. The previous owner stays an observer. When the owner is
     dismissed, their tasks go to their manager. With no manager the task
-    is left without an owner and any observer can take it.
+    is left without an owner and any observer can take it. Every change
+    of the owner is kept (owner_change) and shown in the task''s feed.
   - Observers see the task and change only their own things: comments,
     their time entries, their time left, their reminders, their mentions —
     and bring others in, the way a copy is added to an email. The owner
@@ -394,8 +548,9 @@ From created_by to owner_id.
   responsibility. "I created it, but it is not mine." Responsibility
   blurs.
   What we do: owner_id. Creator = owner. No separate "author" role.
-  Ownership can be transferred. No "who created it" history — not
-  needed. Creation is not a metric. Lead time / cycle time are easy to
+  Ownership can be transferred, and every change is kept (owner_change):
+  whose the task was and since when, never when it was created. No
+  "who created it" role — not needed. Creation is not a metric. Lead time / cycle time are easy to
   game (create only "quick" tasks). created_at is not stored at all.
 
 From deleting to closing.

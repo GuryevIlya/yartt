@@ -243,6 +243,10 @@ INSERT INTO observer ("added_at", "added_by", "deleted_at", "deleted_by", "id", 
 INSERT INTO observer ("added_at", "added_by", "deleted_at", "deleted_by", "id", "task_id", "value") SELECT "added_at", "added_by", "deleted_at", "deleted_by", "id", "task_id", "value" FROM json_populate_record(NULL::observer, '{"added_at" : "2026-10-17T17:02:20.561931+00:00", "added_by" : null, "deleted_at" : null, "deleted_by" : null, "id" : 98, "task_id" : 34, "value" : 2}');
 INSERT INTO observer ("added_at", "added_by", "deleted_at", "deleted_by", "id", "task_id", "value") SELECT "added_at", "added_by", "deleted_at", "deleted_by", "id", "task_id", "value" FROM json_populate_record(NULL::observer, '{"added_at" : "2026-10-17T17:02:20.561931+00:00", "added_by" : null, "deleted_at" : null, "deleted_by" : null, "id" : 99, "task_id" : 34, "value" : 1}');
 
+-- owner_change
+INSERT INTO owner_change ("at", "by", "from_id", "id", "task_id", "to_id") SELECT "at", "by", "from_id", "id", "task_id", "to_id" FROM json_populate_record(NULL::owner_change, '{"at" : "2026-10-17T17:02:20.556055+00:00", "by" : 2, "from_id" : 3, "id" : 1, "task_id" : 31, "to_id" : 4}');
+INSERT INTO owner_change ("at", "by", "from_id", "id", "task_id", "to_id") SELECT "at", "by", "from_id", "id", "task_id", "to_id" FROM json_populate_record(NULL::owner_change, '{"at" : "2026-10-17T17:02:20.624699+00:00", "by" : 7, "from_id" : 7, "id" : 2, "task_id" : 8, "to_id" : 2}');
+
 -- remind
 INSERT INTO remind ("at", "employee_id", "sent_at", "task_id", "value") SELECT "at", "employee_id", "sent_at", "task_id", "value" FROM json_populate_record(NULL::remind, '{"at" : "2026-10-18T06:30:00+00:00", "employee_id" : 1, "sent_at" : null, "task_id" : 1, "value" : "Проверить форму заявки на стенде"}');
 INSERT INTO remind ("at", "employee_id", "sent_at", "task_id", "value") SELECT "at", "employee_id", "sent_at", "task_id", "value" FROM json_populate_record(NULL::remind, '{"at" : "2026-10-19T17:02:20.69+00:00", "employee_id" : 1, "sent_at" : null, "task_id" : 1, "value" : null}');

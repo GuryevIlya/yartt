@@ -118,7 +118,8 @@ Key principles:
   - Ownership can be transferred by the owner or by the owner''s direct
     manager. The previous owner stays an observer. When the owner is
     dismissed, their tasks go to their manager. With no manager the task
-    is left without an owner and any observer can take it.
+    is left without an owner and any observer can take it. Every change
+    of the owner is kept (owner_change) and shown in the task''s feed.
   - Observers see the task and change only their own things: comments,
     their time entries, their time left, their reminders, their mentions —
     and bring others in, the way a copy is added to an email. The owner
@@ -254,8 +255,9 @@ From created_by to owner_id.
   responsibility. "I created it, but it is not mine." Responsibility
   blurs.
   What we do: owner_id. Creator = owner. No separate "author" role.
-  Ownership can be transferred. No "who created it" history — not
-  needed. Creation is not a metric. Lead time / cycle time are easy to
+  Ownership can be transferred, and every change is kept (owner_change):
+  whose the task was and since when, never when it was created. No
+  "who created it" role — not needed. Creation is not a metric. Lead time / cycle time are easy to
   game (create only "quick" tasks). created_at is not stored at all.
 
 From deleting to closing.
@@ -1453,7 +1455,8 @@ away by it: only closing or moving it.
 Reset to NULL when the owner changes.';
 
 COMMENT ON COLUMN task.handed_at IS
-'When the task last came to its current owner (trigger on owner_id).
+'When the task last came to its current owner (trigger on owner_id): the
+moment of its last owner_change.
 Until they accept it (reviewed_at NULL, mark_reviewed()) their review
 shows the handover alone; accepted, reviewed_at is handed_at, and only
 what came after it is new to them. NULL — never handed over: the creator
@@ -1464,6 +1467,48 @@ COMMENT ON CONSTRAINT chk_task_tag_ids_set ON task IS
 
 COMMENT ON CONSTRAINT uq_task_tag_ids ON task IS
 'The set of tags is unique — it is the task "title".';
+
+
+-- ============================================================================
+-- 4a. owner_change — who owned a task, and since when
+-- ============================================================================
+CREATE TABLE owner_change (
+    id SERIAL PRIMARY KEY,
+    task_id INT NOT NULL REFERENCES task(id),
+    at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    from_id INT REFERENCES employee(id),
+    to_id INT REFERENCES employee(id),
+    by INT REFERENCES employee(id)
+);
+CREATE INDEX idx_owner_change_task ON owner_change(task_id, at);
+
+COMMENT ON TABLE owner_change IS
+'Ownership history: one row per change of task.owner_id, written by a
+trigger (decision 96). task.owner_id is the current owner and
+task.handed_at the moment of the last row. The creation of a task is not
+a row: when a task was created is not stored (philosophy).
+The rows are never changed or deleted. The task''s feed shows each one.';
+
+COMMENT ON COLUMN owner_change.id IS
+'Row id.';
+
+COMMENT ON COLUMN owner_change.task_id IS
+'Which task.';
+
+COMMENT ON COLUMN owner_change.at IS
+'When the owner changed.';
+
+COMMENT ON COLUMN owner_change.from_id IS
+'The previous owner. NULL — the task had none, or, with by NULL, it is
+not known.';
+
+COMMENT ON COLUMN owner_change.to_id IS
+'The new owner. NULL — the task was left without one.';
+
+COMMENT ON COLUMN owner_change.by IS
+'Who changed it: the owner who handed it over, their manager, whoever
+took an ownerless task, the manager of a dismissed owner. NULL — not
+known: a change made before 0.6, restored from its notifications.';
 
 
 -- ============================================================================
@@ -2815,16 +2860,26 @@ FOR EACH ROW EXECUTE FUNCTION trg_task_tag_ids();
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION trg_task_owner_reset_review()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_by TEXT := current_setting('yartt.actor', TRUE);
 BEGIN
+    IF COALESCE(v_by, '') = '' THEN
+        RAISE EXCEPTION 'the owner of task % changed without yartt.actor', NEW.id;
+    END IF;
     NEW.reviewed_at := NULL;
     NEW.handed_at := NOW();
+    INSERT INTO owner_change (task_id, from_id, to_id, "by")
+    VALUES (NEW.id, OLD.owner_id, NEW.owner_id, v_by::int);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION trg_task_owner_reset_review() IS
 'reviewed_at = NULL and handed_at = NOW() when the owner changes: the
-new owner is shown only what came after the handover (decision 94).';
+new owner is shown only what came after the handover (decision 94). The
+change is kept in owner_change with who made it: whoever changes
+owner_id first sets yartt.actor (set_config(..., TRUE), for the
+transaction); without it the change is refused.';
 
 CREATE TRIGGER task_owner_reset_review
 BEFORE UPDATE OF owner_id ON task
@@ -4213,6 +4268,7 @@ BEGIN
     END IF;
 
     -- The direct manager is the heir: they are active, they are acting.
+    PERFORM set_config('yartt.actor', p_actor_id::text, TRUE);
     FOR v_task_id IN
         UPDATE task SET owner_id = v_manager_id
          WHERE owner_id = p_employee_id

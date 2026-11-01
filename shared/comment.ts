@@ -141,13 +141,26 @@ export const PlanEvent = z.object({
 });
 export type PlanEvent = z.infer<typeof PlanEvent>;
 
-export const FeedItem = z.discriminatedUnion('kind', [Comment, ReplyEvent, DeadlineEvent, ClosedEvent, MentionedInEvent, SpentEvent, PlanEvent]);
+/** The owner changed (owner_change, decision 96). */
+export const OwnerEvent = z.object({
+  kind: z.literal('owner'),
+  at: z.date(),
+  /** NULL — the task had no owner, or, with byId NULL, it is not known. */
+  fromId: Id.nullable(),
+  /** NULL — the task was left without one. */
+  toId: Id.nullable(),
+  /** Who changed it; NULL — not known (before 0.6). */
+  byId: Id.nullable(),
+});
+export type OwnerEvent = z.infer<typeof OwnerEvent>;
+
+export const FeedItem = z.discriminatedUnion('kind', [Comment, ReplyEvent, DeadlineEvent, ClosedEvent, MentionedInEvent, SpentEvent, PlanEvent, OwnerEvent]);
 export type FeedItem = z.infer<typeof FeedItem>;
 
 /**
  * 'mentions' — only threads with open mentions; 'all' — every thread and
  * event: replies, deadline moves, mentions in other tasks, time logged and
- * planned.
+ * planned, owner changes.
  */
 export const FeedFilter = z.enum(['mentions', 'all']);
 export type FeedFilter = z.infer<typeof FeedFilter>;

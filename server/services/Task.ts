@@ -312,11 +312,16 @@ export async function close(actorId: number, taskId: number, reviewedUntil?: Dat
 
 const OwnerRow = z.object({ ownerId: z.number().nullable(), managerId: z.number().nullable() });
 
+/** Who changes the owner in this transaction: the trigger keeps it in owner_change (decision 96). */
+export async function setActor(db: Sql, actorId: number): Promise<void> {
+  await db`SELECT set_config('yartt.actor', ${String(actorId)}, TRUE)`;
+}
+
 /**
  * Hands the task over. Allowed to the owner and to the owner's direct
  * manager. The new owner is told; when the manager acts, the previous owner
- * is told too. The previous owner stays an observer, reviewed_at resets, handed_at is set and
- * a private task gets the new owner as an observer (triggers).
+ * is told too. The previous owner stays an observer, reviewed_at resets, handed_at is set, the
+ * change is kept in owner_change and a private task gets the new owner as an observer (triggers).
  */
 export async function transfer(actorId: number, taskId: number, newOwnerId: number): Promise<void> {
   await sql.begin(async (tx) => {
@@ -335,6 +340,7 @@ export async function transfer(actorId: number, taskId: number, newOwnerId: numb
     `);
     if (!target?.value) throw new AppError('not_found');
 
+    await setActor(db, actorId);
     await db`UPDATE task SET owner_id = ${newOwnerId} WHERE id = ${taskId}`;
     if (newOwnerId !== actorId) {
       await db`SELECT notify(${newOwnerId}, ${taskId}, ${db.json({ kind: 'owner_change', from: row.ownerId })})`;
@@ -355,6 +361,7 @@ export async function take(actorId: number, taskId: number): Promise<void> {
     if (!row) throw new AppError('not_found');
     if (row.ownerId !== null) throw new AppError('forbidden');
     await assertCanSee(taskId, actorId, db);
+    await setActor(db, actorId);
     await db`UPDATE task SET owner_id = ${actorId} WHERE id = ${taskId}`;
   });
 }

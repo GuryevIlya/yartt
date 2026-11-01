@@ -60,19 +60,48 @@ describe('ownership', () => {
     expect(await kinds(owner.id)).toMatchObject([{ kind: 'owner_handed', by: boss.id, employeeId: heir.id }]);
   });
 
+  test('every change of the owner is kept and shown in the feed, with who made it (decision 96)', async () => {
+    const boss = await createEmployee();
+    const owner = await createEmployee({ managerId: boss.id });
+    const heir = await createEmployee();
+    const id = await createTask(owner.id);
+    const feed = async () => (await (await client(owner.id)).Comment.list({ taskId: id, filter: 'all', page: 1 })).items;
+    // Creating a task is no change: when it was created is not kept.
+    expect(await feed()).toEqual([]);
+
+    await (await client(owner.id)).Task.transfer({ id, ownerId: heir.id });
+    await (await client(heir.id)).Task.transfer({ id, ownerId: owner.id });
+    await (await client(boss.id)).Task.transfer({ id, ownerId: boss.id });
+    expect(await feed()).toMatchObject([
+      { kind: 'owner', fromId: owner.id, toId: boss.id, byId: boss.id },
+      { kind: 'owner', fromId: heir.id, toId: owner.id, byId: heir.id },
+      { kind: 'owner', fromId: owner.id, toId: heir.id, byId: owner.id },
+    ]);
+    const [last] = await sql<{ same: boolean }[]>`
+      SELECT k.handed_at = (SELECT max(at) FROM owner_change WHERE task_id = k.id) AS same FROM task k WHERE k.id = ${id}
+    `;
+    expect(last!.same).toBe(true);
+    // An owner changed with nobody named is refused: the history would have a hole.
+    await expect(sql`UPDATE task SET owner_id = ${heir.id} WHERE id = ${id}`).rejects.toThrow(/yartt.actor/);
+  });
+
   test('an ownerless task is taken by someone who sees it', async () => {
     const owner = await createEmployee();
     const helper = await createEmployee();
     const stranger = await createEmployee();
     const id = await createTask(owner.id);
     await (await client(owner.id)).Observer.add({ taskId: id, employeeId: helper.id });
-    await sql`UPDATE task SET owner_id = NULL WHERE id = ${id}`;
+    await sql.begin(async (tx) => {
+      await tx`SELECT set_config('yartt.actor', ${String(owner.id)}, TRUE)`;
+      await tx`UPDATE task SET owner_id = NULL WHERE id = ${id}`;
+    });
 
     await expect((await client(stranger.id)).Task.take({ id })).rejects.toMatchObject({ message: 'no_access' });
     // The feed of an ownerless task opens (no comment is "new" for nobody).
-    expect((await (await client(helper.id)).Comment.list({ taskId: id, filter: 'all', page: 1 })).total).toBe(0);
+    expect((await (await client(helper.id)).Comment.list({ taskId: id, filter: 'all', page: 1 })).items)
+      .toMatchObject([{ kind: 'owner', fromId: owner.id, toId: null, byId: owner.id }]);
     await (await client(owner.id)).Comment.create({ taskId: id, html: '<p>Anyone?</p>', replyToId: null, files: [], mentionIds: [], taskIds: [] });
-    expect((await (await client(helper.id)).Comment.list({ taskId: id, filter: 'all', page: 1 })).items).toMatchObject([{ isNew: false }]);
+    expect((await (await client(helper.id)).Comment.list({ taskId: id, filter: 'all', page: 1 })).items).toMatchObject([{ isNew: false }, { kind: 'owner' }]);
     await (await client(helper.id)).Task.take({ id });
     expect(await (await client(helper.id)).Task.get({ id })).toMatchObject({ ownerId: helper.id });
     await expect((await client(owner.id)).Task.take({ id })).rejects.toMatchObject({ message: 'forbidden' });

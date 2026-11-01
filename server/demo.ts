@@ -288,7 +288,10 @@ export async function seedDemo(lang: DemoLanguage): Promise<void> {
   const printer = await O.Task.create({ tags: tags.printer });
   await O.Observer.add({ taskId: printer, employeeId: me });
   await O.Comment.create(comment(printer, t.comments.printer));
-  await sql`UPDATE task SET owner_id = NULL WHERE id = ${printer}`;
+  await sql.begin(async (tx) => {
+    await tx`SELECT set_config('yartt.actor', ${String(oleg)}, TRUE)`;
+    await tx`UPDATE task SET owner_id = NULL WHERE id = ${printer}`;
+  });
 
   // 12. For the team summary: Marina closed a task in time; Pavel's is overdue — set a week
   // ahead, passed three days ago (only SQL can move time), still open until he closes it (decision 93).
