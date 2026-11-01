@@ -3,6 +3,7 @@ import { Locale } from '#shared/employee.ts';
 import { NotificationPayload } from '#shared/notification.ts';
 import { refreshDemo } from './demo.ts';
 import { outsideDomains } from './domains.ts';
+import * as Attachments from './services/Attachment.ts';
 import * as Bots from './services/Bot.ts';
 import { checkPeople } from './sso.ts';
 import { deliver } from './delivery.ts';
@@ -51,11 +52,12 @@ const JOBS: { name: string; every: number; run: (sql: Sql) => Promise<unknown> }
   {
     name: 'attachment_cleanup',
     every: DAY,
-    run: (sql) => sql`
-      DELETE FROM attachment a
-       WHERE used_at < NOW() - INTERVAL '1 day'
-         AND NOT attachment_in_use(a.id)
-    `,
+    run: (sql) => Attachments.cleanup(sql),
+  },
+  {
+    name: 'attachment_storage',
+    every: MINUTE,
+    run: (sql) => Attachments.moveToStorage(sql),
   },
   {
     name: 'visit_cleanup',

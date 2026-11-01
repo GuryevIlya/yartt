@@ -39,6 +39,8 @@ work, [demo.env.example](../../demo.env.example) for a trial. Copy one to
 | `EMAIL_DOMAINS` | no | the company's mail domains, comma-separated (`corp.com,corp.kz`): no other address can be invited or set; someone who already has one signs in only to change it, and their mail gets that request instead of notifications, once a day. Exact domains, subdomains are not included. Empty — any address |
 | `FILE_MAX_MB` | no | the largest file that can be attached, in MB; default `50` (the demo keeps 2) |
 | `FILE_QUOTA_MB` | no | how much one person's files may take together, in MB; default `1024`. Over it an upload is refused, and the person deletes the content of files they no longer need in "My files" |
+| `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | no | keep attached files in an S3-compatible object storage (AWS S3, Yandex Object Storage, MinIO, …) instead of PostgreSQL; see [Data and backups](#data-and-backups) |
+| `S3_ENDPOINT`, `S3_REGION` | with `S3_BUCKET` | the storage's address, default `https://s3.amazonaws.com` (`https://storage.yandexcloud.net`, `http://minio:9000`), and its region, default `us-east-1` (`ru-central1`) |
 | `COOKIE_SECURE` | no | `true` (default) — keep it unless you test over plain HTTP |
 | `FIRST_EMPLOYEE_EMAIL`, `FIRST_EMPLOYEE_NAME` | first start, without `OIDC_ISSUER` | the first employee, created only while there are no employees |
 | `FIRST_EMPLOYEE_LOCALE`, `FIRST_EMPLOYEE_TIME_ZONE` | no | `ru` / `en`; an IANA zone such as `Europe/Moscow`. Invited employees inherit them from whoever invites |
@@ -196,8 +198,24 @@ application does not do it. There are no downgrades.
 
 ## Data and backups
 
-Everything is in PostgreSQL, files included (attachments and avatars are
-stored in the database). A regular `pg_dump` is a complete backup. The
+By default everything is in PostgreSQL, files included (attachments and
+avatars are stored in the database), and a regular `pg_dump` is a
+complete backup. Nothing is written to the container's disk, so it needs
+no volume.
+
+With many large files the database grows with them, and so do its
+backups. Then set `S3_BUCKET`: attached files go to the object storage,
+each as `attachments/<id>`, and the database keeps everything else
+(avatars, small, stay in it). Set on a running installation, the worker
+moves the files already in PostgreSQL there, about twenty a minute, and
+they are read from wherever they are meanwhile. A backup is then
+`pg_dump` together with the bucket (its versioning or replication):
+taken apart, a restore may miss files or keep ones already deleted. The
+way back is not automatic: unsetting `S3_BUCKET` leaves the files that
+are in the storage unreadable. The key needs reading, writing and
+deleting objects in that bucket only.
+
+The
 worker removes on its own: sign-in tokens after an hour (email-change
 ones after two days), sessions after 30 days of inactivity (a day from
 sign-in with the identity provider), bot activity after a year, notifications and visits after a year, files no

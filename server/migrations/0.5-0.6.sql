@@ -9,7 +9,8 @@
 -- sign-in link works only in the browser that asked for it (decision 101).
 -- A notification that cannot be delivered no longer holds the queue
 -- (decision 102). A change sent again by the browser's outbox is not
--- applied twice (decision 103).
+-- applied twice (decision 103). Files may live in an S3-compatible object
+-- storage (decision 104).
 
 ALTER TABLE mention ADD COLUMN created_at TIMESTAMPTZ;
 UPDATE mention m SET created_at = c.created_at
@@ -1113,6 +1114,116 @@ COMMENT ON COLUMN sent_change.at IS
 COMMENT ON INDEX idx_sent_change_at IS
 'For the cron cleanup of old ids.';
 
+-- Files may live in an S3-compatible object storage (decision 104).
+ALTER TABLE attachment ADD COLUMN in_storage BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE attachment DROP CONSTRAINT chk_attachment_purged, DROP CONSTRAINT chk_attachment_held;
+ALTER TABLE attachment
+    ADD CONSTRAINT chk_attachment_purged CHECK (CASE WHEN purged_at IS NULL THEN (value IS NOT NULL) <> in_storage
+                                                     ELSE value IS NULL END),
+    ADD CONSTRAINT chk_attachment_held CHECK (purged_at IS NULL OR cardinality(held_by) = 0);
+CREATE INDEX idx_attachment_in_storage ON attachment(id) WHERE in_storage AND purged_at IS NOT NULL;
+
+COMMENT ON TABLE attachment IS
+'Attachments: files of comments and images inside comments and task
+contexts.
+Uploaded before the comment is sent; the comment refers to them by the
+arrays comment.attachment_ids (files) and comment.image_ids (images in
+the text), a context by task.context_image_ids — by id, not by hash
+(hashes may collide).
+Reading an attachment: whoever uploaded or holds it, or whoever sees a
+task whose comment or context refers to it (the application checks).
+There is no file name here: the same file may arrive under different
+names; the name is stored in comment.attachment_names.
+Deduplication: on upload the application looks for a row with the same
+hash and size and compares the bytes (or finds one whose content was
+deleted); on a match it returns the existing id, puts the content back if
+it was gone, and the uploader holds it (held_by).
+Cron deletes, once a day, attachments nothing refers to
+(attachment_in_use) that have not been used for more than a day
+(uploaded, but the comment was never sent). An attachment in use cannot
+be deleted (trigger) — comments live forever.
+
+Storage is limited (decision 84), by the configuration, not the
+database: a file at most so large; the files a person holds (held_by) at
+most so much together, refused at upload or keep. Nothing deletes a
+file''s content by its size or age: people let go of what they no longer
+need when their quota runs out.
+A file is kept while someone holds it: its uploaders, and whoever saw it
+in a task and kept it (keep_attachment()) — a file handed to the one who
+needs it stays theirs when its author lets it go. Letting a file go
+(release_attachment()) takes it out of one''s quota; when nobody holds it
+any more, its content is deleted. The row stays — who uploaded it, its
+size, the names in comments — and value goes (purged_at): a link to it
+says the file is gone. Anyone uploading the same bytes again (the same
+hash and size) restores it in place, so every link to it works again.
+
+Where the content is (decision 104): in value, or — with an object
+storage configured (S3_BUCKET) — in its object attachments/<id>
+(in_storage). The worker moves the files in value there, one at a time,
+deletes the object of a purged file and the objects of the rows it
+cleans up; reading streams it from there.';
+
+COMMENT ON COLUMN attachment.value IS
+'File content. NULL — in the object storage (in_storage), or deleted when
+nobody held it any more (purged_at); the same bytes uploaded again bring
+it back.';
+
+COMMENT ON COLUMN attachment.in_storage IS
+'The content is the object attachments/<id> in the object storage, not
+value. With purged_at — the object is still to be deleted by the worker.';
+
+COMMENT ON INDEX idx_attachment_in_storage IS
+'For the worker: purged files whose object is still to be deleted.';
+
+COMMENT ON CONSTRAINT chk_attachment_held ON attachment IS
+'Nobody holds a purged file.';
+
+COMMENT ON CONSTRAINT chk_attachment_purged ON attachment IS
+'Not purged: the content is in exactly one place, value or the object
+storage. Purged: nothing in value (the object may wait for deletion).';
+
+
+CREATE OR REPLACE FUNCTION keep_attachment(p_attachment_id INT, p_employee_id INT)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE attachment SET held_by = held_by || p_employee_id
+     WHERE id = p_attachment_id AND purged_at IS NULL AND NOT held_by @> ARRAY[p_employee_id];
+    IF NOT FOUND AND NOT EXISTS (SELECT 1 FROM attachment WHERE id = p_attachment_id AND held_by @> ARRAY[p_employee_id]) THEN
+        RAISE EXCEPTION 'attachment % has no content to keep', p_attachment_id
+            USING HINT = 'file_purged';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION keep_attachment(INT, INT) IS
+'Someone keeps a file — one they see in a task (the application checks
+that and the quota): it counts in their quota and stays while they hold
+it, whoever else lets it go. Kept already — nothing changes.';
+
+
+CREATE OR REPLACE FUNCTION release_attachment(p_attachment_id INT, p_employee_id INT)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE attachment SET held_by = array_remove(held_by, p_employee_id)
+     WHERE id = p_attachment_id AND held_by @> ARRAY[p_employee_id];
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'employee % does not hold attachment %', p_employee_id, p_attachment_id
+            USING HINT = 'not_found';
+    END IF;
+    -- Nobody holds it any more: the content goes, the row and the links
+    -- stay; an object in the storage is deleted by the worker.
+    UPDATE attachment SET value = NULL, purged_at = NOW()
+     WHERE id = p_attachment_id AND cardinality(held_by) = 0;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION release_attachment(INT, INT) IS
+'Someone lets a file they hold go, to free their quota. While anyone
+else holds it, it stays as it is; let go by the last one, its content is
+deleted. The row stays, and so do the comments that refer to it: their
+link says the file is gone; the same bytes uploaded again bring it back.';
+
+
 -- The specification (COMMENT ON SCHEMA) as of this version.
 COMMENT ON SCHEMA public IS
 'yartt — a task tracker without projects, subtasks or assignments.
@@ -1713,7 +1824,10 @@ CRON JOBS (outside SQL)
   - every day:    DELETE FROM notification WHERE added_at < NOW() - INTERVAL ''1 year'';
   - every day:    DELETE FROM attachment a
                    WHERE used_at < NOW() - INTERVAL ''1 day''
-                     AND NOT attachment_in_use(a.id);
+                     AND NOT attachment_in_use(a.id)
+                   RETURNING id, in_storage; and the objects of those in_storage.
+  - every minute, with an object storage: move files from value there;
+                  delete the objects of purged files.
   - every day:    DELETE FROM visit WHERE at < NOW() - INTERVAL ''1 year'';
   - every day:    DELETE FROM sent_change WHERE at < NOW() - INTERVAL ''90 days'';
   - every day:    DELETE FROM bot_usage WHERE day < CURRENT_DATE - 366;

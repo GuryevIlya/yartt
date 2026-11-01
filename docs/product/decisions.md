@@ -2067,3 +2067,34 @@ refused like signing in.
 *Implemented:* `sent_change` (`db.sql`, migration `0.5-0.6`), the last
 middleware of `authedProcedure` (`server/trpc.ts`); `client/hooks/offline.ts`,
 the split link in `client/main.tsx`.
+
+### 104. Files may live in an object storage; PostgreSQL stays the default
+
+Files lived in PostgreSQL (decision 84): one backup holds everything,
+and nothing is written to the container's disk. But a company of 300
+with the default quota may keep hundreds of gigabytes there: the
+database and every dump grow with them, and a download was read whole
+into the server's memory.
+
+Now a company may set an S3-compatible object storage (AWS, Yandex
+Object Storage, MinIO): new files go there, the worker moves the ones in
+PostgreSQL in the background, one at a time, and a download is streamed
+from the storage as it comes. Purged files lose their object, and the
+cleanup of files never attached deletes objects with their rows; a
+storage that is down keeps both for the next run.
+
+Without a storage, files stay in PostgreSQL, not on the container's
+disk. A disk needs a volume that, forgotten, loses every file on the
+first restart, is a second thing to back up, and is not shared by the
+containers of a split installation (ROLE). The database is the safer
+default; the storage is for those whose files grew large.
+
+Avatars stay in PostgreSQL: they are small and shown everywhere. The
+way back from a storage is not automatic. Signing uses aws4fetch, a
+small library without dependencies, rather than the AWS SDK; each
+upload carries the hash of its body, so the storage refuses one damaged
+on the way.
+
+*Implemented:* `attachment.in_storage` (`db.sql`, migration `0.5-0.6`);
+`server/storage.ts`; `upload`, `read`, `moveToStorage`, `cleanup` in
+`server/services/Attachment.ts`; the `attachment_storage` job.

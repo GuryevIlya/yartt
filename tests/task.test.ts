@@ -443,7 +443,7 @@ describe('rich text and attachments', () => {
       await api.Attachment.release({ id: first });
       expect((await api.Attachment.mine()).usedBytes).toBe(0);
       expect((await api.Attachment.mine()).files).toMatchObject([{ id: first, held: false, holders: 1, purgedAt: null }]);
-      expect((await Attachments.read(me.id, first)).value.equals(firstBytes)).toBe(true);
+      expect((await Attachments.read(me.id, first)).value).toEqual(firstBytes);
       await expect(api.Attachment.release({ id: first })).rejects.toMatchObject({ message: 'not_found' });
 
       // The last one lets it go: the content goes, the comment keeps the link and says so.
@@ -455,7 +455,7 @@ describe('rich text and attachments', () => {
 
       // Anyone with the bytes brings it back in place: every link works again.
       expect(await Attachments.upload(other.id, firstBytes, 'text/plain')).toBe(first);
-      expect((await Attachments.read(me.id, first)).value.equals(firstBytes)).toBe(true);
+      expect((await Attachments.read(me.id, first)).value).toEqual(firstBytes);
     } finally {
       env.FILE_MAX_MB = saved.max;
       env.FILE_QUOTA_MB = saved.quota;

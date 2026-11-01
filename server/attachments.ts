@@ -1,3 +1,4 @@
+import { pipeline } from 'node:stream/promises';
 import express, { Router, type Request, type Response } from 'express';
 import ctx from './ctx.ts';
 import { AppError } from './errors.ts';
@@ -86,9 +87,21 @@ export default Router()
           'Content-Security-Policy': "default-src 'none'",
           // Access may be revoked: the browser asks again every time.
           'Cache-Control': 'private, no-cache',
-        })
-        .send(file.value);
+        });
+      if (Buffer.isBuffer(file.value)) {
+        res.send(file.value);
+        return;
+      }
+      // From the object storage: passed on as it comes, never whole in memory.
+      res.set('Content-Length', String(file.size));
+      await pipeline(file.value, res);
     } catch (error) {
+      // Cut off midway (the storage or the browser): nothing more can be said.
+      if (res.headersSent) {
+        console.error(`[attachments] sending ${attachmentId} failed:`, error);
+        res.destroy();
+        return;
+      }
       fail(res, error);
     }
   });

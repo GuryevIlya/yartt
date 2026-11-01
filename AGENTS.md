@@ -77,6 +77,7 @@ server/
   errors.ts         — AppError, Postgres errors -> codes
   html.ts           — sanitizes rich text (comments, context) to an allow-list
   attachments.ts    — /api/attachments: raw upload and download, outside tRPC
+  storage.ts        — files in an S3-compatible object storage (S3_BUCKET), else in PostgreSQL
   delivery.ts       — every outgoing message: email (mail.ts) and/or webhook (webhook.ts)
   services/Mail.ts  — renders an email in the recipient's language
   migrate.ts, migrations/, bootstrap.ts, worker.ts

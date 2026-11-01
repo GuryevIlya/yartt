@@ -671,7 +671,10 @@ CRON JOBS (outside SQL)
   - every day:    DELETE FROM notification WHERE added_at < NOW() - INTERVAL ''1 year'';
   - every day:    DELETE FROM attachment a
                    WHERE used_at < NOW() - INTERVAL ''1 day''
-                     AND NOT attachment_in_use(a.id);
+                     AND NOT attachment_in_use(a.id)
+                   RETURNING id, in_storage; and the objects of those in_storage.
+  - every minute, with an object storage: move files from value there;
+                  delete the objects of purged files.
   - every day:    DELETE FROM visit WHERE at < NOW() - INTERVAL ''1 year'';
   - every day:    DELETE FROM sent_change WHERE at < NOW() - INTERVAL ''90 days'';
   - every day:    DELETE FROM bot_usage WHERE day < CURRENT_DATE - 366;
@@ -2133,10 +2136,13 @@ CREATE TABLE attachment (
     used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     held_by INT[] NOT NULL DEFAULT '{}',
     purged_at TIMESTAMPTZ,
+    in_storage BOOLEAN NOT NULL DEFAULT FALSE,
 
-    CONSTRAINT chk_attachment_purged CHECK ((value IS NULL) = (purged_at IS NOT NULL)),
-    CONSTRAINT chk_attachment_held CHECK (value IS NOT NULL OR cardinality(held_by) = 0)
+    CONSTRAINT chk_attachment_purged CHECK (CASE WHEN purged_at IS NULL THEN (value IS NOT NULL) <> in_storage
+                                                 ELSE value IS NULL END),
+    CONSTRAINT chk_attachment_held CHECK (purged_at IS NULL OR cardinality(held_by) = 0)
 );
+CREATE INDEX idx_attachment_in_storage ON attachment(id) WHERE in_storage AND purged_at IS NOT NULL;
 CREATE INDEX idx_attachment_hash ON attachment(hash);
 CREATE INDEX idx_attachment_used_at ON attachment(used_at);
 CREATE INDEX idx_attachment_uploaded_by ON attachment USING GIN (uploaded_by);
@@ -2174,7 +2180,13 @@ needs it stays theirs when its author lets it go. Letting a file go
 any more, its content is deleted. The row stays — who uploaded it, its
 size, the names in comments — and value goes (purged_at): a link to it
 says the file is gone. Anyone uploading the same bytes again (the same
-hash and size) restores it in place, so every link to it works again.';
+hash and size) restores it in place, so every link to it works again.
+
+Where the content is (decision 104): in value, or — with an object
+storage configured (S3_BUCKET) — in its object attachments/<id>
+(in_storage). The worker moves the files in value there, one at a time,
+deletes the object of a purged file and the objects of the rows it
+cleans up; reading streams it from there.';
 
 COMMENT ON COLUMN attachment.id IS
 'Id. Referenced by comment.attachment_ids.';
@@ -2189,8 +2201,16 @@ COMMENT ON COLUMN attachment.mime IS
 'MIME type.';
 
 COMMENT ON COLUMN attachment.value IS
-'File content. NULL — deleted when nobody held it any more (purged_at);
-the same bytes uploaded again bring it back.';
+'File content. NULL — in the object storage (in_storage), or deleted when
+nobody held it any more (purged_at); the same bytes uploaded again bring
+it back.';
+
+COMMENT ON COLUMN attachment.in_storage IS
+'The content is the object attachments/<id> in the object storage, not
+value. With purged_at — the object is still to be deleted by the worker.';
+
+COMMENT ON INDEX idx_attachment_in_storage IS
+'For the worker: purged files whose object is still to be deleted.';
 
 COMMENT ON COLUMN attachment.held_by IS
 'Who keeps the file — it counts in each one''s quota: the uploaders, and
@@ -2199,7 +2219,7 @@ before 0.5 and not let go of, or kept by nobody: nobody pays for it. When
 the last holder lets it go, the content is deleted.';
 
 COMMENT ON CONSTRAINT chk_attachment_held ON attachment IS
-'Nobody holds a file without content.';
+'Nobody holds a purged file.';
 
 COMMENT ON INDEX idx_attachment_held_by IS
 'A person''s quota: the files they hold.';
@@ -2209,7 +2229,8 @@ COMMENT ON COLUMN attachment.purged_at IS
 content is here.';
 
 COMMENT ON CONSTRAINT chk_attachment_purged ON attachment IS
-'No content exactly when it was purged.';
+'Not purged: the content is in exactly one place, value or the object
+storage. Purged: nothing in value (the object may wait for deletion).';
 
 COMMENT ON INDEX idx_attachment_uploaded_by IS
 'A person''s files: their list.';
@@ -5183,7 +5204,7 @@ CREATE OR REPLACE FUNCTION keep_attachment(p_attachment_id INT, p_employee_id IN
 RETURNS VOID AS $$
 BEGIN
     UPDATE attachment SET held_by = held_by || p_employee_id
-     WHERE id = p_attachment_id AND value IS NOT NULL AND NOT held_by @> ARRAY[p_employee_id];
+     WHERE id = p_attachment_id AND purged_at IS NULL AND NOT held_by @> ARRAY[p_employee_id];
     IF NOT FOUND AND NOT EXISTS (SELECT 1 FROM attachment WHERE id = p_attachment_id AND held_by @> ARRAY[p_employee_id]) THEN
         RAISE EXCEPTION 'attachment % has no content to keep', p_attachment_id
             USING HINT = 'file_purged';
@@ -5206,7 +5227,8 @@ BEGIN
         RAISE EXCEPTION 'employee % does not hold attachment %', p_employee_id, p_attachment_id
             USING HINT = 'not_found';
     END IF;
-    -- Nobody holds it any more: the content goes, the row and the links stay.
+    -- Nobody holds it any more: the content goes, the row and the links
+    -- stay; an object in the storage is deleted by the worker.
     UPDATE attachment SET value = NULL, purged_at = NOW()
      WHERE id = p_attachment_id AND cardinality(held_by) = 0;
 END;

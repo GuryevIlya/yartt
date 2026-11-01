@@ -44,6 +44,14 @@ const EnvSchema = z.object({
   // content at most FILE_QUOTA_MB together. The demo keeps 2 MB a file.
   FILE_MAX_MB: z.coerce.number().positive().default(50),
   FILE_QUOTA_MB: z.coerce.number().positive().default(1024),
+  // Files in an S3-compatible object storage instead of PostgreSQL: the
+  // bucket, the storage's address and a key for it. Set later, the worker
+  // moves the files already in PostgreSQL there.
+  S3_BUCKET: z.string().optional().or(z.literal('').transform(() => undefined)),
+  S3_ENDPOINT: z.url().default('https://s3.amazonaws.com'),
+  S3_REGION: z.string().min(1).default('us-east-1'),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
   // A trial: the demo company in this language on the first start (an empty
   // database), and no sign-in — anyone picks whom to see it as. Unset for work.
   DEMO_DATA: z.enum(DEMO_LANGUAGES).optional().or(z.literal('').transform(() => undefined)),
@@ -73,6 +81,10 @@ if (result.data.OIDC_ISSUER && (!result.data.OIDC_CLIENT_ID || !result.data.OIDC
 }
 if (result.data.OIDC_ISSUER && result.data.DEMO_DATA) {
   console.error('Invalid configuration: the demo has no sign-in — unset OIDC_ISSUER or DEMO_DATA');
+  process.exit(1);
+}
+if (result.data.S3_BUCKET && (!result.data.S3_ACCESS_KEY_ID || !result.data.S3_SECRET_ACCESS_KEY)) {
+  console.error('Invalid configuration: S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are required with S3_BUCKET');
   process.exit(1);
 }
 if (result.data.WEBHOOK_URL && !result.data.WEBHOOK_SECRET) {
