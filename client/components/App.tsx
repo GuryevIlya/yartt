@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { matchPath, Navigate, Route, Routes, useLocation } from 'react-router';
+import { setZone } from '#client/hooks/format.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { useVisit } from '#client/hooks/visit.ts';
 import Header from './App/Header.tsx';
@@ -39,6 +40,9 @@ export default function () {
   useEffect(() => {
     if (me.data && i18n.language !== me.data.locale) void i18n.changeLanguage(me.data.locale);
   }, [me.data, i18n]);
+
+  // Moments are shown in the profile's time zone (decision 99): set before anything renders them.
+  if (me.data) setZone(me.data.timeZone);
 
   if (me.isPending) {
     return (

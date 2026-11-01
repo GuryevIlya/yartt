@@ -8,12 +8,8 @@ import { useMe } from '#client/hooks/me.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { fieldErrors } from '#client/i18n/errors.ts';
 
-const pad = (n: number) => String(n).padStart(2, '0');
-/** A day `n` days after `d`, YYYY-MM-DD. */
-const plus = (d: Date, n: number) => {
-  const r = new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-  return `${r.getFullYear()}-${pad(r.getMonth() + 1)}-${pad(r.getDate())}`;
-};
+/** A day `n` days after `d` (a date from fromDay()), YYYY-MM-DD. */
+const plus = (d: Date, n: number) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n)).toISOString().slice(0, 10);
 
 /**
  * "I'm away" from the top line: vacation, sick leave, a day off — the day
@@ -40,19 +36,19 @@ export default function () {
   const set = (nextDay: string | null) => settings.mutate({ nextDay });
   const quick = [
     { label: t('away.tomorrow'), day: plus(now, 1) },
-    { label: t('away.monday'), day: plus(now, (8 - now.getDay()) % 7 || 7) },
+    { label: t('away.monday'), day: plus(now, (8 - now.getUTCDay()) % 7 || 7) },
     { label: t('away.week'), day: plus(now, 7) },
   ];
 
   return (
     <>
       {away ? (
-        <Tooltip title={`${t('away.until', { day: format.date(fromDay(me.nextDay!)) })}. ${t('away.hint')}`} describeChild>
+        <Tooltip title={`${t('away.until', { day: format.dayDate(me.nextDay!) })}. ${t('away.hint')}`} describeChild>
           <Chip
             color="warning"
             size="small"
             icon={<EventBusy />}
-            label={t('away.until', { day: format.date(fromDay(me.nextDay!)) })}
+            label={t('away.until', { day: format.dayDate(me.nextDay!) })}
             onClick={(e) => setAnchor(e.currentTarget)}
             // At phone width the line is full: the sign alone, the date in the hint.
             sx={{ '& .MuiChip-label': { display: { xs: 'none', sm: 'block' } }, '& .MuiChip-icon': { mx: { xs: 0.5, sm: undefined } } }}

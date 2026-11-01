@@ -149,7 +149,7 @@ function EventLine(p: { taskId: number; item: Exclude<FeedItem, { kind: 'comment
       icon = <TaskAlt fontSize="small" />;
       const days = item.entries;
       if (days.length === 1) {
-        text = t('task.feed.spent', { name: name(item.employeeId), time: format.minutes(item.minutes), day: format.date(fromDay(days[0]!.day)) });
+        text = t('task.feed.spent', { name: name(item.employeeId), time: format.minutes(item.minutes), day: format.dayDate(days[0]!.day) });
         break;
       }
       // Several entries in a row: one line, the days on demand.
@@ -164,15 +164,15 @@ function EventLine(p: { taskId: number; item: Exclude<FeedItem, { kind: 'comment
               name: name(item.employeeId),
               time: format.minutes(item.minutes),
               count: days.length,
-              from: format.date(fromDay(days[days.length - 1]!.day)),
-              to: format.date(fromDay(days[0]!.day)),
+              from: format.dayDate(days[days.length - 1]!.day),
+              to: format.dayDate(days[0]!.day),
             })}
             {open ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
           </ButtonBase>
           {open && (
             <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5 }}>
               {days.map((e, i) => (
-                <li key={`${e.day}-${i}`}>{format.date(fromDay(e.day))} — {format.minutes(e.minutes)}</li>
+                <li key={`${e.day}-${i}`}>{format.dayDate(e.day)} — {format.minutes(e.minutes)}</li>
               ))}
             </Box>
           )}

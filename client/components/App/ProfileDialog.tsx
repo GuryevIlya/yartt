@@ -147,7 +147,7 @@ export default function (p: { onClose: () => void }) {
             value={me.timeZone}
             disableClearable
             onChange={(_e, value) => apply({ timeZone: value })}
-            renderInput={(params) => <TextField {...params} label={t('profile.timeZone')} />}
+            renderInput={(params) => <TextField {...params} label={t('profile.timeZone')} helperText={t('profile.timeZoneHint')} />}
           />
           <TextField
             select

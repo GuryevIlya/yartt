@@ -7,7 +7,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TagPart } from '#shared/tags.ts';
 import { PRIORITIES, type Priority, type TaskDetails, type TaskPage } from '#shared/task.ts';
-import { useFormat } from '#client/hooks/format.ts';
+import { fromLocalInput, toLocalInput, useFormat } from '#client/hooks/format.ts';
 import { useDraft } from '#client/hooks/drafts.ts';
 import { useMe } from '#client/hooks/me.ts';
 import { POLL_MS, useEmployees, useTaskRefresh } from '#client/hooks/task.ts';
@@ -25,12 +25,6 @@ import TakenLink from '../App/TakenLink.tsx';
 import { TodoList } from '../MyDayPage/Todo.tsx';
 
 const label = { fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'text.secondary' } as const;
-
-/** <input type="datetime-local"> value in the browser's time zone. */
-function localInput(date: Date): string {
-  const d = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return d.toISOString().slice(0, 16);
-}
 
 /**
  * Header, what waits for me here, context and dependencies — one sheet. The owner
@@ -156,8 +150,8 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
                     type="datetime-local"
                     variant="standard"
                     slotProps={{ htmlInput: { 'aria-label': t('task.deadline') } }}
-                    value={task.deadline ? localInput(task.deadline) : ''}
-                    onChange={(e) => e.target.value && setDeadline.mutate({ id: task.id, deadline: new Date(e.target.value) })}
+                    value={task.deadline ? toLocalInput(task.deadline) : ''}
+                    onChange={(e) => { const deadline = fromLocalInput(e.target.value); if (deadline) setDeadline.mutate({ id: task.id, deadline }); }}
                   />
                   {task.deadline && (
                     <Button size="small" color="inherit" onClick={() => setDeadline.mutate({ id: task.id, deadline: null })}>

@@ -9,6 +9,7 @@ import { PRIORITIES, type Priority } from '#shared/task.ts';
 import { useDraft } from '#client/hooks/drafts.ts';
 import { useMe } from '#client/hooks/me.ts';
 import { useEmployees, useTaskRefresh } from '#client/hooks/task.ts';
+import { fromLocalInput } from '#client/hooks/format.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { employeeFilter, employeeOption } from './App/employeeOption.tsx';
 import RichEditor, { type RichEditorHandle } from './App/RichEditor.tsx';
@@ -94,7 +95,7 @@ export default function () {
   const submit = () => title.ready && create.mutate({
     tags: names,
     priority,
-    deadline: deadline ? new Date(deadline) : null,
+    deadline: fromLocalInput(deadline),
     context: editor.current?.isEmpty() ? null : (editor.current?.getHtml() ?? null),
     waitsFor,
     waitedOnBy,

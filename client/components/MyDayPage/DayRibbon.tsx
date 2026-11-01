@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import type { Action, Shift, Visit } from '#shared/myDay.ts';
 import type { TaskHeader } from '#shared/task.ts';
-import { useFormat } from '#client/hooks/format.ts';
+import { clockOf, midnightOf, useFormat, useZone } from '#client/hooks/format.ts';
 import { taskTitle } from '../TaskPage/TaskLine.tsx';
 
 const HOUR = 3_600_000;
@@ -26,7 +26,8 @@ export default function (p: {
 }) {
   const { t } = useTranslation();
   const format = useFormat();
-  const midnight = new Date(`${p.day}T00:00`).getTime();
+  const zone = useZone();
+  const midnight = midnightOf(p.day, zone).getTime();
   const now = Date.now();
   const lastSeen = Math.max(midnight, ...p.visits.map((v) => v.at.getTime()), ...p.actions.map((a) => a.at.getTime()));
   // An open shift runs to now today; on a past day, to the last thing seen.
@@ -50,7 +51,7 @@ export default function (p: {
     const task = p.tasks.get(taskId);
     return task ? `#${taskId} ${taskTitle(task.tags)}` : `#${taskId}`;
   };
-  const hour = (at: number) => String(new Date(at).getHours()).padStart(2, '0');
+  const hour = (at: number) => String(clockOf(new Date(at), zone).hour).padStart(2, '0');
 
   return (
     <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }} aria-label={t('myDay.ribbon.label')}>

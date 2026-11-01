@@ -3,7 +3,7 @@ import type { Shift } from '#shared/myDay.ts';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useFormat } from '#client/hooks/format.ts';
+import { clockOf, dayOf, midnightOf, useFormat, useZone, zoned } from '#client/hooks/format.ts';
 import { useTaskRefresh } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 
@@ -23,16 +23,18 @@ export function shiftEnd(): Date {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
-const clock = (value: Date) => `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+const clock = (value: Date, zone: string) => {
+  const c = clockOf(value, zone);
+  return `${pad(c.hour)}:${pad(c.minute)}`;
+};
 
-/** HH:mm of the day starting at `midnight`; 00:00 as an end is the midnight after it. */
-function moment(midnight: Date, value: string, end: boolean): Date | null {
+/** HH:mm of the day YYYY-MM-DD in a time zone; 00:00 as an end is the midnight after it. */
+function moment(day: string, zone: string, value: string, end: boolean): Date | null {
   const match = /^(\d{2}):(\d{2})$/.exec(value);
   if (!match) return null;
-  const at = new Date(midnight);
-  at.setHours(Number(match[1]), Number(match[2]), 0, 0);
-  if (end && at.getTime() === midnight.getTime()) at.setDate(at.getDate() + 1);
-  return at;
+  const [y, m, d] = day.split('-').map(Number);
+  const at = zoned(y!, m!, d!, Number(match[1]), Number(match[2]), zone);
+  return end && at.getTime() === midnightOf(day, zone).getTime() ? zoned(y!, m!, d! + 1, 0, 0, zone) : at;
 }
 
 /**
@@ -53,15 +55,14 @@ export default function (p: {
   const update = useMutation(trpc.Work.update.mutationOptions(done));
 
   // A shift belongs to one day (its start's): only the times are picked, and it ends by midnight.
-  const midnight = new Date(p.from);
-  midnight.setHours(0, 0, 0, 0);
-  const nextMidnight = new Date(midnight);
-  nextMidnight.setDate(nextMidnight.getDate() + 1);
-  const [from, setFrom] = useState(clock(p.from));
-  const [to, setTo] = useState(clock(p.to >= nextMidnight ? nextMidnight : p.to));
+  const zone = useZone();
+  const day = dayOf(p.from, zone);
+  const nextMidnight = moment(day, zone, '00:00', true)!;
+  const [from, setFrom] = useState(clock(p.from, zone));
+  const [to, setTo] = useState(clock(p.to >= nextMidnight ? nextMidnight : p.to, zone));
   const [about, setAbout] = useState(p.about ?? '');
-  const startedAt = moment(midnight, from, false);
-  const endedAt = moment(midnight, to, true);
+  const startedAt = moment(day, zone, from, false);
+  const endedAt = moment(day, zone, to, true);
   const minutes = startedAt && endedAt ? Math.floor((endedAt.getTime() - startedAt.getTime()) / 60_000) : 0;
   const future = endedAt !== null && endedAt > shiftEnd();
   // The first shift in the way: an open one lasts until now and on.
@@ -83,7 +84,7 @@ export default function (p: {
       <DialogTitle>{t(`myDay.shift.${p.mode}Title`)}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
         <Typography variant="body2" sx={{ color: 'text.secondary', '&::first-letter': { textTransform: 'uppercase' } }}>
-          {format.day(`${midnight.getFullYear()}-${pad(midnight.getMonth() + 1)}-${pad(midnight.getDate())}`)}
+          {format.day(day)}
         </Typography>
         <Stack direction="row" spacing={2}>
           <TextField

@@ -36,7 +36,7 @@ function buckets(days: string[], series: Series[]): { first: string[]; weekly: b
   const weekly = days.length > DAILY_UP_TO;
   const groups: number[][] = [];
   days.forEach((day, i) => {
-    if (!weekly || groups.length === 0 || fromDay(day).getDay() === 1) groups.push([i]);
+    if (!weekly || groups.length === 0 || fromDay(day).getUTCDay() === 1) groups.push([i]);
     else groups[groups.length - 1]!.push(i);
   });
   return {
@@ -133,7 +133,7 @@ export default function (p: {
   const data = buckets(p.days, p.series);
   const details = detailBuckets(p.days, p.series, data.first);
   const labels = data.first.map((day) =>
-    data.weekly ? t('employee.stats.weekOf', { day: format.date(fromDay(day)) }) : format.date(fromDay(day)));
+    data.weekly ? t('employee.stats.weekOf', { day: format.dayDate(day) }) : format.dayDate(day));
   return (
     <Box>
       {p.series.length > 1 && (

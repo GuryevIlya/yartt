@@ -819,6 +819,7 @@ export const en: Translation = {
     nextDay: 'Back at work on',
     nextDayHint: 'Vacation, sick leave, a day off: until then your notifications are copied to your manager.',
     timeZone: 'Time zone',
+    timeZoneHint: 'Your days are counted in it, and every time in yartt is shown in it, whatever the computer\'s time zone.',
     locale: 'Language',
     manager: 'My manager',
     noManager: 'None',

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DayHistory } from '#shared/myDay.ts';
 import type { TaskHeader } from '#shared/task.ts';
-import { useFormat } from '#client/hooks/format.ts';
+import { midnightOf, useFormat, useZone } from '#client/hooks/format.ts';
 import { useTaskRefresh } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import ScoreDialog from '../EmployeePage/ScoreDialog.tsx';
@@ -23,11 +23,11 @@ type Dialog = { mode: ShiftDialogMode; from: Date; to: Date; about?: string | nu
  * that day from 09:00 (then the small hours), every half hour, inside the
  * day and not past now — never into the next day or into another shift.
  */
-function defaultShift(day: string, shifts: { startedAt: Date; spentMinutes: number | null }[]): { from: Date; to: Date } {
+function defaultShift(day: string, zone: string, shifts: { startedAt: Date; spentMinutes: number | null }[]): { from: Date; to: Date } {
   const HOUR = 3_600_000;
   const busy = shifts.map((s) => [s.startedAt.getTime(), s.startedAt.getTime() + (s.spentMinutes ?? 24 * 60) * 60_000] as const);
-  const dayEnd = Math.min(new Date(`${day}T00:00`).getTime() + 24 * HOUR, Date.now());
-  const midnight = new Date(`${day}T00:00`).getTime();
+  const midnight = midnightOf(day, zone).getTime();
+  const dayEnd = Math.min(midnight + 24 * HOUR, Date.now());
   // From 09:00 to the day's end, then the small hours.
   const starts = Array.from({ length: 48 }, (_, i) => midnight + ((i + 18) % 48) * (HOUR / 2));
   for (const from of starts) {
@@ -36,8 +36,7 @@ function defaultShift(day: string, shifts: { startedAt: Date; spentMinutes: numb
     }
   }
   // No free hour: the person corrects the times themselves.
-  const start = new Date(`${day}T00:00`);
-  return { from: start, to: new Date(start.getTime() + HOUR) };
+  return { from: new Date(midnight), to: new Date(midnight + HOUR) };
 }
 
 /** Visits outside the shifts that span at least this long look like a forgotten shift. */
@@ -91,6 +90,7 @@ export default function (p: {
   const { t } = useTranslation();
   const trpc = useTRPC();
   const format = useFormat();
+  const zone = useZone();
   const refresh = useTaskRefresh();
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [scoring, setScoring] = useState(false);
@@ -221,7 +221,7 @@ export default function (p: {
             <IconButton
               size="small"
               aria-label={t('myDay.shift.addTitle')}
-              onClick={() => setDialog({ mode: 'add', ...(suggestion ?? defaultShift(day.day, day.shifts)) })}
+              onClick={() => setDialog({ mode: 'add', ...(suggestion ?? defaultShift(day.day, zone, day.shifts)) })}
             >
               <AlarmAdd fontSize="small" />
             </IconButton>

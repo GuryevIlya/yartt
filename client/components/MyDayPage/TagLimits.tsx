@@ -194,7 +194,7 @@ function Line(p: { limit: TagLimit; mine: boolean; onEdit?: () => void }) {
             sx={{ mt: 0.5, height: 6, borderRadius: 3 }}
           />
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            {t('tagLimits.period', { from: format.date(fromDay(l.startsOn)), to: format.date(fromDay(l.endsOn)) })}
+            {t('tagLimits.period', { from: format.dayDate(l.startsOn), to: format.dayDate(l.endsOn) })}
             {!p.mine && ` · ${t('tagLimits.of', { name: employees.get(l.employeeId)?.fullName ?? `#${l.employeeId}` })}`}
           </Typography>
         </Box>
@@ -246,7 +246,7 @@ function Version(p: { version: TagLimitVersion }) {
   return (
     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
       {v.tags.map((tag) => tag.name).join(' · ')} — {format.minutes(v.minutes)},{' '}
-      {t('tagLimits.period', { from: format.date(fromDay(v.startsOn)), to: format.date(fromDay(v.endsOn)) })}
+      {t('tagLimits.period', { from: format.dayDate(v.startsOn), to: format.dayDate(v.endsOn) })}
       {' · '}
       {v.expiredAt
         ? t('tagLimits.stood', { from: format.dateTime(v.createdAt), to: format.dateTime(v.expiredAt) })

@@ -26,7 +26,7 @@ function buckets(days: DayStats[], label: (day: string, weekly: boolean) => stri
   const weekly = days.length > DAILY_UP_TO;
   const groups: DayStats[][] = [];
   for (const day of days) {
-    const startsWeek = fromDay(day.day).getDay() === 1;
+    const startsWeek = fromDay(day.day).getUTCDay() === 1;
     if (!weekly || groups.length === 0 || startsWeek) groups.push([day]);
     else groups[groups.length - 1]!.push(day);
   }
@@ -47,7 +47,7 @@ export default function (p: { days: DayStats[] }) {
   const format = useFormat();
   const theme = useTheme();
   const data = buckets(p.days, (day, weekly) =>
-    weekly ? t('employee.stats.weekOf', { day: format.date(fromDay(day)) }) : format.date(fromDay(day)));
+    weekly ? t('employee.stats.weekOf', { day: format.dayDate(day) }) : format.dayDate(day));
   const colors = { work: theme.palette.primary.main, spent: theme.palette.primary.light, score: theme.palette.warning.main };
   const hours = (v: number | null) => (v === null ? '—' : format.minutes(Math.round(v * 60)));
 

@@ -471,7 +471,10 @@ A dialog behind my avatar, not a screen.
   taken when they are set; someone whose address is outside them sees a
   single page after signing in — why, and this field (decision 52).
 - **Back at work on, time zone, language, my manager** — applied as soon as
-  picked, no button. "Back at work on" covers any absence: vacation, sick
+  picked, no button. The time zone counts my days, and every moment in
+  the interface is shown in it, whatever the browser's (on a report's
+  page, in the report's: their days are theirs; decision 99). "Back at
+  work on" covers any absence: vacation, sick
   leave, a day off; until that day my notifications are copied to my
   manager.
 - **Pronoun** — he, she or not given: verb forms follow.

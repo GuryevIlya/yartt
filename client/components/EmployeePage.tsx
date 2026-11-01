@@ -39,7 +39,7 @@ export default function (p: { id: number }) {
             {employee.idpBlockedAt !== null && employee.dismissedAt === null && (
               <Chip size="small" color="error" variant="outlined" label={t('employee.idpBlocked')} />
             )}
-            {away && <Chip size="small" color="warning" label={t('employee.awayUntil', { day: format.date(fromDay(employee.nextDay!)) })} />}
+            {away && <Chip size="small" color="warning" label={t('employee.awayUntil', { day: format.dayDate(employee.nextDay!) })} />}
           </Stack>
           {employee.about && <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{employee.about}</Typography>}
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>

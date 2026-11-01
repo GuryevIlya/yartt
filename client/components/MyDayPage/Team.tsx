@@ -205,8 +205,8 @@ export default function (p: { fold?: ReactNode }) {
           </Tooltip>
         )}
         {away && (
-          <Tooltip title={t('employee.awayUntil', { day: format.date(fromDay(e.nextDay!)) })}>
-            <Chip size="small" color="warning" label={t('myDay.team.away', { day: format.date(fromDay(e.nextDay!)) })} />
+          <Tooltip title={t('employee.awayUntil', { day: format.dayDate(e.nextDay!) })}>
+            <Chip size="small" color="warning" label={t('myDay.team.away', { day: format.dayDate(e.nextDay!) })} />
           </Tooltip>
         )}
       </Stack>

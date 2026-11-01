@@ -1914,3 +1914,23 @@ reaction.
 `comment_forbid_change` over the other columns (`db.sql`, migration
 `0.5-0.6`); `Comment.reviewComment`; `awaitsReview()` in
 `shared/comment.ts`.
+
+### 99. Moments are shown in the profile's time zone
+
+Days were counted in the time zone of the profile, and moments shown in
+the browser's. When the two differed, a day showed times of another: the
+English demo, opened from Moscow, suggested a shift of a New York day as
+"04:03 PM–01:13 AM", past midnight; a manager in another zone than a
+report saw the report's shifts shifted; a deadline typed while
+travelling meant another moment than it said.
+
+Now every moment is shown and typed in the signed-in employee's time
+zone: shifts, the day's ribbon, deadlines, reminders, the feed. On a
+report's page, the report's My day is shown in the report's zone: their
+days are theirs, and a shift reads as they wrote it. The profile says
+so under the field. A day (YYYY-MM-DD) is a date and is shown as one,
+in no zone.
+
+*Implemented:* `setZone()`, `useZone()`, `clockOf()`, `zoned()` in
+`client/hooks/format.ts`; `e2e/timeZone.spec.ts` runs the browser in
+another zone.

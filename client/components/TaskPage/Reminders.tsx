@@ -6,22 +6,20 @@ import {
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fromLocalInput, toLocalInput, useFormat } from '#client/hooks/format.ts';
+import { clockOf, fromDay, fromLocalInput, today, toLocalInput, useFormat, zoned } from '#client/hooks/format.ts';
 import { useTaskRefresh } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 
-/** Today or a later day at 09:00 local time. */
+/** Today or a later day at 09:00 in the profile's time zone. */
 function morning(daysAhead: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + daysAhead);
-  d.setHours(9, 0, 0, 0);
-  return d;
+  const c = clockOf(new Date());
+  return zoned(c.year, c.month, c.day + daysAhead, 9, 0);
 }
 
 /** The moments a reminder is offered for, a click away: in an hour, tomorrow, on Monday, before the deadline. */
 function useQuick(deadline: Date | null): { label: string; at: Date }[] {
   const { t } = useTranslation();
-  const nextMonday = morning(((8 - new Date().getDay()) % 7) || 7);
+  const nextMonday = morning(((8 - fromDay(today()).getUTCDay()) % 7) || 7);
   const dayBefore = deadline && deadline.getTime() - 86_400_000 > Date.now() + 60_000
     ? new Date(deadline.getTime() - 86_400_000) : null;
   return [
