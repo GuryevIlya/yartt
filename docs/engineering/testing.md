@@ -11,6 +11,7 @@ Run both suites before calling a change done.
 | API + database | business rules in triggers and functions, access, procedures, emails | `tests/*.test.ts` (vitest, real PostgreSQL, `createCaller`; HTTP for files and avatars) | `TEST_DATABASE_URL=… npm test` |
 | End-to-end | the built client against the real server, as a person uses it | `e2e/*.spec.ts` (Playwright, installed Chrome) | `TEST_DATABASE_URL=… npm run e2e` |
 | Dependencies | what the image runs has no known high or critical advisory (CI) | `package-lock.json` | `npm audit --omit=dev --audit-level=high` |
+| Load | the interface stays quick for a company of 300 with two years of work (by hand, before a release that touches queries) | `scripts/load.ts` | `DATABASE_URL=… npm run load -- generate`, then `measure` |
 
 `TEST_DATABASE_URL` is an admin connection: each suite creates its own
 database (vitest — a temporary one; end-to-end — `yartt_e2e`, filled by
@@ -77,6 +78,41 @@ also has to load into today's `db.sql` and dump back unchanged.
 `master` and every pull request, against PostgreSQL 17 in a service
 container, and attaches the end-to-end report when it fails
 ([release.md](release.md)).
+
+## The load check
+
+`npm run load -- generate` fills an empty database (its own, never the one
+in `.env`) with a company of 300 people over two years: a CEO, 8
+directors, 30 managers and their teams, ten of them dismissed; 40 000
+tasks, 220 000 comments, 50 000 mentions, 146 000 shifts, 290 000 time
+entries, 435 000 visits, budgets and reminders. It is written in bulk by
+SQL with the triggers on, so the rules hold; it takes about seven minutes,
+most of it the time entries (`LOAD_FROM=<step>` goes on from the step a
+run stopped at). `npm run load -- measure` then times every query of the
+interface as an ordinary employee, a manager, a director and the CEO —
+the median and the worst of seven runs — and lists what takes over 200 ms.
+
+What it found before 1.0, and the rules that came of it:
+
+- A list of tasks never calls `can_see()` per task: the tasks one sees
+  come as a set (`visibleTasks()` in `server/services/Task.ts`), and
+  `tests/access.test.ts` holds the two to the same answer.
+- A range of days narrows the shifts by `started_at` before `shift_day`
+  or `spent_day` splits them (`shiftsWithin()`): splitting every shift
+  ever made took 150 ms whatever the range.
+- A figure of many rows is gathered once and joined, never a correlated
+  subquery over a materialized CTE per row; `at_risk()` is asked only of
+  open tasks.
+- A SQL function with an aggregate, called per row, is several times
+  slower than one returning a set used through `LATERAL`, which
+  PostgreSQL inlines (`working_minutes()`).
+
+Polled every 30 seconds, My day answered in 300–500 ms and now in 20–80
+for everyone. Opened on demand, the tag summary takes 0.3–0.8 s (it took
+up to three and a half minutes for a director's year), the team summary
+of a month 15–400 ms. A year for the CEO, who sees all 40 000 tasks and
+300 people, is the slowest: 1.5 s for the tags, 2.5 s for the team
+(11.5 s before).
 
 ## What is checked by hand
 

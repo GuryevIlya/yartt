@@ -1578,6 +1578,14 @@ CREATE UNIQUE INDEX uq_observer_open
 CREATE INDEX idx_observer_value
     ON observer(value)
     WHERE added_at IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX idx_observer_active
+    ON observer(task_id, value)
+    WHERE added_at IS NOT NULL AND deleted_at IS NULL;
+
+COMMENT ON INDEX idx_observer_active IS
+'Active access by task: is_observer() and is_public() answer from the
+index alone, and a list of tasks finds its public ones (no entry here)
+by one pass over it rather than a lookup per task.';
 
 COMMENT ON TABLE observer IS
 'Access to a task and access requests.
@@ -1901,6 +1909,11 @@ CREATE TABLE work (
         work_period(started_at, spent_minutes) WITH &&
     )
 );
+CREATE INDEX idx_work_started_at ON work(started_at);
+
+COMMENT ON INDEX idx_work_started_at IS
+'Everyone''s shifts around a range of days: the time under a tag or a
+budget is found without splitting every shift ever made into days.';
 
 COMMENT ON TABLE work IS
 'Timesheet. The employee records: "started at 10:00, worked N minutes".
@@ -1984,7 +1997,7 @@ it and its share of the whole (1 for an empty interval, on its day).';
 
 
 CREATE VIEW shift_day AS
-SELECT w.id AS shift_id, w.employee_id, d.day, d.minutes, d.share, w.spent_minutes IS NOT NULL AS closed
+SELECT w.id AS shift_id, w.employee_id, d.day, d.minutes, d.share, w.spent_minutes IS NOT NULL AS closed, w.started_at
   FROM work w
   JOIN employee e ON e.id = w.employee_id
  CROSS JOIN LATERAL day_split(e.time_zone, w.started_at,
@@ -1994,7 +2007,10 @@ COMMENT ON VIEW shift_day IS
 'Each shift by the days of its employee it touches (decision 100): a shift
 past midnight belongs to both days, each with the minutes worked in it and
 its share of the shift. An open shift counts up to now (closed = FALSE).
-Sums by day take minutes from here, so nothing is counted twice.';
+Sums by day take minutes from here, so nothing is counted twice.
+started_at narrows a range of days to the shifts around it before they are
+split (shiftsWithin in the server): a day of any time zone lies within two
+days of its date, and a shift is at most a day long.';
 
 
 -- ============================================================================
@@ -2054,13 +2070,15 @@ COMMENT ON CONSTRAINT uq_spent_minutes_shift ON spent_minutes IS
 
 
 CREATE VIEW spent_day AS
-SELECT s.id AS entry_id, s.task_id, s."by", s.shift_id, d.day, s.value * d.share AS minutes, s.added_at, s.updated_at
+SELECT s.id AS entry_id, s.task_id, s."by", s.shift_id, d.day, s.value * d.share AS minutes, s.added_at, s.updated_at,
+       d.started_at
   FROM spent_minutes s
   JOIN shift_day d ON d.shift_id = s.shift_id;
 
 COMMENT ON VIEW spent_day IS
 'Each time entry by the days of its shift, with the share of its minutes
-that falls on each (decision 100): sums of time by day take it from here.';
+that falls on each (decision 100): sums of time by day take it from here.
+started_at is the shift''s, as in shift_day.';
 
 
 -- ============================================================================
@@ -2274,9 +2292,14 @@ CREATE TABLE comment (
         CHECK (cardinality(image_ids) = 0 OR is_int_set(image_ids))
 );
 CREATE INDEX idx_comment_reply_to ON comment(task_id, reply_to_id);
+CREATE INDEX idx_comment_created_by ON comment(created_by, created_at);
 CREATE INDEX idx_comment_attachment_ids ON comment USING GIN (attachment_ids);
 CREATE INDEX idx_comment_image_ids ON comment USING GIN (image_ids);
 CREATE INDEX idx_comment_value_trgm ON comment USING GIN (value gin_trgm_ops);
+
+COMMENT ON INDEX idx_comment_created_by IS
+'A person''s comments: their days in History and their comments with
+mentions in Waiting for others.';
 
 COMMENT ON TABLE comment IS
 'Comments. id is local (max+1 within task_id).
@@ -3557,7 +3580,7 @@ FOR EACH ROW EXECUTE FUNCTION trg_work_check();
 
 
 CREATE OR REPLACE FUNCTION working_minutes(p_employee_id INT, p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
-RETURNS NUMERIC AS $$
+RETURNS TABLE (minutes NUMERIC) AS $$
     SELECT COALESCE(sum(extract(epoch FROM upper(r) - lower(r))), 0) / 60
       FROM (
         SELECT work_period(started_at, spent_minutes) * tstzrange(p_from, LEAST(p_to, NOW())) AS r
@@ -3572,7 +3595,10 @@ COMMENT ON FUNCTION working_minutes(INT, TIMESTAMPTZ, TIMESTAMPTZ) IS
 'Minutes of the employee''s shifts between two moments (an open shift
 counts up to now). Time someone did not work is not theirs to answer
 for: a mention a minute after the shift ended, answered as the next
-shift began, took 0 working minutes.';
+shift began, took 0 working minutes. One row, so that it is used as
+LATERAL working_minutes(...) over many rows at once: a set-returning SQL
+function is inlined into the query, a scalar one with an aggregate is
+called row by row, several times slower.';
 
 
 CREATE OR REPLACE FUNCTION deadline_risk(p_task_id INT)

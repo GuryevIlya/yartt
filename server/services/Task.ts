@@ -95,16 +95,41 @@ async function assertOwner(taskId: number, employeeId: number, db: Sql = sql): P
 /**
  * Whose open task `k` is in Available tasks (decision 85): 'mine' — I own it
  * or have time planned on it; 'team' — someone under me does; 'others'.
+ * My people are found once per query, not once per task.
  */
 export const whose = (viewerId: number) => sql`
   CASE WHEN k.owner_id = ${viewerId}
          OR EXISTS (SELECT 1 FROM estimate_minutes es WHERE es.task_id = k.id AND es.expired_at IS NULL AND es."by" = ${viewerId})
        THEN 'mine'
-       WHEN k.owner_id IN (SELECT subordinates(${viewerId}))
+       WHEN k.owner_id = ANY(ARRAY(SELECT subordinates(${viewerId})))
          OR EXISTS (SELECT 1 FROM estimate_minutes es WHERE es.task_id = k.id AND es.expired_at IS NULL
-                       AND es."by" IN (SELECT subordinates(${viewerId})))
+                       AND es."by" = ANY(ARRAY(SELECT subordinates(${viewerId}))))
        THEN 'team'
        ELSE 'others' END`;
+
+/**
+ * The ids of the tasks the viewer sees, as a set: can_see() for a list of
+ * tasks at once — those they actively observe and the public ones (no
+ * active observer). Calling can_see() per task of a large list costs a
+ * function call and two lookups each; tests/access.test.ts holds both to
+ * the same answer.
+ */
+export const visibleTasks = (viewerId: number) => sql`
+  SELECT task_id AS id FROM observer
+   WHERE value = ${viewerId} AND added_at IS NOT NULL AND deleted_at IS NULL
+  UNION
+  SELECT k.id FROM task k
+   WHERE NOT EXISTS (SELECT 1 FROM observer o
+                      WHERE o.task_id = k.id AND o.added_at IS NOT NULL AND o.deleted_at IS NULL)`;
+
+/**
+ * Only the shifts around a range of days, before shift_day or spent_day
+ * splits them into days: a day of any time zone lies within two days of its
+ * date, and a shift is at most a day long. The days themselves are still
+ * picked by `day`; this only spares splitting every shift ever made.
+ */
+export const shiftsWithin = (view: ReturnType<typeof sql>, from: string, to: string) =>
+  sql`${view}.started_at >= ${from}::date - 2 AND ${view}.started_at < ${to}::date + 2`;
 
 const Plan = z.object({ taskId: z.number(), minutes: z.number() });
 

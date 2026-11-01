@@ -3,6 +3,7 @@ import type { History } from '#shared/myDay.ts';
 import type { DayStats, Member, MemberDay, PeriodStats, ScoreInput, Stats } from '#shared/team.ts';
 import { AppError } from '../errors.ts';
 import { sql, type Sql } from '../pg.ts';
+import { shiftsWithin } from './Task.ts';
 import * as MyDay from './MyDay.ts';
 
 const Bool = z.object({ value: z.boolean() });
@@ -87,6 +88,7 @@ export async function stats(ids: number[], range: Range, db: Sql = sql): Promise
       SELECT d.employee_id, d.day, sum(d.minutes) AS minutes
         FROM shift_day d JOIN e ON e.id = d.employee_id
        WHERE d.closed AND d.day BETWEEN e.since AND e.until
+         AND d.started_at >= e.since - 2 AND d.started_at < e.until + 2
        GROUP BY 1, 2
     ),
     -- Grouped once per person, not a subquery per person: the summary has hundreds.
@@ -95,6 +97,7 @@ export async function stats(ids: number[], range: Range, db: Sql = sql): Promise
       SELECT s."by" AS employee_id, sum(s.minutes)::int AS minutes
         FROM spent_day s JOIN e ON e.id = s."by"
        WHERE s.day BETWEEN e.since AND e.until
+         AND s.started_at >= e.since - 2 AND s.started_at < e.until + 2
        GROUP BY 1
     ),
     sc AS (
@@ -103,6 +106,7 @@ export async function stats(ids: number[], range: Range, db: Sql = sql): Promise
         FROM shift_day d JOIN e ON e.id = d.employee_id
         JOIN score s ON s.shift_id = d.shift_id AND s.value IS NOT NULL
        WHERE d.day BETWEEN e.since AND e.until
+         AND d.started_at >= e.since - 2 AND d.started_at < e.until + 2
        GROUP BY 1
     )
     SELECT e.id AS employee_id,
@@ -135,11 +139,13 @@ async function memberDays(ids: number[], from: string, to: string): Promise<z.in
              FROM shift_day
              LEFT JOIN score sc USING (shift_id)
             WHERE employee_id = ANY(${ids}) AND closed AND day BETWEEN ${from}::date AND ${to}::date
+              AND ${shiftsWithin(sql`shift_day`, from, to)}
             GROUP BY 1, 2
          ),
          s AS (
            SELECT "by" AS employee_id, day, sum(minutes) AS minutes FROM spent_day
             WHERE "by" = ANY(${ids}) AND day BETWEEN ${from}::date AND ${to}::date
+              AND ${shiftsWithin(sql`spent_day`, from, to)}
             GROUP BY 1, 2
          )
     SELECT d.id AS employee_id, d.day::text, COALESCE(w.minutes, 0)::int AS work_minutes,
@@ -174,10 +180,11 @@ async function delaysByDay(ids: number[], from: string, to: string): Promise<z.i
          ),
          rep AS (
            SELECT m.value AS employee_id, (m.created_at AT TIME ZONE e.time_zone)::date AS day,
-                  percentile_cont(0.5) WITHIN GROUP (ORDER BY working_minutes(m.value, m.created_at, r.replied_at)) AS minutes
+                  percentile_cont(0.5) WITHIN GROUP (ORDER BY wm.minutes) AS minutes
              FROM mention m
              JOIN e ON e.id = m.value
              CROSS JOIN LATERAL (SELECT mention_reaction(m.task_id, m.comment_id, m.value) AS replied_at) r
+             CROSS JOIN LATERAL working_minutes(m.value, m.created_at, r.replied_at) wm
             WHERE r.replied_at IS NOT NULL
               AND m.created_at >= (${from}::date - 2)::timestamptz AND m.created_at < (${to}::date + 2)::timestamptz
               AND EXISTS (SELECT 1 FROM work w WHERE w.employee_id = m.value)
@@ -188,7 +195,7 @@ async function delaysByDay(ids: number[], from: string, to: string): Promise<z.i
                   percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM
                     s.added_at - (w.started_at + w.spent_minutes * INTERVAL '1 minute')) / 60) AS minutes
              FROM score s JOIN work w ON w.id = s.shift_id JOIN employee r ON r.id = w.employee_id
-            WHERE s."by" = ANY(${ids})
+            WHERE s."by" = ANY(${ids}) AND ${shiftsWithin(sql`w`, from, to)}
               AND (w.started_at AT TIME ZONE r.time_zone)::date BETWEEN ${from}::date AND ${to}::date
             GROUP BY 1, 2
          )
@@ -220,16 +227,18 @@ export async function summary(viewerId: number, from: string, to: string): Promi
      ORDER BY (e.id = ${viewerId}) DESC, (e.manager_id = ${viewerId}) DESC, e.dismissed_at IS NOT NULL, e.full_name, e.id
   `);
   const ids = rows.map((r) => r.id);
-  const byId = await stats(ids, { from, to });
+  // The parts do not depend on each other: asked at once, the summary takes as long as the slowest.
+  const statsOf = stats(ids, { from, to });
   // The current deadline row tells how a task closed (decision 93): closed by its owner at or
   // before the deadline — in time; after it, overdue first — late.
-  const extra = new Map(ExtraRow.array().parse(await sql`
+  const extraOf = sql`
     WITH e AS (SELECT id, time_zone, local_today(id) AS today FROM employee WHERE id = ANY(${ids})),
          -- Days of the range before today with a closed shift not scored (decision 100).
          unscored AS (
            SELECT d.employee_id, count(DISTINCT d.day)::int AS n
              FROM shift_day d JOIN e ON e.id = d.employee_id
             WHERE d.closed AND d.day < e.today AND d.day BETWEEN ${from}::date AND ${to}::date
+              AND ${shiftsWithin(sql`d`, from, to)}
               AND NOT EXISTS (SELECT 1 FROM score s WHERE s.shift_id = d.shift_id AND s.value IS NOT NULL)
             GROUP BY 1
          ),
@@ -239,54 +248,76 @@ export async function summary(viewerId: number, from: string, to: string): Promi
                   mention_reaction(m.task_id, m.comment_id, m.value) AS replied_at
              FROM mention m
              JOIN e ON e.id = m.value
-            WHERE (m.created_at AT TIME ZONE e.time_zone)::date BETWEEN ${from}::date AND ${to}::date
+            WHERE m.created_at >= ${from}::date - 2 AND m.created_at < ${to}::date + 2
+              AND (m.created_at AT TIME ZONE e.time_zone)::date BETWEEN ${from}::date AND ${to}::date
          ),
          -- The reaction counts only the person's working time: hours off are not theirs to answer for.
+         -- Without a timesheet there is no working time to measure against: no value.
          replies AS (
-           SELECT a.*, CASE WHEN a.replied_at IS NOT NULL
-                            THEN working_minutes(a.employee_id, a.asked_at, a.replied_at) END AS reaction
+           SELECT a.employee_id,
+                  percentile_cont(0.5) WITHIN GROUP (ORDER BY wm.minutes)
+                    FILTER (WHERE a.replied_at IS NOT NULL AND EXISTS (SELECT 1 FROM work w WHERE w.employee_id = a.employee_id))
+                    AS minutes,
+                  count(*) FILTER (WHERE a.replied_at IS NULL)::int AS unanswered
              FROM asked a
+             LEFT JOIN LATERAL (SELECT minutes FROM working_minutes(a.employee_id, a.asked_at, a.replied_at)
+                                 WHERE a.replied_at IS NOT NULL) wm ON TRUE
+            GROUP BY 1
          ),
          closed AS (
-           SELECT k.owner_id, f.confirmed_at > f.value AS late
+           SELECT k.owner_id, count(*) FILTER (WHERE f.confirmed_at <= f.value)::int AS finished,
+                  count(*) FILTER (WHERE f.confirmed_at > f.value)::int AS late
              FROM task k
              JOIN e ON e.id = k.owner_id
              JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
             WHERE (f.confirmed_at AT TIME ZONE e.time_zone)::date BETWEEN ${from}::date AND ${to}::date
+            GROUP BY 1
+         ),
+         -- Only an open task is at risk: at_risk() is not asked of the closed ones.
+         open AS (
+           SELECT k.owner_id, count(*)::int AS n, count(*) FILTER (WHERE at_risk(k.id))::int AS at_risk
+             FROM task k
+             JOIN e ON e.id = k.owner_id
+             LEFT JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
+            WHERE f.confirmed_at IS NULL
+            GROUP BY 1
+         ),
+         scores AS (
+           SELECT s."by", percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM
+                    s.added_at - (w.started_at + w.spent_minutes * INTERVAL '1 minute')) / 60) AS minutes
+             FROM score s JOIN work w ON w.id = s.shift_id JOIN employee r ON r.id = w.employee_id
+            WHERE s."by" = ANY(${ids}) AND ${shiftsWithin(sql`w`, from, to)}
+              AND (w.started_at AT TIME ZONE r.time_zone)::date BETWEEN ${from}::date AND ${to}::date
+            GROUP BY 1
          )
     SELECT e.id AS employee_id,
-           COALESCE((SELECT n FROM unscored u WHERE u.employee_id = e.id), 0) AS unscored_days,
-           (SELECT count(*)::int FROM closed c WHERE c.owner_id = e.id AND NOT c.late) AS finished,
-           (SELECT count(*)::int FROM closed c WHERE c.owner_id = e.id AND c.late) AS late,
-           (SELECT count(*)::int FROM task k
-              LEFT JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
-             WHERE k.owner_id = e.id AND f.confirmed_at IS NULL) AS open_tasks,
-           (SELECT count(*)::int FROM task k WHERE k.owner_id = e.id AND at_risk(k.id)) AS at_risk,
+           COALESCE(u.n, 0) AS unscored_days,
+           COALESCE(c.finished, 0) AS finished,
+           COALESCE(c.late, 0) AS late,
+           COALESCE(o.n, 0) AS open_tasks,
+           COALESCE(o.at_risk, 0) AS at_risk,
            (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY GREATEST(0,
                      extract(epoch FROM w.updated_at - (w.started_at + w.spent_minutes * INTERVAL '1 minute')) / 60))
               FROM work w
-             WHERE w.employee_id = e.id AND w.spent_minutes IS NOT NULL
+             WHERE w.employee_id = e.id AND w.spent_minutes IS NOT NULL AND ${shiftsWithin(sql`w`, from, to)}
                AND (w.started_at AT TIME ZONE e.time_zone)::date BETWEEN ${from}::date AND ${to}::date
            )::float8 AS record_delay_minutes,
-           -- Without a timesheet there is no working time to measure against: no value.
-           (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY r.reaction)
-              FROM replies r
-             WHERE r.employee_id = e.id AND r.replied_at IS NOT NULL
-               AND EXISTS (SELECT 1 FROM work w WHERE w.employee_id = e.id))::float8 AS reply_minutes,
-           (SELECT count(*)::int FROM replies r WHERE r.employee_id = e.id AND r.replied_at IS NULL) AS unanswered,
-           (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM
-                     s.added_at - (w.started_at + w.spent_minutes * INTERVAL '1 minute')) / 60)
-              FROM score s JOIN work w ON w.id = s.shift_id JOIN employee r ON r.id = w.employee_id
-             WHERE s."by" = e.id
-               AND (w.started_at AT TIME ZONE r.time_zone)::date BETWEEN ${from}::date AND ${to}::date)::float8 AS score_wait_minutes,
+           r.minutes::float8 AS reply_minutes,
+           COALESCE(r.unanswered, 0) AS unanswered,
+           sc.minutes::float8 AS score_wait_minutes,
            backlog_minutes(e.id, NOW()) AS backlog_minutes,
            backlog_minutes(e.id, LEAST(NOW(), (${to}::date + 1)::timestamp AT TIME ZONE e.time_zone))
              - backlog_minutes(e.id, ${from}::date::timestamp AT TIME ZONE e.time_zone) AS backlog_growth_minutes,
            GREATEST((SELECT max(v.at) FROM visit v WHERE v.employee_id = e.id),
                     (SELECT max(s.last_seen_at) FROM session s WHERE s.employee_id = e.id)) AS last_seen_at
       FROM e
-  `).map(({ employeeId, ...rest }) => [employeeId, rest]));
-  const [days, delays] = await Promise.all([memberDays(ids, from, to), delaysByDay(ids, from, to)]);
+      LEFT JOIN unscored u ON u.employee_id = e.id
+      LEFT JOIN closed c ON c.owner_id = e.id
+      LEFT JOIN open o ON o.owner_id = e.id
+      LEFT JOIN replies r ON r.employee_id = e.id
+      LEFT JOIN scores sc ON sc."by" = e.id
+  `.then((rows) => new Map(ExtraRow.array().parse(rows).map(({ employeeId, ...rest }) => [employeeId, rest])));
+  const [byId, extra, days, delays] = await Promise.all([statsOf, extraOf, memberDays(ids, from, to), delaysByDay(ids, from, to)]);
   const delayOf = new Map(delays.map((d) => [`${d.employeeId}/${d.day}/${d.kind}`, d.minutes]));
   const daysOf = new Map<number, MemberDay[]>();
   for (const { employeeId, ...day } of days) {

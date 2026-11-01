@@ -74,6 +74,7 @@ violation maps to a code by the constraint's name in `server/errors.ts`.
 | Question | Look at |
 |---|---|
 | Who sees a task | `can_see()`, `is_observer()`, `is_public()`, the trigger `observer_add_manager`, the header's access rules |
+| Who sees a list of tasks | the same rule as a set: `visibleTasks()` in `server/services/Task.ts`, held to `can_see()` by `tests/access.test.ts` |
 | Who may change it | `check_owner()`, the header's access rules, the functions under "task access" |
 | Why a time entry is refused | `trg_spent_minutes_check()`, `check_shift_minutes()` |
 | When a task is at risk | `at_risk()`, `deadline_risk()`, `dependency_risk()` |

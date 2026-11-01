@@ -38,6 +38,8 @@ const plus = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00
  * day by day.
  */
 async function current(viewerId: number, taskId: number | null): Promise<TagLimit[]> {
+  // The time of the limits' people is read once, over the days any of the limits needs, and summed
+  // per limit by joins: a lookup per limit over all the company's time would grow with both.
   const scope = sql`
     WITH l AS (
       SELECT l.* FROM tag_limit l
@@ -46,6 +48,27 @@ async function current(viewerId: number, taskId: number | null): Promise<TagLimi
     ),
     people AS (
       SELECT l.id, p.person FROM l, LATERAL (SELECT l.employee_id AS person UNION SELECT subordinates(l.employee_id)) p
+    ),
+    t AS (SELECT local_today(${viewerId}) AS today),
+    sp AS MATERIALIZED (
+      SELECT s."by", s.day, s.minutes, k.tag_ids
+        FROM spent_day s JOIN task k ON k.id = s.task_id, t
+       WHERE s."by" IN (SELECT person FROM people)
+         AND s.started_at >= LEAST((SELECT min(starts_on) FROM l), t.today - 28) - 2
+         AND s.started_at < GREATEST((SELECT max(ends_on) FROM l), t.today) + 2
+    ),
+    -- Each limit's time by day of its period, and over the last 28 days for its pace.
+    ld AS (
+      SELECT l.id, s.day, sum(s.minutes) AS minutes
+        FROM l JOIN people p ON p.id = l.id JOIN sp s ON s."by" = p.person AND s.tag_ids @> l.tag_ids
+       WHERE s.day BETWEEN l.starts_on AND l.ends_on
+       GROUP BY l.id, s.day
+    ),
+    lp AS (
+      SELECT l.id, sum(s.minutes) AS minutes
+        FROM l JOIN people p ON p.id = l.id JOIN sp s ON s."by" = p.person AND s.tag_ids @> l.tag_ids, t
+       WHERE s.day > t.today - 28 AND s.day <= t.today
+       GROUP BY l.id
     )
   `;
   const rows = LimitRow.array().parse(await sql`
@@ -54,27 +77,19 @@ async function current(viewerId: number, taskId: number | null): Promise<TagLimi
            EXISTS (SELECT 1 FROM tag_limit p WHERE p.replaced_by = l.id) AS changed,
            EXISTS (SELECT 1 FROM people WHERE people.id = l.id AND people.person = ${viewerId}) AS includes_me,
            t.today::text AS today,
-           (SELECT COALESCE(sum(s.minutes), 0) FROM spent_day s JOIN task k ON k.id = s.task_id
-             WHERE k.tag_ids @> l.tag_ids AND s.day BETWEEN l.starts_on AND l.ends_on
-               AND s."by" IN (SELECT person FROM people WHERE people.id = l.id))::int AS spent_minutes,
+           COALESCE((SELECT sum(ld.minutes) FROM ld WHERE ld.id = l.id), 0)::int AS spent_minutes,
            (SELECT COALESCE(sum(e.value), 0) FROM estimate_minutes e JOIN task k ON k.id = e.task_id
               LEFT JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
              WHERE e.expired_at IS NULL AND k.tag_ids @> l.tag_ids AND f.confirmed_at IS NULL
                AND e."by" IN (SELECT person FROM people WHERE people.id = l.id))::int AS left_minutes,
-           (SELECT COALESCE(sum(s.minutes), 0) FROM spent_day s JOIN task k ON k.id = s.task_id
-             WHERE k.tag_ids @> l.tag_ids AND s.day > t.today - 28 AND s.day <= t.today
-               AND s."by" IN (SELECT person FROM people WHERE people.id = l.id))::int AS pace_minutes,
+           COALESCE((SELECT lp.minutes FROM lp WHERE lp.id = l.id), 0)::int AS pace_minutes,
            GREATEST(0, l.ends_on - GREATEST(t.today, l.starts_on) + 1) AS days_ahead
-      FROM l, LATERAL (SELECT local_today(${viewerId}) AS today) t
+      FROM l, t
      ORDER BY l.ends_on, l.id
   `);
   const daily = DayRow.array().parse(await sql`
     ${scope}
-    SELECT l.id, s.day::text, sum(s.minutes)::int AS minutes
-      FROM l JOIN spent_day s ON s.day BETWEEN l.starts_on AND l.ends_on
-      JOIN task k ON k.id = s.task_id AND k.tag_ids @> l.tag_ids
-     WHERE s."by" IN (SELECT person FROM people WHERE people.id = l.id)
-     GROUP BY l.id, s.day
+    SELECT id, day::text, minutes::int FROM ld
   `);
   const tags = await tagMap(viewerId, [...new Set(rows.flatMap((r) => r.tagIds))]);
   return rows.map(({ tagIds, today, paceMinutes, daysAhead, ...r }) => {

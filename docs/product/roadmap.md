@@ -15,17 +15,6 @@ it is decided. Proposals wait for a decision in their own section.
   signed copies. Before the first outside pull request a lawyer in
   Kazakhstan checks both agreements, in particular that signing through
   GitHub counts as the written form (CONTRIBUTING.md).
-- [ ] **Load check.** Generate a company of 300 people with tens of
-  thousands of tasks, comments and time entries over two years; open My
-  day, a person's page, My team and a task's feed as an owner, a manager
-  at the top and a participant; read the plans of the slowest queries
-  (`at_risk()`, `can_see()`, `mention_reaction()` called per row) and fix
-  what takes more than a few hundred milliseconds. Count the polling too:
-  every open tab asks for 5–7 queries each 30 seconds, `MyDay.todo` with
-  `at_risk()` among them (hidden tabs do not poll); if it weighs, a light
-  "what changed since" query in place of re-reading, and `can_see()`
-  as a join rather than a call per row. Before 1.0: a slow interface is
-  what people leave Jira for.
 - [ ] **The image scanned before it is published.** The release workflow
   builds the image and scans it (Trivy) for high and critical advisories
   of the base image and its packages, and stops the release on one. The
@@ -73,6 +62,12 @@ In this order after stage 6 (S — a day, M — a few days, L — a week or more
   level, instead of plain text, and the queue's length and the age of
   its oldest notification in them, so a monitoring system can raise an
   alarm.
+- [ ] **A year of summaries for hundreds of people in under a second** (M).
+  The load check (docs/engineering/testing.md) leaves the slowest at a
+  year seen from the top of a 300-person company: 1.5 s for the tags,
+  2.5 s for the team, mostly each person's backlog day by day and the
+  reaction time of every mention. Daily figures kept by the worker
+  overnight would make any range a sum of days.
 
 ### Separate projects, after 1.0
 

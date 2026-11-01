@@ -6,6 +6,7 @@ import { Tag, TagName } from '#shared/task.ts';
 import { z } from 'zod';
 import { AppError } from '../errors.ts';
 import { sql } from '../pg.ts';
+import { shiftsWithin, visibleTasks } from './Task.ts';
 
 export const PAGE_SIZE = 50;
 
@@ -21,21 +22,28 @@ export async function mine(viewerId: number, query: string, page: number): Promi
            count(*)::int AS tasks,
            count(*) FILTER (WHERE f.confirmed_at IS NULL)::int AS open,
            (u.tag_id IS NOT NULL) AS personal
-      FROM task k
+      FROM (${visibleTasks(viewerId)}) seen
+      JOIN task k ON k.id = seen.id
       CROSS JOIN LATERAL unnest(k.tag_ids) AS kt(id)
       JOIN tag t ON t.id = kt.id
       LEFT JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
       LEFT JOIN user_tag u ON u.tag_id = t.id AND u.employee_id = ${viewerId}
-     WHERE can_see(k.id, ${viewerId}) AND t.name ILIKE ${like}
+     WHERE t.name ILIKE ${like}
      GROUP BY t.id, t.name, u.tag_id, u.color, u.weight
   `;
-  const items = MyTag.array().parse(await sql`
-    SELECT id, name, color, weight, tasks, open FROM (${tags}) x
+  // The page and the count from one pass over the tasks.
+  const rows = MyTag.extend({ total: z.number() }).array().parse(await sql`
+    SELECT id, name, color, weight, tasks, open, count(*) OVER ()::int AS total FROM (${tags}) x
      ORDER BY personal DESC, weight DESC, tasks DESC, name
      LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}
   `);
-  const [count] = z.object({ n: z.number() }).array().parse(await sql`SELECT count(*)::int AS n FROM (${tags}) x`);
-  return { items, total: count?.n ?? 0 };
+  const total = rows[0]?.total ?? (page === 1 ? 0 : await count());
+  return { items: rows.map(({ total: _, ...item }) => item), total };
+
+  async function count(): Promise<number> {
+    const [row] = z.object({ n: z.number() }).array().parse(await sql`SELECT count(*)::int AS n FROM (${tags}) x`);
+    return row?.n ?? 0;
+  }
 }
 
 /** My color and weight of a tag; the default ones (no color, weight 0) remove my row. */
@@ -271,9 +279,11 @@ export async function untilToday(viewerId: number, since: string): Promise<{ fro
 /**
  * The tasks the viewer sees and what people did on them over a range of
  * their days (decision 58): `v` — the tasks, `cm` — their comments in the
- * range, `tp` — who commented on or logged time to each, `m` — each task's
- * figures. Bots are not people here: their comments are automation, not
- * work under a tag.
+ * range, `sp` — the time logged to them in it, `tp` — who commented on or
+ * logged time to each, `m` — each task's figures. Bots are not people here:
+ * their comments are automation, not work under a tag. Each figure is
+ * gathered once for all the tasks and joined, never looked up per task; the
+ * shifts are narrowed to the range before they are split into days.
  */
 function scope(viewerId: number, from: string, to: string) {
   return sql`
@@ -283,66 +293,99 @@ function scope(viewerId: number, from: string, to: string) {
              e.time_zone
         FROM employee e WHERE e.id = ${viewerId}
     ),
-    v AS (
+    v AS MATERIALIZED (
       SELECT k.id, k.tag_ids, f.value AS deadline, f.confirmed_at AS closed_at
-        FROM task k
+        FROM (${visibleTasks(viewerId)}) seen
+        JOIN task k ON k.id = seen.id
         LEFT JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
-       WHERE can_see(k.id, ${viewerId})
     ),
-    cm AS (
+    cm AS MATERIALIZED (
       SELECT c.task_id, c.created_by, (c.created_at AT TIME ZONE r.time_zone)::date AS day
-        FROM comment c JOIN human h ON h.employee_id = c.created_by, r
-       WHERE c.created_at >= r.since AND c.created_at < r.until AND c.task_id IN (SELECT id FROM v)
+        FROM comment c JOIN human h ON h.employee_id = c.created_by JOIN v ON v.id = c.task_id, r
+       WHERE c.created_at >= r.since AND c.created_at < r.until
     ),
-    sp AS (
+    sp AS MATERIALIZED (
       -- A shift past midnight puts its share of an entry in each day (decision 100).
-      SELECT s.task_id, s."by", s.day, s.minutes AS value FROM spent_day s
-       WHERE s.day BETWEEN ${from}::date AND ${to}::date AND s.task_id IN (SELECT id FROM v)
+      SELECT s.task_id, s."by", s.day, s.minutes AS value
+        FROM spent_day s JOIN v ON v.id = s.task_id
+       WHERE ${shiftsWithin(sql`s`, from, to)} AND s.day BETWEEN ${from}::date AND ${to}::date
     ),
-    tp AS (
+    tp AS MATERIALIZED (
       SELECT DISTINCT task_id, person, day FROM (
         SELECT task_id, created_by AS person, day FROM cm
         UNION ALL
         SELECT task_id, "by", day FROM sp
       ) x
     ),
-    m AS (
+    m AS MATERIALIZED (
       SELECT v.id, v.tag_ids,
              v.closed_at IS NULL AS open,
-             at_risk(v.id) AS at_risk,
+             -- Only an open task is at risk: at_risk() is not asked of the closed ones.
+             CASE WHEN v.closed_at IS NULL THEN at_risk(v.id) ELSE FALSE END AS at_risk,
              COALESCE(v.closed_at >= r.since AND v.closed_at < r.until, FALSE) AS closed_in,
              (v.closed_at AT TIME ZONE r.time_zone)::date AS closed_day,
              COALESCE(v.closed_at > v.deadline, FALSE) AS late,
-             (SELECT count(*) FROM cm WHERE cm.task_id = v.id)::int AS comments,
-             EXISTS (SELECT 1 FROM tp WHERE tp.task_id = v.id) AS touched,
-             GREATEST(
-               (SELECT max((c.created_at AT TIME ZONE r.time_zone)::date) FROM comment c
-                  JOIN human h ON h.employee_id = c.created_by WHERE c.task_id = v.id),
-               (SELECT max(s.day) FROM spent_day s WHERE s.task_id = v.id),
-               (v.closed_at AT TIME ZONE r.time_zone)::date
-             ) AS last_day
+             COALESCE(c.n, 0) AS comments,
+             t.task_id IS NOT NULL AS touched,
+             GREATEST((lc.at AT TIME ZONE r.time_zone)::date, ls.day, (v.closed_at AT TIME ZONE r.time_zone)::date) AS last_day,
+             COALESCE(s.minutes, 0) AS minutes,
+             CASE WHEN v.closed_at IS NULL THEN COALESCE(e.minutes, 0) ELSE 0 END AS left_minutes
         FROM v CROSS JOIN r
+        LEFT JOIN (SELECT task_id, count(*)::int AS n FROM cm GROUP BY task_id) c ON c.task_id = v.id
+        LEFT JOIN (SELECT DISTINCT task_id FROM tp) t ON t.task_id = v.id
+        LEFT JOIN (SELECT task_id, sum(value) AS minutes FROM sp GROUP BY task_id) s ON s.task_id = v.id
+        LEFT JOIN (SELECT task_id, sum(value) AS minutes FROM estimate_minutes WHERE expired_at IS NULL GROUP BY task_id) e
+          ON e.task_id = v.id
+        -- When each last moved, whatever the range: its last comment by a person, its last time logged.
+        LEFT JOIN (SELECT c.task_id, max(c.created_at) AS at FROM comment c JOIN human h ON h.employee_id = c.created_by
+                    GROUP BY c.task_id) lc ON lc.task_id = v.id
+        -- Its last time logged: the day its latest shift ends (now, for an open one).
+        LEFT JOIN (
+          SELECT s.task_id,
+                 (max(COALESCE(w.started_at + w.spent_minutes * INTERVAL '1 minute' - INTERVAL '1 microsecond', NOW()))
+                    AT TIME ZONE (SELECT time_zone FROM r))::date AS day
+            FROM spent_minutes s JOIN work w ON w.id = s.shift_id
+           GROUP BY s.task_id
+        ) ls ON ls.task_id = v.id
     )
   `;
 }
 
-const figures = () => sql`
-  count(*) FILTER (WHERE m.open)::int AS open,
-  count(*) FILTER (WHERE m.at_risk)::int AS at_risk,
-  count(*) FILTER (WHERE m.open AND NOT m.touched)::int AS stale,
-  count(*) FILTER (WHERE m.closed_in AND NOT m.late)::int AS finished,
-  count(*) FILTER (WHERE m.closed_in AND m.late)::int AS late,
-  count(*) FILTER (WHERE m.closed_in OR m.touched)::int AS active,
-  COALESCE(sum(m.comments), 0)::int AS comments,
-  count(*) FILTER (WHERE m.comments > 0)::int AS discussed,
-  (SELECT COALESCE(sum(sp.value), 0) FROM sp WHERE sp.task_id = ANY(array_agg(m.id)))::int AS minutes,
-  (SELECT COALESCE(sum(e.value), 0) FROM estimate_minutes e
-    WHERE e.expired_at IS NULL AND e.task_id = ANY(array_agg(m.id) FILTER (WHERE m.open)))::int AS left_minutes,
-  (SELECT count(DISTINCT tp.person) FROM tp WHERE tp.task_id = ANY(array_agg(m.id)))::int AS people,
-  (SELECT count(DISTINCT e."by") FROM estimate_minutes e
-    WHERE e.expired_at IS NULL AND e.task_id = ANY(array_agg(m.id) FILTER (WHERE m.open)))::int AS planners,
-  max(m.last_day)::text AS last_day
-`;
+/**
+ * The figures of lines of tasks: `lines` gives each line's `key` and its
+ * tasks of `m` (a task under several tags is in each of their lines). The
+ * people and the planners of a line are counted over its tasks, each person
+ * once.
+ */
+function summarize(lines: ReturnType<typeof sql>) {
+  return sql`
+    ln AS MATERIALIZED (${lines}),
+    lp AS (SELECT ln.key, count(DISTINCT tp.person)::int AS people FROM ln JOIN tp ON tp.task_id = ln.id GROUP BY ln.key),
+    le AS (
+      SELECT ln.key, count(DISTINCT e."by")::int AS planners FROM ln
+        JOIN estimate_minutes e ON e.task_id = ln.id AND e.expired_at IS NULL
+       WHERE ln.open GROUP BY ln.key
+    ),
+    figures AS (
+      SELECT ln.key,
+             count(*) FILTER (WHERE ln.open)::int AS open,
+             count(*) FILTER (WHERE ln.at_risk)::int AS at_risk,
+             count(*) FILTER (WHERE ln.open AND NOT ln.touched)::int AS stale,
+             count(*) FILTER (WHERE ln.closed_in AND NOT ln.late)::int AS finished,
+             count(*) FILTER (WHERE ln.closed_in AND ln.late)::int AS late,
+             count(*) FILTER (WHERE ln.closed_in OR ln.touched)::int AS active,
+             COALESCE(sum(ln.comments), 0)::int AS comments,
+             count(*) FILTER (WHERE ln.comments > 0)::int AS discussed,
+             COALESCE(sum(ln.minutes), 0)::int AS minutes,
+             COALESCE(sum(ln.left_minutes), 0)::int AS left_minutes,
+             COALESCE(max(lp.people), 0)::int AS people,
+             COALESCE(max(le.planners), 0)::int AS planners,
+             max(ln.last_day)::text AS last_day
+        FROM ln LEFT JOIN lp USING (key) LEFT JOIN le USING (key)
+       GROUP BY ln.key
+    )
+  `;
+}
 
 /** The order of the lines: the column picked, largest (latest) first, then the tasks in work. */
 function order(sort: TagSort) {
@@ -387,22 +430,17 @@ export async function stats(viewerId: number, input: TagStatsInput): Promise<z.i
   const base = scope(viewerId, from, to);
   const which = picked ? sql`t.id = ANY(${input.tagIds}::int[])` : rubric();
   const rows = SummaryRow.array().parse(await sql`
-    ${base}
-    SELECT * FROM (
-      SELECT t.id AS tag_id, t.name, ${figures()}
-        FROM m
-        CROSS JOIN LATERAL unnest(m.tag_ids) AS mt(id)
-        JOIN tag t ON t.id = mt.id
-       WHERE ${which}
-       GROUP BY t.id, t.name
-    ) x
-     ORDER BY ${order(input.sort)}, x.name
+    ${base},
+    ${summarize(sql`SELECT t.id AS key, m.* FROM m CROSS JOIN LATERAL unnest(m.tag_ids) AS mt(id) JOIN tag t ON t.id = mt.id WHERE ${which}`)}
+    SELECT x.key AS tag_id, t.name, x.* FROM figures x JOIN tag t ON t.id = x.key
+     ORDER BY ${order(input.sort)}, t.name
      ${picked ? sql`` : sql`LIMIT ${SUMMARY_PAGE} OFFSET ${(input.page - 1) * SUMMARY_PAGE}`}
   `);
+  // Only the tasks seen are needed to count the lines, not their figures.
   const [count] = Count.array().parse(await sql`
     ${base}
     SELECT count(DISTINCT t.id)::int AS n
-      FROM m CROSS JOIN LATERAL unnest(m.tag_ids) AS mt(id) JOIN tag t ON t.id = mt.id
+      FROM v CROSS JOIN LATERAL unnest(v.tag_ids) AS vt(id) JOIN tag t ON t.id = vt.id
      WHERE ${which}
   `);
   const groups: { group: TagGroup; tagIds: number[]; figures: z.infer<typeof SummaryRow> }[] = rows.map((r) => ({
@@ -412,8 +450,9 @@ export async function stats(viewerId: number, input: TagStatsInput): Promise<z.i
     for (const kind of ['all', 'any'] as const) {
       const group: TagGroup = { kind, tagIds: input.tagIds };
       const [row] = SummaryRow.array().parse(await sql`
-        ${base}
-        SELECT NULL::int AS tag_id, ${figures()} FROM m WHERE ${carrying(group, sql`m.tag_ids`)}
+        ${base},
+        ${summarize(sql`SELECT 0 AS key, m.* FROM m WHERE ${carrying(group, sql`m.tag_ids`)}`)}
+        SELECT NULL::int AS tag_id, z.* FROM (SELECT 0 AS key) k LEFT JOIN figures z USING (key)
       `);
       groups.push({ group, tagIds: input.tagIds, figures: row! });
     }
@@ -462,7 +501,7 @@ export async function detail(viewerId: number, input: TagDetailInput): Promise<T
     ${base},
     total AS (
       SELECT s."by", sum(s.minutes) AS minutes FROM spent_day s
-       WHERE s.day BETWEEN ${from}::date AND ${to}::date GROUP BY s."by"
+       WHERE s.day BETWEEN ${from}::date AND ${to}::date AND ${shiftsWithin(sql`s`, from, to)} GROUP BY s."by"
     ),
     mine AS (
       SELECT p.person,

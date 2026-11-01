@@ -29,6 +29,9 @@ async function shown(person: Person, taskId: number, fileId: number): Promise<Re
   const preview = await api.Task.preview({ id: taskId });
   const [tag] = await sql<{ id: number }[]>`SELECT tag_ids[1] AS id FROM task WHERE id = ${taskId}`;
   const found = (await api.Task.search({ tagIds: [tag!.id], tab: 'all', page: 1 })).items.find((t) => t.id === taskId);
+  const [name] = await sql<{ name: string }[]>`SELECT name FROM tag WHERE id = ${tag!.id}`;
+  const today = (await sql<{ d: string }[]>`SELECT local_today(${person.id})::text AS d`)[0]!.d;
+  const stats = await api.Tags.stats({ since: today, tagIds: [tag!.id], page: 1, sort: 'active' });
   return {
     'Task.get details': page.details !== null,
     'Task.preview': preview.visible && preview.context !== null && preview.people.length > 0,
@@ -37,6 +40,9 @@ async function shown(person: Person, taskId: number, fileId: number): Promise<Re
     'Observer.list': !(await refused(() => api.Observer.list({ taskId, page: 1 }))),
     'Observer.mentionable': !(await refused(() => api.Observer.mentionable({ taskId }))),
     'Attachment.read': !(await refused(() => Attachments.read(person.id, fileId))),
+    // The lists that find the tasks one sees all at once (visibleTasks), not by can_see() per task.
+    'Tags.mine': (await api.Tags.mine({ query: name!.name, page: 1 })).items.some((t) => t.id === tag!.id),
+    'Tags.stats': stats.rows.some((r) => r.open === 1),
   };
 }
 

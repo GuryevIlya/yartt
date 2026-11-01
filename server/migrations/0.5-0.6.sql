@@ -553,7 +553,7 @@ COMMENT ON FUNCTION day_split(TEXT, TIMESTAMPTZ, TIMESTAMPTZ) IS
 it and its share of the whole (1 for an empty interval, on its day).';
 
 CREATE VIEW shift_day AS
-SELECT w.id AS shift_id, w.employee_id, d.day, d.minutes, d.share, w.spent_minutes IS NOT NULL AS closed
+SELECT w.id AS shift_id, w.employee_id, d.day, d.minutes, d.share, w.spent_minutes IS NOT NULL AS closed, w.started_at
   FROM work w
   JOIN employee e ON e.id = w.employee_id
  CROSS JOIN LATERAL day_split(e.time_zone, w.started_at,
@@ -563,16 +563,21 @@ COMMENT ON VIEW shift_day IS
 'Each shift by the days of its employee it touches (decision 100): a shift
 past midnight belongs to both days, each with the minutes worked in it and
 its share of the shift. An open shift counts up to now (closed = FALSE).
-Sums by day take minutes from here, so nothing is counted twice.';
+Sums by day take minutes from here, so nothing is counted twice.
+started_at narrows a range of days to the shifts around it before they are
+split (shiftsWithin in the server): a day of any time zone lies within two
+days of its date, and a shift is at most a day long.';
 
 CREATE VIEW spent_day AS
-SELECT s.id AS entry_id, s.task_id, s."by", s.shift_id, d.day, s.value * d.share AS minutes, s.added_at, s.updated_at
+SELECT s.id AS entry_id, s.task_id, s."by", s.shift_id, d.day, s.value * d.share AS minutes, s.added_at, s.updated_at,
+       d.started_at
   FROM spent_minutes s
   JOIN shift_day d ON d.shift_id = s.shift_id;
 
 COMMENT ON VIEW spent_day IS
 'Each time entry by the days of its shift, with the share of its minutes
-that falls on each (decision 100): sums of time by day take it from here.';
+that falls on each (decision 100): sums of time by day take it from here.
+started_at is the shift''s, as in shift_day.';
 
 CREATE OR REPLACE FUNCTION trg_work_check()
 RETURNS TRIGGER AS $$
@@ -1222,6 +1227,57 @@ COMMENT ON FUNCTION release_attachment(INT, INT) IS
 else holds it, it stays as it is; let go by the last one, its content is
 deleted. The row stays, and so do the comments that refer to it: their
 link says the file is gone; the same bytes uploaded again bring it back.';
+
+
+-- Who sees a task is answered from an index alone, for one task or a list.
+CREATE INDEX idx_observer_active
+    ON observer(task_id, value)
+    WHERE added_at IS NOT NULL AND deleted_at IS NULL;
+
+COMMENT ON INDEX idx_observer_active IS
+'Active access by task: is_observer() and is_public() answer from the
+index alone, and a list of tasks finds its public ones (no entry here)
+by one pass over it rather than a lookup per task.';
+
+
+-- A person's comments are found without reading them all.
+CREATE INDEX idx_comment_created_by ON comment(created_by, created_at);
+
+COMMENT ON INDEX idx_comment_created_by IS
+'A person''s comments: their days in History and their comments with
+mentions in Waiting for others.';
+
+
+-- Everyone's shifts are found by when they started.
+CREATE INDEX idx_work_started_at ON work(started_at);
+
+COMMENT ON INDEX idx_work_started_at IS
+'Everyone''s shifts around a range of days: the time under a tag or a
+budget is found without splitting every shift ever made into days.';
+
+
+-- Working minutes are a one-row set: inlined into the query that asks for many.
+DROP FUNCTION working_minutes(INT, TIMESTAMPTZ, TIMESTAMPTZ);
+CREATE OR REPLACE FUNCTION working_minutes(p_employee_id INT, p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
+RETURNS TABLE (minutes NUMERIC) AS $$
+    SELECT COALESCE(sum(extract(epoch FROM upper(r) - lower(r))), 0) / 60
+      FROM (
+        SELECT work_period(started_at, spent_minutes) * tstzrange(p_from, LEAST(p_to, NOW())) AS r
+          FROM work
+         WHERE employee_id = p_employee_id
+           AND work_period(started_at, spent_minutes) && tstzrange(p_from, LEAST(p_to, NOW()))
+      ) x
+     WHERE NOT isempty(r)
+$$ LANGUAGE sql STABLE;
+
+COMMENT ON FUNCTION working_minutes(INT, TIMESTAMPTZ, TIMESTAMPTZ) IS
+'Minutes of the employee''s shifts between two moments (an open shift
+counts up to now). Time someone did not work is not theirs to answer
+for: a mention a minute after the shift ended, answered as the next
+shift began, took 0 working minutes. One row, so that it is used as
+LATERAL working_minutes(...) over many rows at once: a set-returning SQL
+function is inlined into the query, a scalar one with an aggregate is
+called row by row, several times slower.';
 
 
 -- The specification (COMMENT ON SCHEMA) as of this version.

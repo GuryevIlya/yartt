@@ -4,7 +4,7 @@ import { newestReaction, reactions } from '#shared/comment.ts';
 import { plainText } from '../html.ts';
 import { sql } from '../pg.ts';
 import { mentionReplies, replyKey } from './Comment.ts';
-import { headers, hours, plans, whose } from './Task.ts';
+import { headers, hours, plans, visibleTasks, whose } from './Task.ts';
 
 export const PAGE_SIZE = 20;
 /** Days with activity per page of History. */
@@ -287,27 +287,30 @@ export async function waiting(me: number, viewerId: number = me): Promise<Waitin
  * first (decision 57).
  */
 export async function current(me: number, tab: CurrentTab, page: number): Promise<Current> {
-  const seen = sql`
-    SELECT k.id, k.owner_id, k.priority, f.value AS deadline, f.confirmed_at AS closed_at, f.confirmed_at IS NOT NULL AS closed,
-           ${whose(me)} AS whose
-      FROM task k
-      LEFT JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
-     WHERE can_see(k.id, ${me})
-  `;
-  const ids = z.object({ id: z.number() }).array().parse(await sql`
-    SELECT id FROM (${seen}) t
-     WHERE ${tab === 'closed' ? sql`closed` : sql`NOT closed AND whose = ${tab}`}
-     ORDER BY ${tab === 'closed' ? sql`closed_at DESC, priority DESC, id DESC` : sql`deadline NULLS LAST, priority DESC, id DESC`}
-     LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}
-  `).map((r) => r.id);
-  const [counts] = z.object({ mine: z.number(), team: z.number(), others: z.number(), closed: z.number() }).array().parse(await sql`
-    SELECT count(*) FILTER (WHERE NOT closed AND whose = 'mine')::int AS mine,
-           count(*) FILTER (WHERE NOT closed AND whose = 'team')::int AS team,
-           count(*) FILTER (WHERE NOT closed AND whose = 'others')::int AS others,
-           count(*) FILTER (WHERE closed)::int AS closed
-      FROM (${seen}) t
-  `);
-  return { items: await headers(me, ids), counts: counts!, plans: await plans(me, tab, ids), hours: await hours(me, ids) };
+  // Whose it is only matters for an open task: a closed one is only counted.
+  const [row] = z.object({ ids: z.number().array(), mine: z.number(), team: z.number(), others: z.number(), closed: z.number() })
+    .array().parse(await sql`
+      WITH seen AS MATERIALIZED (
+        SELECT k.id, k.priority, f.value AS deadline, f.confirmed_at AS closed_at, f.confirmed_at IS NOT NULL AS closed,
+               CASE WHEN f.confirmed_at IS NULL THEN ${whose(me)} END AS whose
+          FROM (${visibleTasks(me)}) v
+          JOIN task k ON k.id = v.id
+          LEFT JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
+      )
+      SELECT ARRAY(
+               SELECT id FROM seen
+                WHERE ${tab === 'closed' ? sql`closed` : sql`NOT closed AND whose = ${tab}`}
+                ORDER BY ${tab === 'closed' ? sql`closed_at DESC, priority DESC, id DESC` : sql`deadline NULLS LAST, priority DESC, id DESC`}
+                LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}
+             ) AS ids,
+             count(*) FILTER (WHERE NOT closed AND whose = 'mine')::int AS mine,
+             count(*) FILTER (WHERE NOT closed AND whose = 'team')::int AS team,
+             count(*) FILTER (WHERE NOT closed AND whose = 'others')::int AS others,
+             count(*) FILTER (WHERE closed)::int AS closed
+        FROM seen
+    `);
+  const { ids, ...counts } = row!;
+  return { items: await headers(me, ids), counts, plans: await plans(me, tab, ids), hours: await hours(me, ids) };
 }
 
 const DayRow = z.object({ day: z.string() });

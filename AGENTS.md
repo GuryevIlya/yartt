@@ -238,6 +238,8 @@ a `matchPath` in `client/components/App.tsx`.
 - `npm run typecheck` — `tsconfig.json` (server + shared + tests + scripts + e2e) and `client/tsconfig.json`.
 - `TEST_DATABASE_URL=… npm run fixture` — the test data of the current schema version
   (`-- --migrate`: the last release's data through the migrations).
+- `DATABASE_URL=… npm run load -- generate | measure` — the load check: a company of 300 over two years
+  in an empty database, and how long each query of the interface takes in it (`docs/engineering/testing.md`).
 - `npm run seed -- --reset [--lang en]` — wipes the database in `DATABASE_URL` and fills it with demo data that
   touches every screen (`server/demo.ts`; in the image — every start and every night with `DEMO_DATA=ru|en`).
   Keep it in step with new features, in both languages (`server/demoTexts.ts`).
