@@ -15,6 +15,13 @@ it is decided. Proposals wait for a decision in their own section.
   signed copies. Before the first outside pull request a lawyer in
   Kazakhstan checks both agreements, in particular that signing through
   GitHub counts as the written form (CONTRIBUTING.md).
+- [ ] **Load check.** Generate a company of 300 people with tens of
+  thousands of tasks, comments and time entries over two years; open My
+  day, a person's page, My team and a task's feed as an owner, a manager
+  at the top and a participant; read the plans of the slowest queries
+  (`at_risk()`, `can_see()`, `mention_reaction()` called per row) and fix
+  what takes more than a few hundred milliseconds. Before 1.0: a slow
+  interface is what people leave Jira for.
 - [ ] **Release 1.0.** The delivery check passed (2026-11-01: the image
   built from scratch, an empty PostgreSQL 17, sign-in through a test
   SMTP, emails in each recipient's language, every webhook signature
@@ -28,7 +35,30 @@ it is decided. Proposals wait for a decision in their own section.
 
 In this order after stage 6 (S — a day, M — a few days, L — a week or more).
 
-Nothing approved is waiting.
+- [ ] **Who knows the subject (M).** Under the tags of a new task, and
+  in the field that adds a participant, two or three people who logged
+  the most time in tasks with those tags lately, with "Invite": the
+  answer to "I do not know who should take it" is in the data already.
+  Only tasks the author sees count, and dismissed people and bots are
+  left out.
+
+## Proposals
+
+- **A comment is read as a whole.** "Accepted" on each mention becomes
+  "Read" on the comment (comment.reviewed_at, like task.reviewed_at,
+  decision 94): Waiting for others shows a comment only while it has
+  reactions its author has not seen, so a comment to a hundred people
+  does not bother its author with each of them. Waits for the answer
+  on whether a reviewed comment with mentions still unanswered leaves
+  the list.
+- **Shifts across midnight; scores and time entries by shift (L).** A
+  shift may run past midnight and is shown in both days; the manager
+  scores shifts, time entries belong to a shift, and the day is only
+  how they are shown. Reverses decision 72, changes decision 6 (time
+  is logged only within a shift). Waits for the answers on the limit of
+  entries per shift, scoring several shifts of a day at once, the
+  migration of entries on days without a shift, and the time zone the
+  times are shown in.
 
 ## Decided against
 
@@ -36,6 +66,10 @@ Nothing approved is waiting.
 - A task without movement in TODO — a task may be put off on purpose.
 - `@` and `#` while typing in a comment — the buttons are enough.
 - Notification digests — notifications stay instant.
+- A service desk built in — an employee who needs help makes a task of
+  their own, stays its owner and invites those who can help; external
+  clients are served by tools made for it, and what needs work becomes
+  a task, or time on an open-ended task for client support.
 - Import from other trackers — only if migration becomes the main
   obstacle to adoption.
 - Everything in "Never" of [features](features.md).
