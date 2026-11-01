@@ -5,6 +5,7 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import api from '../server/api.ts';
 import { sql } from '../server/pg.ts';
+import { isPrivateAddress } from '../server/webhook.ts';
 import { deliverNotifications } from '../server/worker.ts';
 import { client, createEmployee } from './helpers.ts';
 
@@ -223,5 +224,40 @@ describe('bots', () => {
         hook.close();
       }
     });
+
+    test('never reaches inside the network, unless its host is listed as internal', async () => {
+      let hits = 0;
+      const hook = createServer((_req, res) => { hits++; res.writeHead(200).end(); }).listen(0);
+      await new Promise((resolve) => hook.once('listening', resolve));
+      try {
+        const port = (hook.address() as AddressInfo).port;
+        const lead = await createEmployee();
+        const leadApi = await client(lead.id);
+        // Listed (BOT_WEBHOOK_INTERNAL_HOSTS=localhost in the tests): reached.
+        const listed = await leadApi.Bot.create({ ...newBot(), webhookUrl: `http://localhost:${port}/hook` });
+        // The same machine by its address: refused, and counted as a failed delivery.
+        const inside = await leadApi.Bot.create({ ...newBot(), webhookUrl: `http://127.0.0.1:${port}/hook` });
+        const task = await leadApi.Task.create({ tags: [`inside-${inside.id}`] });
+        await leadApi.Observer.add({ taskId: task, employeeId: listed.id });
+        await leadApi.Observer.add({ taskId: task, employeeId: inside.id });
+        await deliverNotifications(sql);
+        expect(hits).toBe(1);
+        const today = new Date().toISOString().slice(0, 10);
+        const stats = await leadApi.Bot.stats({ since: today });
+        expect(stats.find((b) => b.id === inside.id)).toMatchObject({ deliveries: 1, failedDeliveries: 1 });
+      } finally {
+        hook.close();
+      }
+    });
   });
+});
+
+test('addresses inside the network', () => {
+  for (const address of ['127.0.0.1', '10.1.2.3', '172.20.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0',
+    '::1', '::', 'fd00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:7f00:1', 'not-an-address']) {
+    expect(isPrivateAddress(address), address).toBe(true);
+  }
+  for (const address of ['8.8.8.8', '1.1.1.1', '172.32.0.1', '::ffff:808:808', '2a00:1450:4001::1']) {
+    expect(isPrivateAddress(address), address).toBe(false);
+  }
 });

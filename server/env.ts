@@ -15,6 +15,10 @@ const EnvSchema = z.object({
   // Optional extra channel for other messengers.
   WEBHOOK_URL: z.url().optional().or(z.literal('').transform(() => undefined)),
   WEBHOOK_SECRET: z.string().optional(),
+  // A bot's own webhook reaches only outside addresses, except these hosts
+  // inside the company's network (comma-separated, e.g. ci.corp.local).
+  BOT_WEBHOOK_INTERNAL_HOSTS: z.string().optional()
+    .transform((value) => (value ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean)),
   COOKIE_SECURE: z.stringbool().default(true),
   CLIENT_DIST: z.string().optional(),
   FIRST_EMPLOYEE_EMAIL: z.email().optional(),
