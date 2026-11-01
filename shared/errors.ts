@@ -66,17 +66,16 @@ export const ERROR_CODES = [
   'shift_overlap',
   'shift_overlap_with',
   'shift_overlap_open',
-  'shift_crosses_day',
+  'shift_too_long',
+  'shift_scored',
+  'shift_has_entries',
+  'shift_shorter_than_entries',
   'shift_in_future',
   'shift_open',
   'spent_immutable',
-  'spent_in_future',
-  'spent_over_day',
-  'day_scored',
+  'spent_over_shift',
   'score_final',
   'not_manager',
-  'score_day_not_past',
-  'no_work_for_day',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

@@ -146,29 +146,35 @@ range; a click on another heading sorts by it — or the tags
   all of them, my own employee page (decision 54). On a wide screen it
   sits beside the other blocks and scrolls on its own, staying in view
   while they scroll. A day in a few lines:
-  - its totals — the time in its closed shifts and the time logged to
-    tasks, with a warning when more is logged than worked;
+  - its totals — the time in its closed shifts and the time logged in
+    them, a shift past midnight by the share of it in the day;
   - the ribbon: the day from 09 to 18 (wider if something happened
     outside), the shifts as bars, every visit as a thin tick — faint
     inside a shift, marked outside one — and what was done (a comment,
     time logged) as a dot; a hover tells the time and the task;
-  - its shifts, each corrected or deleted while the day is not scored
-    (decision 37); today "Start the shift" starts one now, and "Finish"
-    closes it with what was done (the end offered is now, rounded up to
-    the minute) — the top line does the same with its icons;
-  - every task once, in one line: its one entry of the day — the whole
-    time, set and replaced, 0 removes it, at most 24 hours for the day's
-    tasks together, when it was last set on hover
-    (decision 60) — and "Log time" (15m, 30m, 1h, 2h a click away), so
-    time is logged where the day is reviewed; the tasks opened and not
-    logged are folded under one line, a reminder — without those opened
-    only once closed, looked up rather than worked on;
+  - its shifts — one past midnight in both its days, its other end with
+    its date — each corrected or deleted until scored (decisions 37,
+    100), with its score; today "Start the shift" starts one now, and
+    "Finish" closes it with what was done (the end offered is now,
+    rounded up to the minute) — the top line does the same with its
+    icons;
+  - under each shift, every task logged in it, in one line: its one
+    entry of the shift — the whole time, set and replaced, 0 removes it,
+    when it was last set on hover (decision 60) — and "Log time" (15m,
+    30m, 1h, 2h a click away), so time is logged where the day is
+    reviewed; a shift holds at most its length, all tasks together, and
+    is never made shorter than that nor deleted with time in it
+    (decision 100). The tasks opened and not logged are folded under one
+    line, a reminder — without those opened only once closed, looked up
+    rather than worked on — logged into the shift their visit falls in;
+    a day without a shift says to write one first;
   - the visits one by one, folded too under "Activity" (the screens and
     tasks opened; "visits" in the code).
-  Any shift is added by hand with the clock in the day's header. A shift
-  belongs to its day: the dialog names the day and asks only for the
-  start and the end, 00:00 as the end being the midnight after it
-  (decision 72); a shift in the way is named with its times as they
+  Any shift is added by hand with the clock in the day's header. The
+  dialog names the day the shift starts and asks only for the start and
+  the end; an end not after the start is the next day's, said under the
+  times, and a shift lasts at most 24 hours (decision 100); a shift in
+  the way is named with its times as they
   are typed, and "Save" waits until they are moved (decision 81). A past
   day suggests the shift its activity shows — a day without shifts, or 30
   minutes or more of visits outside its shifts as the shift that was not
@@ -377,8 +383,8 @@ narrow — four columns that compare across rows, no horizontal scroll
 - **delay** — the one of three delays furthest past its limit, named
   under it: writing the timesheet (median from a shift's end to its
   record; a day is the limit), replying to mentions (median of their
-  working time to the first reply to it; a working day), scoring reports' days
-  (median from the day's end to the score; three days).
+  working time to the first reply to it; a working day), scoring reports' shifts
+  (median from a shift's end to its score; three days).
 
 On top, the line of all my team — me included; then me (my own report:
 there is no other place to see it) and my direct reports, always shown.
@@ -442,13 +448,15 @@ changes anything; managers above look.
 ## 4a. Employee page — "how are this person's days?"
 
 All of their days, as in My day — shifts, time logged to tasks, the
-ribbon of visits and what was done, the score of each day if given — in
+ribbon of visits and what was done, the score of each shift if given — in
 pages of two weeks, laid out as a grid of day cards of one size; a day that does not fit scrolls in its card, with "Details" under it,
 which opens the whole day, with its actions, in a dialog. Nothing is hidden from the managers (decision 12). Seen by the employee and every manager
-above them. Only the direct manager scores a day — never required;
-managers higher up only look. A score is given in a small dialog, with a
-reason for a low one, and may be corrected or withdrawn so the employee
-can correct the day (the reason stays for the next score); the page
+above them. Only the direct manager scores — never required; managers
+higher up only look. "Score" on a day scores its closed shifts not
+scored yet, at once, each of them can be left out; a shift's score chip
+opens it alone (decision 100). A score is given in a small dialog, with
+a reason for a low one, and may be corrected or withdrawn so the
+employee can correct the shift (the reason stays for the next score); the page
 shows the current value, the employee's mail keeps every version
 (decisions 22, 37). On top —
 workload and the weighted score for 7, 30, 90 days or any dates, with a

@@ -146,22 +146,22 @@ Key principles:
     on it. A task under several limits counts in each. A limit is never
     edited: a change closes it and opens a new one, so its history is
     kept. It warns, it forbids nothing.
-  - Work quality is scored only per employee per day, never per task.
-    The current manager (employee.manager_id) scores any past day with a
-    filled timesheet. Scores are optional: the manager decides which days
-    to score, if any. After the first score neither the timesheet nor
-    the time entries of that day can change. The score itself can be
+  - Work quality is scored only per employee per shift, never per task.
+    The current manager (employee.manager_id) scores any closed shift;
+    the interface scores a day''s shifts at once. Scores are optional: the
+    manager decides which to score, if any. While a score stands neither
+    the shift nor the time entries in it can change. The score itself can be
     corrected by the current manager; every version (value, reason, time
     and the previous value) is emailed to the employee — the mail is the
     history, the table keeps only the current value.
-  - The timesheet and time entries are optional too: they are kept when the
-    manager asks for them.
+  - The timesheet is optional too, but time is logged to tasks only
+    within a shift (decision 100): an entry belongs to a shift, and the
+    shift holds what is logged in it.
+  - A day is how shifts are shown and summed: a shift past midnight is
+    in both days, each with its share of the minutes (shift_day).
   - Workload comes from the timesheet (work). Quality and workload are
     kept apart. A bonus is the manager''s decision; the system provides
     both metrics.
-  - The timesheet only moves forward: a closed shift cannot be changed
-    or deleted. People think when closing a shift instead of editing it
-    afterwards.
   - While a person is away (human.next_day in the future),
     notifications go both to them and to their manager (recursively up
     manager_id until an available manager is found).
@@ -242,8 +242,8 @@ From scoring tasks to scoring people per day.
   on it — what do you score? Whom do you blame? Unclear. A "bad" or
   "good" score is subjective and vague. Gaming: close faster to avoid
   being late, or drag it out to look "hard".
-  What we do: the manager scores a person''s day, 0–100%. The score is
-  about the quality of the day''s decisions: did the person pick the
+  What we do: the manager scores a person''s shifts, 0–100%, a day''s at
+  once. The score is about the quality of the day''s decisions: did the person pick the
   right priorities, do their decisions match the manager''s
   understanding. Not about the task result. A task may fail while the
   scores are good if the person chose well every day — then the problem
@@ -426,15 +426,15 @@ the API is implemented.
       the task).
 
   Time entries:
-    - Set one''s time on a task for a day (anyone who sees the task): the
-      day''s whole time, replacing what was there; 0 removes the entry.
+    - Set one''s time on a task in one of one''s shifts (anyone who sees
+      the task): the shift''s whole time on it, replacing what was there;
+      0 removes the entry.
 
   Timesheet:
     - Open a shift (started_at = NOW, spent_minutes = NULL).
-    - Change the open shift (started_at, about).
-    - Close a shift (spent_minutes = N, about = text).
-    - Delete the open shift.
-    - Closed shifts are immutable.
+    - Close a shift (spent_minutes = N, about = text), its start corrected.
+    - Add a closed shift, correct one (times, about) or delete one —
+      while it has no standing score; it may run past midnight.
 
   Comments:
     - Upload an attachment (deduplicated by hash; refused over the size
@@ -466,8 +466,8 @@ the API is implemented.
     - Close a notification (closed_at = NOW).
 
   Scores:
-    - Score an employee''s past day or correct the score (the current
-      manager; every version is notified to the employee).
+    - Score an employee''s closed shifts or correct the score, withdraw it
+      (the current manager; every version is notified to the employee).
 
 
 ============================================================================
@@ -584,28 +584,28 @@ INVARIANTS (forbidden; all checked in the database)
 
   Timesheet:
     - Overlapping shifts of one employee (including two open ones).
-    - A shift that runs into the next day of the employee.
-    - spent_minutes <= 0.
+    - A shift longer than 24 hours; spent_minutes <= 0.
     - A shift that starts in the future or ends after the current minute.
-    - Changing or deleting a closed shift.
-    - Any timesheet change for a scored day.
+    - Changing or deleting a scored shift.
+    - A shift shorter than the time logged in it; deleting a shift with
+      time logged in it; changing a shift''s number.
 
   Time entries:
-    - An entry by someone who does not see the task, for a future day,
-      for a scored day.
-    - More than 24 hours logged by one person for one day, all tasks
-      together.
-    - Two entries of one person for one task and day.
-    - Moving an entry to another task, person or day.
+    - An entry by someone who does not see the task, in a shift not
+      their own, in a scored shift.
+    - More logged in a shift, all tasks together, than it lasts (an open
+      one: than since it began).
+    - Two entries of one person for one task and shift.
+    - Moving an entry to another task, person or shift.
 
   Deadlines:
     - finished_at.value IS NULL (clearing = closing the row without a new one).
 
   Scores:
     - A score not by the current manager.
-    - Scoring today or a future day.
-    - Scoring a day without closed shifts or with an open shift.
-    - A score changed by anyone but the current manager; deleting a score.
+    - Scoring an open shift.
+    - A score changed by anyone but the current manager; deleting a
+      standing score; moving a score to another shift.
 
   Comments:
     - Changing or deleting a comment.
@@ -632,7 +632,6 @@ WHAT THE APPLICATION DOES ITSELF (not in the database)
   - Sanitizing the HTML of comment.value and task.context (an allow-list
     of tags; images only from the application''s own attachments) and
     filling comment.image_ids / task.context_image_ids from it.
-  - A frontend warning "more time logged than in the timesheet".
   - Creating notifications through notify(): comment, mention, task
     attachment, owner change, score. Database functions create the rest.
   - Protection against accidental comment sending: after "Send" the
@@ -1834,32 +1833,148 @@ person and day, for the sparklines of My team.';
 
 
 -- ============================================================================
+-- 10. work — timesheet
+-- ============================================================================
+CREATE TABLE work (
+    id SERIAL NOT NULL UNIQUE,
+    employee_id INT NOT NULL REFERENCES human(employee_id),
+    started_at TIMESTAMPTZ NOT NULL,
+    spent_minutes INT CHECK (spent_minutes > 0),
+    about TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    PRIMARY KEY (employee_id, started_at),
+    CONSTRAINT chk_work_length CHECK (spent_minutes <= 24 * 60),
+    CONSTRAINT excl_work_overlap EXCLUDE USING gist (
+        employee_id WITH =,
+        work_period(started_at, spent_minutes) WITH &&
+    )
+);
+
+COMMENT ON TABLE work IS
+'Timesheet. The employee records: "started at 10:00, worked N minutes".
+Optional — if nobody keeps it, the day cannot be scored.
+
+spent_minutes IS NULL — the shift is open (working right now).
+An open shift lasts until infinity, so an employee has at most one open
+shift and no shift can follow it.
+The employee always closes the shift themselves, with whatever time
+they consider right.
+Shift end = started_at + spent_minutes. A shift may run past midnight: it
+belongs to every day of the employee it touches, each with its share of the
+minutes (shift_day, decision 100). It is never longer than 24 hours
+(chk_work_length): a slip of the date is not a week of work.
+Shifts of one employee never overlap (EXCLUDE).
+A shift cannot start in the future, nor end after the end of the current
+minute: the timesheet is kept in whole minutes, so closing rounds the end
+up — a shift closed at 17:59:40 ends at 18:00, and one started a moment
+ago can be closed as one minute.
+
+Any shift without a standing score can be added, changed or deleted,
+closed ones included, and a day may have several shifts. A score freezes
+the shift and its time entries; the manager withdrawing the score
+(score.value NULL) lets the employee correct them. Time is logged to tasks
+within a shift (spent_minutes.shift_id): a shift is never shorter than the
+time logged in it, nor deleted while time is logged in it (trigger).
+
+about — what was done during the shift. Free text, optional.
+
+The close_delay metric (delay in closing a shift) is computed on the
+frontend: the difference between updated_at and
+(started_at + spent_minutes). A large one is a signal for the manager.
+
+id — the shift''s own number: time entries and scores refer to it, so a
+shift keeps them when its times are corrected.';
+
+COMMENT ON COLUMN work.id IS
+'The shift''s number, for time entries and scores; never changes.';
+
+COMMENT ON COLUMN work.employee_id IS
+'Who worked.';
+
+COMMENT ON COLUMN work.started_at IS
+'When work started. Part of the PK.';
+
+COMMENT ON COLUMN work.spent_minutes IS
+'Minutes worked. NULL = the shift is open.
+Filled by the employee when closing the shift.';
+
+COMMENT ON COLUMN work.about IS
+'What was done during the shift. Free text. Optional.';
+
+COMMENT ON COLUMN work.updated_at IS
+'When the row last changed (for a closed shift — the moment it was closed).';
+
+COMMENT ON CONSTRAINT excl_work_overlap ON work IS
+'Shifts of one employee never overlap. An open one lasts until infinity.';
+
+COMMENT ON CONSTRAINT chk_work_length ON work IS
+'A shift lasts at most 24 hours.';
+
+
+CREATE OR REPLACE FUNCTION day_split(p_time_zone TEXT, p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
+RETURNS TABLE (day DATE, minutes NUMERIC, share NUMERIC) AS $$
+    SELECT g::date,
+           extract(epoch FROM LEAST(p_to, (g::date + 1)::timestamp AT TIME ZONE p_time_zone)
+                            - GREATEST(p_from, g::date::timestamp AT TIME ZONE p_time_zone)) / 60,
+           CASE WHEN p_to > p_from
+                THEN extract(epoch FROM LEAST(p_to, (g::date + 1)::timestamp AT TIME ZONE p_time_zone)
+                                      - GREATEST(p_from, g::date::timestamp AT TIME ZONE p_time_zone))
+                     / extract(epoch FROM p_to - p_from)
+                ELSE 1 END
+      FROM generate_series((p_from AT TIME ZONE p_time_zone)::date,
+                           (GREATEST(p_from, p_to - INTERVAL '1 microsecond') AT TIME ZONE p_time_zone)::date,
+                           INTERVAL '1 day') g
+$$ LANGUAGE sql IMMUTABLE;
+
+COMMENT ON FUNCTION day_split(TEXT, TIMESTAMPTZ, TIMESTAMPTZ) IS
+'The days of a time zone an interval touches, each with its minutes in
+it and its share of the whole (1 for an empty interval, on its day).';
+
+
+CREATE VIEW shift_day AS
+SELECT w.id AS shift_id, w.employee_id, d.day, d.minutes, d.share, w.spent_minutes IS NOT NULL AS closed
+  FROM work w
+  JOIN employee e ON e.id = w.employee_id
+ CROSS JOIN LATERAL day_split(e.time_zone, w.started_at,
+                              COALESCE(w.started_at + w.spent_minutes * INTERVAL '1 minute', GREATEST(NOW(), w.started_at))) d;
+
+COMMENT ON VIEW shift_day IS
+'Each shift by the days of its employee it touches (decision 100): a shift
+past midnight belongs to both days, each with the minutes worked in it and
+its share of the shift. An open shift counts up to now (closed = FALSE).
+Sums by day take minutes from here, so nothing is counted twice.';
+
+
+-- ============================================================================
 -- 9. spent_minutes — time entries
 -- ============================================================================
 CREATE TABLE spent_minutes (
     id SERIAL PRIMARY KEY,
     task_id INT NOT NULL REFERENCES task(id),
     by INT NOT NULL REFERENCES human(employee_id),
-    day DATE NOT NULL,
+    shift_id INT NOT NULL REFERENCES work(id),
     value INT NOT NULL CHECK (value > 0),
     added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT uq_spent_minutes_day UNIQUE (task_id, "by", day)
+    CONSTRAINT uq_spent_minutes_shift UNIQUE (task_id, "by", shift_id)
 );
 CREATE INDEX idx_spent_minutes_task ON spent_minutes(task_id);
-CREATE INDEX idx_spent_minutes_by_day ON spent_minutes(by, day);
+CREATE INDEX idx_spent_minutes_shift ON spent_minutes(shift_id);
+CREATE INDEX idx_spent_minutes_by ON spent_minutes(by);
 
 COMMENT ON TABLE spent_minutes IS
-'Time entries: one per task, person and day (uq_spent_minutes_day).
-by — who logged it. Only for oneself, only someone who sees the task
-(can_see). Checked by a trigger.
-Time cannot be logged for a future day or a scored day (trigger), nor more
-than 24 hours for one day, all tasks together (check_day_minutes()).
-The value is the day''s whole time on the task: a new value replaces it
-(updated_at follows), 0 removes the entry — never on a scored day.
-When the day''s entries exceed the timesheet hours, the frontend shows
-a warning (in the employee''s timesheet).
+'Time entries: one per task, person and shift (uq_spent_minutes_shift).
+by — who logged it, in one of their own shifts (shift_id). Only for
+oneself, only someone who sees the task (can_see). Checked by a trigger.
+Time is logged only within a shift (decision 100): the entries of a
+shift together are at most its length — for an open one, the time since
+it began (check_shift_minutes()). Nothing changes in a scored shift.
+The value is the shift''s whole time on the task: a new value replaces it
+(updated_at follows), 0 removes the entry — never in a scored shift.
+An entry belongs to the days of its shift by the shift''s shares
+(spent_day).
 Does not notify the task owner.';
 
 COMMENT ON COLUMN spent_minutes.id IS
@@ -1871,11 +1986,11 @@ COMMENT ON COLUMN spent_minutes.task_id IS
 COMMENT ON COLUMN spent_minutes.by IS
 'Who logged it — and for whom: only for oneself.';
 
-COMMENT ON COLUMN spent_minutes.day IS
-'The day the time is logged for (in the time zone of by).';
+COMMENT ON COLUMN spent_minutes.shift_id IS
+'The shift of by the time is logged in.';
 
 COMMENT ON COLUMN spent_minutes.value IS
-'Minutes spent that day on the task, all of them. CHECK > 0: none is no row.';
+'Minutes spent in that shift on the task, all of them. CHECK > 0: none is no row.';
 
 COMMENT ON COLUMN spent_minutes.added_at IS
 'When the entry was first made.';
@@ -1883,8 +1998,18 @@ COMMENT ON COLUMN spent_minutes.added_at IS
 COMMENT ON COLUMN spent_minutes.updated_at IS
 'When its value was last set: shown over the entry.';
 
-COMMENT ON CONSTRAINT uq_spent_minutes_day ON spent_minutes IS
-'One entry per task, person and day: time is set for the day, not added up.';
+COMMENT ON CONSTRAINT uq_spent_minutes_shift ON spent_minutes IS
+'One entry per task, person and shift: time is set for the shift, not added up.';
+
+
+CREATE VIEW spent_day AS
+SELECT s.id AS entry_id, s.task_id, s."by", s.shift_id, d.day, s.value * d.share AS minutes, s.added_at, s.updated_at
+  FROM spent_minutes s
+  JOIN shift_day d ON d.shift_id = s.shift_id;
+
+COMMENT ON VIEW spent_day IS
+'Each time entry by the days of its shift, with the share of its minutes
+that falls on each (decision 100): sums of time by day take it from here.';
 
 
 -- ============================================================================
@@ -1944,75 +2069,6 @@ COMMENT ON COLUMN tag_limit.expired_at IS
 
 COMMENT ON COLUMN tag_limit.replaced_by IS
 'The row that replaced it when it was changed; NULL when removed or current.';
-
-
--- ============================================================================
--- 10. work — timesheet
--- ============================================================================
-CREATE TABLE work (
-    employee_id INT NOT NULL REFERENCES human(employee_id),
-    started_at TIMESTAMPTZ NOT NULL,
-    spent_minutes INT CHECK (spent_minutes > 0),
-    about TEXT,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    PRIMARY KEY (employee_id, started_at),
-    CONSTRAINT excl_work_overlap EXCLUDE USING gist (
-        employee_id WITH =,
-        work_period(started_at, spent_minutes) WITH &&
-    )
-);
-
-COMMENT ON TABLE work IS
-'Timesheet. The employee records: "started at 10:00, worked N minutes".
-Optional — if nobody keeps it, the day cannot be scored.
-
-spent_minutes IS NULL — the shift is open (working right now).
-An open shift lasts until infinity, so an employee has at most one open
-shift and no shift can follow it.
-The employee always closes the shift themselves, with whatever time
-they consider right.
-Shift end = started_at + spent_minutes. Shift day = local_day(started_at).
-A shift belongs to that day alone: it ends by the following midnight, so it
-is never longer than a day — work past midnight is a shift of the next day.
-Shifts of one employee never overlap (EXCLUDE).
-A shift cannot start in the future, nor end after the end of the current
-minute: the timesheet is kept in whole minutes, so closing rounds the end
-up — a shift closed at 17:59:40 ends at 18:00, and one started a moment
-ago can be closed as one minute.
-
-Any shift of a day without a standing score can be added, changed or
-deleted, closed ones included, and a day may have several shifts. A
-score freezes the day''s timesheet; the manager withdrawing the score
-(score.value NULL) lets the employee correct it.
-
-about — what was done during the shift. Free text, optional.
-
-The close_delay metric (delay in closing a shift) is computed on the
-frontend: the difference between updated_at and
-(started_at + spent_minutes). A large one is a signal for the manager.
-
-If more time is logged to tasks (spent_minutes) than worked (work), the
-employee''s timesheet shows a warning.';
-
-COMMENT ON COLUMN work.employee_id IS
-'Who worked.';
-
-COMMENT ON COLUMN work.started_at IS
-'When work started. Part of the PK.';
-
-COMMENT ON COLUMN work.spent_minutes IS
-'Minutes worked. NULL = the shift is open.
-Filled by the employee when closing the shift.';
-
-COMMENT ON COLUMN work.about IS
-'What was done during the shift. Free text. Optional.';
-
-COMMENT ON COLUMN work.updated_at IS
-'When the row last changed (for a closed shift — the moment it was closed).';
-
-COMMENT ON CONSTRAINT excl_work_overlap ON work IS
-'Shifts of one employee never overlap. An open one lasts until infinity.';
 
 
 -- ============================================================================
@@ -2416,36 +2472,33 @@ A copy for an absent employee''s manager has for = the recipient id.';
 
 
 -- ============================================================================
--- 15. score — daily work score
+-- 15. score — the work score of a shift
 -- ============================================================================
 CREATE TABLE score (
-    employee_id INT NOT NULL REFERENCES human(employee_id),
-    day DATE NOT NULL,
+    shift_id INT PRIMARY KEY REFERENCES work(id) ON DELETE CASCADE,
     by INT NOT NULL REFERENCES human(employee_id),
     value INT CHECK (value BETWEEN 0 AND 100),
     reason TEXT,
     added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ,
-
-    PRIMARY KEY (employee_id, day)
+    updated_at TIMESTAMPTZ
 );
-CREATE INDEX idx_score_day ON score(day);
 
 COMMENT ON TABLE score IS
-'An employee''s work score for a day. 0–100.
-Set by the current manager (employee.manager_id) for any past day (in the
-employee''s time zone) that has closed shifts and no open one.
+'An employee''s work score for a shift. 0–100 (decision 100).
+Set by the employee''s current manager (employee.manager_id) for any
+closed shift; the interface scores the day''s unscored shifts at once.
 A score cannot be deleted. The current manager may correct it (value,
 reason; by and updated_at follow) or withdraw it (value -> NULL, the
-reason stays, to be seen again when the day is scored anew); the
+reason stays, to be seen again when the shift is scored anew); the
 application emails every version to the employee with its time and the
 previous value, so the history lives in their mail and the table keeps
 only the current value. While a score stands (value IS NOT NULL) the
-timesheet and time entries of that day are frozen (triggers); withdrawing
-it is how a manager lets the employee correct the day. A withdrawn score
-is not a score: it counts nowhere.
+shift and its time entries are frozen (triggers); withdrawing it is how
+a manager lets the employee correct them. A withdrawn score is not a
+score: it counts nowhere, and it goes with its shift if the employee
+deletes it.
 
-The score is about the quality of the day''s decisions:
+The score is about the quality of the shift''s decisions:
   - did the employee pick the right priorities;
   - do their decisions match the manager''s understanding.
 Not about the task result. A task may fail while the scores are good, if
@@ -2454,26 +2507,21 @@ the employee chose well every day.
 reason — an optional justification. Needed first of all for bad scores,
 so the employee understands what went wrong.
 
-Hours per day for weighting come from work:
-  SUM(spent_minutes) / 60 for local_day(started_at) = day.
+Weighted average score for a period: SUM(value * minutes) / SUM(minutes)
+over the scored shifts, the minutes of each within the period
+(shift_day). A day''s score is the same over the day. Workload — the
+minutes — is a separate metric; the manager weighs it on their own when
+deciding on a bonus.';
 
-Weighted average score for a period:
-  SUM(value * hours) / SUM(hours), where hours come from work.
-Workload — SUM(hours) — is a separate metric; the manager weighs it on
-their own when deciding on a bonus.';
-
-COMMENT ON COLUMN score.employee_id IS
-'Who is scored.';
-
-COMMENT ON COLUMN score.day IS
-'Which day is scored.';
+COMMENT ON COLUMN score.shift_id IS
+'Which shift is scored; whose — its employee.';
 
 COMMENT ON COLUMN score.by IS
 'Who scored — the manager at the time of scoring (manager_id has no history).';
 
 COMMENT ON COLUMN score.value IS
-'Score 0–100. Quality of the day''s decisions. NULL — withdrawn: the day
-is not scored and its timesheet can be corrected.';
+'Score 0–100. Quality of the shift''s decisions. NULL — withdrawn: the
+shift is not scored, and it and its time entries can be corrected.';
 
 COMMENT ON COLUMN score.reason IS
 'Justification. Optional. Needed first of all for bad scores.';
@@ -3259,26 +3307,32 @@ stay open: they wait in the TODO of those mentioned.';
 
 
 -- ----------------------------------------------------------------------------
--- work: not in the future, frozen on a scored day
+-- work: not in the future, frozen once scored, never shorter than its entries
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION trg_work_check()
 RETURNS TRIGGER AS $$
 DECLARE
     v_time_zone TEXT;
     v_other work;
+    v_logged INT;
 BEGIN
     IF TG_OP IN ('UPDATE', 'DELETE') AND EXISTS (
-        SELECT 1 FROM score
-         WHERE employee_id = OLD.employee_id
-           AND day = local_day(OLD.employee_id, OLD.started_at)
-           AND value IS NOT NULL
+        SELECT 1 FROM score WHERE shift_id = OLD.id AND value IS NOT NULL
     ) THEN
-        RAISE EXCEPTION 'day is already scored'
-            USING HINT = 'day_scored';
+        RAISE EXCEPTION 'shift % is scored', OLD.id
+            USING HINT = 'shift_scored';
     END IF;
 
     IF TG_OP = 'DELETE' THEN
+        IF EXISTS (SELECT 1 FROM spent_minutes WHERE shift_id = OLD.id) THEN
+            RAISE EXCEPTION 'time is logged in shift %', OLD.id
+                USING HINT = 'shift_has_entries';
+        END IF;
         RETURN OLD;
+    END IF;
+
+    IF TG_OP = 'UPDATE' AND NEW.id <> OLD.id THEN
+        RAISE EXCEPTION 'a shift keeps its number' USING HINT = 'forbidden';
     END IF;
 
     -- The end may be the end of the current minute: closing rounds it up.
@@ -3289,19 +3343,12 @@ BEGIN
             USING HINT = 'shift_in_future';
     END IF;
 
-    -- A shift belongs to one day: it ends by the midnight after its start.
-    SELECT time_zone INTO v_time_zone FROM employee WHERE id = NEW.employee_id;
-    IF NEW.started_at + NEW.spent_minutes * INTERVAL '1 minute'
-       > ((NEW.started_at AT TIME ZONE v_time_zone)::date + 1)::timestamp AT TIME ZONE v_time_zone THEN
-        RAISE EXCEPTION 'shift of employee % runs into the next day', NEW.employee_id
-            USING HINT = 'shift_crosses_day';
-    END IF;
-
     -- Said with the shift in the way, so the person knows which one to fix;
     -- excl_work_overlap still guards against two writes at once.
+    SELECT time_zone INTO v_time_zone FROM employee WHERE id = NEW.employee_id;
     SELECT * INTO v_other FROM work w
      WHERE w.employee_id = NEW.employee_id
-       AND (TG_OP = 'INSERT' OR w.started_at <> OLD.started_at)
+       AND (TG_OP = 'INSERT' OR w.id <> OLD.id)
        AND work_period(w.started_at, w.spent_minutes) && work_period(NEW.started_at, NEW.spent_minutes)
      ORDER BY w.started_at
      LIMIT 1;
@@ -3320,14 +3367,15 @@ BEGIN
                                     AT TIME ZONE v_time_zone, 'HH24:MI'))::text;
     END IF;
 
-    IF EXISTS (
-        SELECT 1 FROM score
-         WHERE employee_id = NEW.employee_id
-           AND day = local_day(NEW.employee_id, NEW.started_at)
-           AND value IS NOT NULL
-    ) THEN
-        RAISE EXCEPTION 'day is already scored'
-            USING HINT = 'day_scored';
+    -- The time logged in it must still fit.
+    IF TG_OP = 'UPDATE' AND NEW.spent_minutes IS NOT NULL THEN
+        SELECT COALESCE(sum(value), 0) INTO v_logged FROM spent_minutes WHERE shift_id = NEW.id;
+        IF v_logged > NEW.spent_minutes THEN
+            RAISE EXCEPTION 'shift % is shorter than the time logged in it', NEW.id
+                USING HINT = 'shift_shorter_than_entries',
+                      DETAIL = json_build_object(
+                          'logged', (v_logged / 60) || ':' || lpad((v_logged % 60)::text, 2, '0'))::text;
+        END IF;
     END IF;
 
     IF TG_OP = 'UPDATE' THEN
@@ -3338,18 +3386,20 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION trg_work_check() IS
-'The timesheet of a day is the employee''s until the day is scored:
-  - any shift of a day without a standing score can be added, changed
-    or deleted, an open or a closed one;
+'The timesheet is the employee''s until a shift is scored (decision 100):
+  - any shift without a standing score can be added, changed or deleted,
+    an open or a closed one; a scored one changes in no way
+    (shift_scored), a withdrawn score (value NULL) frees it;
   - a shift does not start in the future nor end after the current minute
     (closing rounds the end up to the minute);
-  - a shift belongs to one day of the employee: it ends by the midnight
-    after its start, so it is never longer than a day (shift_crosses_day);
+  - a shift may run past midnight; it lasts at most 24 hours
+    (chk_work_length);
   - a shift overlapping another is refused with the other''s times
     (shift_overlap_with, or shift_overlap_open for the open one), so the person
     sees which shift is in the way;
-  - nothing changes on a scored day — neither the shift''s old day nor
-    its new one; a withdrawn score (value NULL) frees the day.
+  - a shift is never shorter than the time logged in it
+    (shift_shorter_than_entries), nor deleted while time is logged in it
+    (shift_has_entries); its number (id) never changes.
 Updates updated_at on UPDATE.';
 
 
@@ -3450,53 +3500,64 @@ delays a task that waits for it.';
 
 
 -- ----------------------------------------------------------------------------
--- spent_minutes: for oneself, by an observer, not in the future, not scored
+-- spent_minutes: for oneself, by an observer, within an unscored shift
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION check_day_minutes(p_employee_id INT, p_day DATE, p_task_id INT, p_minutes INT)
+CREATE OR REPLACE FUNCTION check_shift_minutes(p_shift_id INT, p_task_id INT, p_minutes INT)
 RETURNS VOID AS $$
 DECLARE
     v_others INT;
+    v_length INT;
 BEGIN
-    -- Two entries of the same day written at once must not both pass.
-    PERFORM pg_advisory_xact_lock(hashtext('yartt.spent'), p_employee_id);
+    -- Two entries of the same shift written at once must not both pass.
+    PERFORM pg_advisory_xact_lock(hashtext('yartt.spent'), p_shift_id);
+    SELECT COALESCE(spent_minutes, ceil(extract(epoch FROM NOW() - started_at) / 60)::int) INTO v_length
+      FROM work WHERE id = p_shift_id;
     SELECT COALESCE(sum(value), 0) INTO v_others FROM spent_minutes
-     WHERE "by" = p_employee_id AND day = p_day AND task_id <> p_task_id;
-    IF v_others + p_minutes > 24 * 60 THEN
-        RAISE EXCEPTION 'more than 24 hours logged by employee % on %', p_employee_id, p_day
-            USING HINT = 'spent_over_day',
+     WHERE shift_id = p_shift_id AND task_id <> p_task_id;
+    IF v_others + p_minutes > v_length THEN
+        RAISE EXCEPTION 'more logged in shift % than it lasts', p_shift_id
+            USING HINT = 'spent_over_shift',
                   DETAIL = json_build_object(
                       'logged', (v_others / 60) || ':' || lpad((v_others % 60)::text, 2, '0'),
-                      'left', ((24 * 60 - v_others) / 60) || ':' || lpad(((24 * 60 - v_others) % 60)::text, 2, '0'))::text;
+                      'left', (GREATEST(v_length - v_others, 0) / 60) || ':'
+                              || lpad((GREATEST(v_length - v_others, 0) % 60)::text, 2, '0'))::text;
     END IF;
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION check_day_minutes(INT, DATE, INT, INT) IS
-'A day has 24 hours: the time an employee logs to all tasks of one day
-together is at most that. p_minutes — the new value of the entry of
-p_task_id, which replaces the old one. Refused with spent_over_day, saying
-how much the other tasks of the day already have and how much is left.';
+COMMENT ON FUNCTION check_shift_minutes(INT, INT, INT) IS
+'A shift holds the time logged in it: the entries of all tasks in one
+shift together are at most its length — an open one''s, the time since it
+began (decision 100). p_minutes — the new value of the entry of
+p_task_id, which replaces the old one. Refused with spent_over_shift,
+saying how much the other tasks of the shift already have and how much is
+left.';
 
 
 CREATE OR REPLACE FUNCTION trg_spent_minutes_check()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF TG_OP = 'UPDATE' AND (NEW.task_id <> OLD.task_id OR NEW."by" <> OLD."by" OR NEW.day <> OLD.day) THEN
-        RAISE EXCEPTION 'a time entry keeps its task, person and day'
+    IF TG_OP = 'UPDATE' AND (NEW.task_id <> OLD.task_id OR NEW."by" <> OLD."by" OR NEW.shift_id <> OLD.shift_id) THEN
+        RAISE EXCEPTION 'a time entry keeps its task, person and shift'
             USING HINT = 'spent_immutable';
     END IF;
 
     IF TG_OP IN ('UPDATE', 'DELETE') THEN
-        IF EXISTS (SELECT 1 FROM score WHERE employee_id = OLD."by" AND day = OLD.day AND value IS NOT NULL) THEN
-            RAISE EXCEPTION 'day is already scored'
-            USING HINT = 'day_scored';
+        IF EXISTS (SELECT 1 FROM score WHERE shift_id = OLD.shift_id AND value IS NOT NULL) THEN
+            RAISE EXCEPTION 'shift % is scored', OLD.shift_id
+                USING HINT = 'shift_scored';
         END IF;
         IF TG_OP = 'DELETE' THEN
             RETURN OLD;
         END IF;
-        PERFORM check_day_minutes(NEW."by", NEW.day, NEW.task_id, NEW.value);
+        PERFORM check_shift_minutes(NEW.shift_id, NEW.task_id, NEW.value);
         NEW.updated_at := NOW();
         RETURN NEW;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM work WHERE id = NEW.shift_id AND employee_id = NEW."by") THEN
+        RAISE EXCEPTION 'shift % is not a shift of employee %', NEW.shift_id, NEW."by"
+            USING HINT = 'not_found';
     END IF;
 
     IF NOT can_see(NEW.task_id, NEW."by") THEN
@@ -3505,25 +3566,21 @@ BEGIN
                   DETAIL = json_build_object('taskId', NEW.task_id)::text;
     END IF;
 
-    IF NEW.day > local_today(NEW."by") THEN
-        RAISE EXCEPTION 'cannot spend time in the future'
-            USING HINT = 'spent_in_future';
+    IF EXISTS (SELECT 1 FROM score WHERE shift_id = NEW.shift_id AND value IS NOT NULL) THEN
+        RAISE EXCEPTION 'shift % is scored', NEW.shift_id
+            USING HINT = 'shift_scored';
     END IF;
-
-    IF EXISTS (SELECT 1 FROM score WHERE employee_id = NEW."by" AND day = NEW.day AND value IS NOT NULL) THEN
-        RAISE EXCEPTION 'day is already scored'
-            USING HINT = 'day_scored';
-    END IF;
-    PERFORM check_day_minutes(NEW."by", NEW.day, NEW.task_id, NEW.value);
+    PERFORM check_shift_minutes(NEW.shift_id, NEW.task_id, NEW.value);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION trg_spent_minutes_check() IS
-'Time entries: only by someone who sees the task, not for a future day,
-not for a scored day, and at most a day''s 24 hours on all tasks of the
-day together (check_day_minutes()). An UPDATE sets the value of the same
-task, person and day (updated_at follows); a scored day changes in no way.';
+'Time entries: only by someone who sees the task, in a shift of their own,
+not in a scored one, and at most the shift''s length on all tasks of the
+shift together (check_shift_minutes()). An UPDATE sets the value of the
+same task, person and shift (updated_at follows); a scored shift changes
+in no way.';
 
 CREATE TRIGGER spent_minutes_check
 BEFORE INSERT OR UPDATE OR DELETE ON spent_minutes
@@ -3531,61 +3588,49 @@ FOR EACH ROW EXECUTE FUNCTION trg_spent_minutes_check();
 
 
 -- ----------------------------------------------------------------------------
--- score: by the manager, for a past day with a timesheet; corrected, never deleted
+-- score: by the manager, for a closed shift; corrected, never deleted
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION trg_score_check()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_employee_id INT;
+    v_minutes INT;
 BEGIN
+    -- A withdrawn score goes with its shift (ON DELETE CASCADE); a standing one keeps it.
     IF TG_OP = 'DELETE' THEN
+        IF OLD.value IS NULL AND NOT EXISTS (SELECT 1 FROM work WHERE id = OLD.shift_id) THEN
+            RETURN OLD;
+        END IF;
         RAISE EXCEPTION 'score cannot be deleted'
             USING HINT = 'score_final';
     END IF;
 
+    SELECT employee_id, spent_minutes INTO v_employee_id, v_minutes FROM work WHERE id = NEW.shift_id;
     IF TG_OP = 'UPDATE' THEN
-        IF NEW.employee_id <> OLD.employee_id OR NEW.day <> OLD.day THEN
-            RAISE EXCEPTION 'score cannot move to another day or employee'
+        IF NEW.shift_id <> OLD.shift_id THEN
+            RAISE EXCEPTION 'score cannot move to another shift'
                 USING HINT = 'score_final';
         END IF;
-        IF NEW."by" IS DISTINCT FROM (SELECT manager_id FROM employee WHERE id = NEW.employee_id) THEN
-            RAISE EXCEPTION 'only current manager can correct the score of employee %', NEW.employee_id
+        IF NEW."by" IS DISTINCT FROM (SELECT manager_id FROM employee WHERE id = v_employee_id) THEN
+            RAISE EXCEPTION 'only current manager can correct the score of employee %', v_employee_id
                 USING HINT = 'not_manager',
-                      DETAIL = json_build_object('employeeId', NEW.employee_id)::text;
+                      DETAIL = json_build_object('employeeId', v_employee_id)::text;
         END IF;
         NEW.updated_at := NOW();
-        -- Withdrawing, or correcting a standing score: the day was checked when scored.
+        -- Withdrawing, or correcting a standing score: the shift was checked when scored.
         IF NEW.value IS NULL OR OLD.value IS NOT NULL THEN
             RETURN NEW;
         END IF;
     END IF;
 
-    IF TG_OP = 'INSERT' AND NEW."by" IS DISTINCT FROM (SELECT manager_id FROM employee WHERE id = NEW.employee_id) THEN
-        RAISE EXCEPTION 'only current manager can score employee %', NEW.employee_id
+    IF TG_OP = 'INSERT' AND NEW."by" IS DISTINCT FROM (SELECT manager_id FROM employee WHERE id = v_employee_id) THEN
+        RAISE EXCEPTION 'only current manager can score employee %', v_employee_id
             USING HINT = 'not_manager',
-                  DETAIL = json_build_object('employeeId', NEW.employee_id)::text;
+                  DETAIL = json_build_object('employeeId', v_employee_id)::text;
     END IF;
 
-    IF NEW.day >= local_today(NEW.employee_id) THEN
-        RAISE EXCEPTION 'only past days can be scored'
-            USING HINT = 'score_day_not_past';
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM work
-         WHERE employee_id = NEW.employee_id
-           AND local_day(employee_id, started_at) = NEW.day
-           AND spent_minutes IS NOT NULL
-    ) THEN
-        RAISE EXCEPTION 'no closed shifts for this day'
-            USING HINT = 'no_work_for_day';
-    END IF;
-
-    IF EXISTS (
-        SELECT 1 FROM work
-         WHERE employee_id = NEW.employee_id
-           AND local_day(employee_id, started_at) = NEW.day
-           AND spent_minutes IS NULL
-    ) THEN
-        RAISE EXCEPTION 'shift of this day is still open'
+    IF v_minutes IS NULL THEN
+        RAISE EXCEPTION 'shift % is still open', NEW.shift_id
             USING HINT = 'shift_open';
     END IF;
     RETURN NEW;
@@ -3593,11 +3638,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION trg_score_check() IS
-'Score: only by the current manager, only for a past day with a closed
-timesheet. A correction or a withdrawal (UPDATE, value NULL) only by the
-current manager, of the same employee and day; updated_at is set. Scoring
-a withdrawn day again checks the day like a first score: its timesheet
-may have changed meanwhile. DELETE is forbidden.';
+'Score: only by the employee''s current manager, only for a closed shift
+(decision 100). A correction or a withdrawal (UPDATE, value NULL) only by
+the current manager, of the same shift; updated_at is set. Scoring a
+withdrawn shift again checks it like a first score. DELETE is forbidden,
+but for a withdrawn score going with its shift.';
 
 CREATE TRIGGER score_check
 BEFORE INSERT OR UPDATE OR DELETE ON score
@@ -4790,18 +4835,13 @@ BEGIN
            AND (h.weekly_digest_on IS NULL OR h.weekly_digest_on < (p_now AT TIME ZONE e.time_zone)::date)
          FOR UPDATE OF h SKIP LOCKED
     LOOP
-        -- Past days of direct reports (the last 30) with a closed timesheet and no standing score.
-        SELECT count(*) INTO v_unscored FROM (
-            SELECT w.employee_id, local_day(w.employee_id, w.started_at) AS day
-              FROM work w JOIN employee r ON r.id = w.employee_id
-             WHERE r.manager_id = v_manager.id AND r.dismissed_at IS NULL
-             GROUP BY 1, 2
-            HAVING bool_and(w.spent_minutes IS NOT NULL)
-        ) d
-         WHERE d.day < (p_now AT TIME ZONE v_manager.time_zone)::date
+        -- Days of direct reports (the last 30, today aside) with a closed shift and no standing score on it.
+        SELECT count(DISTINCT (d.employee_id, d.day)) INTO v_unscored
+          FROM shift_day d JOIN employee r ON r.id = d.employee_id
+         WHERE r.manager_id = v_manager.id AND r.dismissed_at IS NULL AND d.closed
+           AND d.day < (p_now AT TIME ZONE v_manager.time_zone)::date
            AND d.day >= (p_now AT TIME ZONE v_manager.time_zone)::date - 30
-           AND NOT EXISTS (SELECT 1 FROM score s
-                            WHERE s.employee_id = d.employee_id AND s.day = d.day AND s.value IS NOT NULL);
+           AND NOT EXISTS (SELECT 1 FROM score s WHERE s.shift_id = d.shift_id AND s.value IS NOT NULL);
         -- Tasks of the team overdue now: the deadline passed and nobody closed them.
         SELECT count(*) INTO v_overdue
           FROM task k JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
@@ -4833,7 +4873,7 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION send_weekly_digests(TIMESTAMPTZ) IS
 'Cron, every hour: on Monday from 09:00 in each manager''s time zone,
 once a week, a summary of what waits for them — days of direct reports
-waiting for a score (the last 30), tasks of the subtree overdue now,
+with a shift waiting for a score (the last 30), tasks of the subtree overdue now,
 tasks of the subtree at risk now, direct reports
 the identity provider no longer lets in (to dismiss). Sent only if
 something is there; not copied to anyone (it is about their own team).

@@ -171,18 +171,30 @@ export const Current = z.object({
 });
 export type Current = z.infer<typeof Current>;
 
-/** A shift of the timesheet. */
+/** A score of a shift (decision 100). */
+export const ShiftScore = z.object({
+  /** NULL — withdrawn (its reason stays): the shift is open to corrections again. */
+  value: z.number().int().nullable(),
+  reason: z.string().nullable(),
+});
+export type ShiftScore = z.infer<typeof ShiftScore>;
+
+/** A shift of the timesheet. It may run past midnight: then it is in both days (decision 100). */
 export const Shift = z.object({
+  id: Id,
   startedAt: z.date(),
   /** NULL — the shift is open. */
   spentMinutes: z.number().int().nullable(),
   about: z.string().nullable(),
+  /** NULL — never scored. */
+  score: ShiftScore.nullable(),
 });
 export type Shift = z.infer<typeof Shift>;
 
-/** Time logged to a task (spent_minutes). */
+/** Time logged to a task in a shift (spent_minutes): its whole value, in each day of the shift. */
 export const Entry = z.object({
   id: Id,
+  shiftId: Id,
   taskId: Id,
   minutes: z.number().int(),
   /** When its value was last set. */
@@ -216,8 +228,9 @@ export const DayHistory = z.object({
   /** The first and last thing I did that day: visits, comments, time logged. */
   firstActivity: z.date().nullable(),
   lastActivity: z.date().nullable(),
-  /** NULL — never scored; `value` NULL — the score was withdrawn (its reason stays): the day is open again. */
-  score: z.object({ value: z.number().int().nullable(), reason: z.string().nullable() }).nullable(),
+  /** Minutes of the closed shifts within the day, and of the time logged in them: a shift past midnight by its share. */
+  workedMinutes: z.number().int(),
+  loggedMinutes: z.number().int(),
 });
 export type DayHistory = z.infer<typeof DayHistory>;
 

@@ -109,16 +109,31 @@ test.describe('My day', () => {
     await history.getByRole('button', { name: 'Удалить списание' }).first().click();
     await expect(total).not.toHaveText(before!);
 
-    // Pavel's last shift is open: deleting it asks first, then lets a shift start again — now.
+    // Pavel's last shift is open, since a past day: it is in that day and today (decision 100).
+    // Time is logged in it, so it goes once its entries are gone; deleting asks first, then a
+    // shift can start again — now.
+    const removeOpen = history.getByRole('button', { name: 'Удалить открытую смену' });
+    await expect(removeOpen).toHaveCount(2);
+    // The shift's own block: its row, and the tasks logged in it under it.
+    const open = removeOpen.last().locator('xpath=ancestor::div[2]');
+    const pavel = await employeeId('pavel@example.com');
+    const inOpen = async () => (await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM spent_minutes s JOIN work w ON w.id = s.shift_id
+       WHERE w.employee_id = ${pavel} AND w.spent_minutes IS NULL
+    `)[0]!.n;
+    for (let left = await inOpen(); left > 0; left--) {
+      await open.getByRole('button', { name: 'Удалить списание' }).first().click();
+      await expect.poll(inOpen).toBe(left - 1);
+    }
     let asked = '';
     page.once('dialog', (d) => { asked = d.message(); void d.dismiss(); });
-    await history.getByRole('button', { name: 'Удалить открытую смену' }).click();
-    expect(asked).toMatch(/^Удалить открытую смену с \d\d:\d\d\?$/);
-    await expect(history.getByText(/Смена идёт с \d\d:\d\d/)).toBeVisible();
+    await removeOpen.last().click();
+    expect(asked).toMatch(/^Удалить открытую смену с .*\d\d:\d\d\?$/);
+    await expect(history.getByText(/Смена идёт с .*\d\d:\d\d/).first()).toBeVisible();
     page.once('dialog', (d) => void d.accept());
-    await history.getByRole('button', { name: 'Удалить открытую смену' }).click();
+    await removeOpen.last().click();
     await history.getByRole('button', { name: 'Начать смену' }).click();
-    await expect(history.getByText(/Смена идёт с \d\d:\d\d/)).toBeVisible();
+    await expect(history.getByText(/Смена идёт с .*\d\d:\d\d/).first()).toBeVisible();
   });
 });
 
@@ -233,8 +248,9 @@ test.describe('a task', () => {
     // How many days the seed gave Marina depends on the calendar (her days are
     // among the last ten), so the number comes from the data, as the feed counts it.
     const [row] = await sql<{ days: number }[]>`
-      SELECT count(DISTINCT day)::int AS days FROM spent_minutes
-       WHERE task_id = ${stock} AND by = ${await employeeId('marina@example.com')}
+      SELECT count(DISTINCT (w.started_at AT TIME ZONE e.time_zone)::date)::int AS days
+        FROM spent_minutes s JOIN work w ON w.id = s.shift_id JOIN employee e ON e.id = w.employee_id
+       WHERE s.task_id = ${stock} AND s.by = ${await employeeId('marina@example.com')}
     `;
     const days = row!.days;
     expect(days).toBeGreaterThan(1);
@@ -248,14 +264,22 @@ test.describe('a task', () => {
     await expect(page.getByRole('listitem').filter({ hasText: /— 2ч$/ })).toHaveCount(days);
   });
 
-  test('time logged for a past day lands on that day in My day', async ({ page }) => {
+  test('time is logged in a shift, and lands on its day in My day', async ({ page }) => {
     await signIn(page, 'olga@example.com');
     await page.goto(`/tasks/${await taskId('найм', 'документация', 'памятка новичку на первую неделю')}`);
+    // Without a shift the time has nowhere to go (decision 100).
     await page.getByRole('button', { name: 'Списать время' }).click();
-    const day = new Date(Date.now() - 2 * 86_400_000);
-    const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-    await page.getByRole('dialog').getByLabel('День', { exact: true }).fill(ymd);
-    await page.getByLabel('Всего за день').fill('45');
+    await expect(page.getByRole('dialog').getByText(/Время списывается в смену/)).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: 'Отмена' }).click();
+    const olga = await employeeId('olga@example.com');
+    await sql`
+      INSERT INTO work (employee_id, started_at, spent_minutes)
+      SELECT id, ((local_today(id) - 2) + time '10:00') AT TIME ZONE time_zone, 120 FROM employee WHERE id = ${olga}
+    `;
+    await page.reload();
+    await page.getByRole('button', { name: 'Списать время' }).click();
+    await expect(page.getByRole('dialog').getByText('Ещё не списано в этой смене: 2ч')).toBeVisible();
+    await page.getByLabel('Всего за смену').fill('45');
     await page.getByRole('dialog').getByRole('button', { name: 'Сохранить' }).click();
     await page.getByRole('link', { name: 'Мой день', exact: true }).click();
     const history = page.locator('.MuiPaper-root').filter({ has: page.getByRole('heading', { name: 'Табель' }) });

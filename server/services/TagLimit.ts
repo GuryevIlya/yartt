@@ -54,14 +54,14 @@ async function current(viewerId: number, taskId: number | null): Promise<TagLimi
            EXISTS (SELECT 1 FROM tag_limit p WHERE p.replaced_by = l.id) AS changed,
            EXISTS (SELECT 1 FROM people WHERE people.id = l.id AND people.person = ${viewerId}) AS includes_me,
            t.today::text AS today,
-           (SELECT COALESCE(sum(s.value), 0) FROM spent_minutes s JOIN task k ON k.id = s.task_id
+           (SELECT COALESCE(sum(s.minutes), 0) FROM spent_day s JOIN task k ON k.id = s.task_id
              WHERE k.tag_ids @> l.tag_ids AND s.day BETWEEN l.starts_on AND l.ends_on
                AND s."by" IN (SELECT person FROM people WHERE people.id = l.id))::int AS spent_minutes,
            (SELECT COALESCE(sum(e.value), 0) FROM estimate_minutes e JOIN task k ON k.id = e.task_id
               LEFT JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
              WHERE e.expired_at IS NULL AND k.tag_ids @> l.tag_ids AND f.confirmed_at IS NULL
                AND e."by" IN (SELECT person FROM people WHERE people.id = l.id))::int AS left_minutes,
-           (SELECT COALESCE(sum(s.value), 0) FROM spent_minutes s JOIN task k ON k.id = s.task_id
+           (SELECT COALESCE(sum(s.minutes), 0) FROM spent_day s JOIN task k ON k.id = s.task_id
              WHERE k.tag_ids @> l.tag_ids AND s.day > t.today - 28 AND s.day <= t.today
                AND s."by" IN (SELECT person FROM people WHERE people.id = l.id))::int AS pace_minutes,
            GREATEST(0, l.ends_on - GREATEST(t.today, l.starts_on) + 1) AS days_ahead
@@ -70,8 +70,8 @@ async function current(viewerId: number, taskId: number | null): Promise<TagLimi
   `);
   const daily = DayRow.array().parse(await sql`
     ${scope}
-    SELECT l.id, s.day::text, sum(s.value)::int AS minutes
-      FROM l JOIN spent_minutes s ON s.day BETWEEN l.starts_on AND l.ends_on
+    SELECT l.id, s.day::text, sum(s.minutes)::int AS minutes
+      FROM l JOIN spent_day s ON s.day BETWEEN l.starts_on AND l.ends_on
       JOIN task k ON k.id = s.task_id AND k.tag_ids @> l.tag_ids
      WHERE s."by" IN (SELECT person FROM people WHERE people.id = l.id)
      GROUP BY l.id, s.day

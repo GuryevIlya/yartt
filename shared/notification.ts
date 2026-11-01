@@ -34,8 +34,12 @@ export const NotificationPayload = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('score'),
     by: Id,
+    /** The day the shift began. */
     day: Day,
-    /** NULL — the score was withdrawn: the day's timesheet can be corrected. */
+    /** The shift scored (decision 100), ISO and minutes; absent before 0.6, when a day was scored. */
+    startedAt: z.string().optional(),
+    minutes: z.number().int().optional(),
+    /** NULL — the score was withdrawn: the shift can be corrected. */
     value: z.number().int().nullable(),
     reason: z.string().nullable(),
     /** When this version was given, ISO. */

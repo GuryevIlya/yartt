@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import { sql } from '../server/pg.ts';
-import { client, createEmployee } from './helpers.ts';
+import { client, createEmployee, dayAgo, logTime } from './helpers.ts';
 
 // Limits of hours on tag combinations (decision 69).
 describe('tag limits', () => {
@@ -16,17 +16,19 @@ describe('tag limits', () => {
     const both = await devApi.Task.create({ tags: [rubric, `a ${randomUUID().slice(0, 6)}`] });
     const other = await strangerApi.Task.create({ tags: [rubric, `b ${randomUUID().slice(0, 6)}`] });
     const today = (await devApi.MyDay.history({ page: 1 })).today;
-    await devApi.Time.set({ taskId: both, day: today, minutes: 120 });
+    // Logged yesterday, in a shift (decision 100): the limit runs from yesterday to today.
+    const yesterday = await dayAgo(dev.id, 1);
+    await logTime(dev.id, both, yesterday, 120);
     await devApi.Time.setLeft({ taskId: both, minutes: 60 });
-    await strangerApi.Time.set({ taskId: other, day: today, minutes: 500 }); // not one of the lead's people
+    await logTime(stranger.id, other, await dayAgo(stranger.id, 1), 500); // not one of the lead's people
     const [tag] = await sql<{ id: number }[]>`SELECT id FROM tag WHERE name = ${rubric}`;
 
-    const id = await leadApi.TagLimit.set({ replaces: null, tagIds: [tag!.id], startsOn: today, endsOn: today, minutes: 150 });
+    const id = await leadApi.TagLimit.set({ replaces: null, tagIds: [tag!.id], startsOn: yesterday, endsOn: today, minutes: 150 });
     const [mine] = (await leadApi.TagLimit.list()).current;
     expect(mine).toMatchObject({
       // The pace: 120 minutes in 28 days, for the one day left — of the plan, 4 minutes fit.
       id, employeeId: lead.id, minutes: 150, spentMinutes: 120, leftMinutes: 60, aheadMinutes: 4, forecastMinutes: 124,
-      days: [today], cumulative: [120], changed: false,
+      days: [yesterday, today], cumulative: [120, 120], changed: false,
     });
     // The dev sees the lead's limit — it counts their hours; a stranger does not.
     expect((await devApi.TagLimit.list()).current.map((l) => l.id)).toEqual([id]);
@@ -57,7 +59,7 @@ describe('tag limits', () => {
     const paced = `pace-${randomUUID().slice(0, 8)}`;
     const fresh = `fresh-${randomUUID().slice(0, 8)}`;
     const task = await api.Task.create({ tags: [paced] });
-    await api.Time.set({ taskId: task, day: plus(today, -10), minutes: 280 }); // 10 minutes a day
+    await logTime(lead.id, task, plus(today, -10), 280); // 10 minutes a day
     await api.Time.setLeft({ taskId: task, minutes: 6000 });
     const other = await api.Task.create({ tags: [fresh] });
     await api.Time.setLeft({ taskId: other, minutes: 6000 });

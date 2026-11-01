@@ -122,7 +122,7 @@ test.describe('Team and the employee page', () => {
     // Withdrawn: the day is open again for the employee, the reason waits for the next score.
     await row.getByRole('button', { name: 'Оценка 50%' }).click();
     await page.getByRole('button', { name: 'Снять оценку' }).click();
-    await expect(page.getByText('Оценка снята: сотрудник может поправить табель').first()).toBeVisible();
+    await expect(page.getByText('Оценка снята: сотрудник может поправить смену').first()).toBeVisible();
     await row.getByRole('button', { name: 'Оценить' }).click();
     await expect(page.getByLabel('Почему')).toHaveValue('Слишком поздно начали');
   });
@@ -150,7 +150,8 @@ test.describe('Team and the employee page', () => {
   test('a manager higher up sees the days but does not score', async ({ page }) => {
     await page.goto(`/employees/${await employeeId('pavel@example.com')}`);
     await expect(page.getByText('Руководитель: Марина Соколова')).toBeVisible();
-    await expect(page.getByText(/Смена идёт с/)).toBeVisible();
+    // His open shift began on a past day: it is in that day and today (decision 100).
+    await expect(page.getByText(/Смена идёт с/).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Оценить' })).toHaveCount(0);
     // His My day as he sees it, without his buttons: what waits for him, his tasks, his folded blocks.
     const main = page.getByRole('main');

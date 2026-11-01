@@ -3,7 +3,7 @@ import type { Shift } from '#shared/myDay.ts';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { clockOf, dayOf, midnightOf, useFormat, useZone, zoned } from '#client/hooks/format.ts';
+import { clockOf, dayOf, useFormat, useZone, zoned } from '#client/hooks/format.ts';
 import { useTaskRefresh } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 
@@ -28,13 +28,12 @@ const clock = (value: Date, zone: string) => {
   return `${pad(c.hour)}:${pad(c.minute)}`;
 };
 
-/** HH:mm of the day YYYY-MM-DD in a time zone; 00:00 as an end is the midnight after it. */
-function moment(day: string, zone: string, value: string, end: boolean): Date | null {
+/** HH:mm of the day YYYY-MM-DD in a time zone, or of the day after it. */
+function moment(day: string, zone: string, value: string, nextDay = false): Date | null {
   const match = /^(\d{2}):(\d{2})$/.exec(value);
   if (!match) return null;
   const [y, m, d] = day.split('-').map(Number);
-  const at = zoned(y!, m!, d!, Number(match[1]), Number(match[2]), zone);
-  return end && at.getTime() === midnightOf(day, zone).getTime() ? zoned(y!, m!, d! + 1, 0, 0, zone) : at;
+  return zoned(y!, m!, d! + (nextDay ? 1 : 0), Number(match[1]), Number(match[2]), zone);
 }
 
 /**
@@ -43,7 +42,7 @@ function moment(day: string, zone: string, value: string, end: boolean): Date | 
  * times are moved (decision 81).
  */
 export default function (p: {
-  mode: ShiftDialogMode; from: Date; to: Date; about?: string | null; others?: Shift[]; onClose: () => void;
+  mode: ShiftDialogMode; from: Date; to: Date; about?: string | null; others?: Pick<Shift, 'startedAt' | 'spentMinutes'>[]; onClose: () => void;
 }) {
   const { t } = useTranslation();
   const trpc = useTRPC();
@@ -54,15 +53,17 @@ export default function (p: {
   const add = useMutation(trpc.Work.add.mutationOptions(done));
   const update = useMutation(trpc.Work.update.mutationOptions(done));
 
-  // A shift belongs to one day (its start's): only the times are picked, and it ends by midnight.
+  // Only the times are picked, on the day the shift starts; an end not after the start is
+  // the next day's: a shift may run past midnight, and is never longer than a day (decision 100).
   const zone = useZone();
   const day = dayOf(p.from, zone);
-  const nextMidnight = moment(day, zone, '00:00', true)!;
   const [from, setFrom] = useState(clock(p.from, zone));
-  const [to, setTo] = useState(clock(p.to >= nextMidnight ? nextMidnight : p.to, zone));
+  const [to, setTo] = useState(clock(p.to, zone));
   const [about, setAbout] = useState(p.about ?? '');
-  const startedAt = moment(day, zone, from, false);
-  const endedAt = moment(day, zone, to, true);
+  const startedAt = moment(day, zone, from);
+  const sameDay = moment(day, zone, to);
+  const nextDay = startedAt !== null && sameDay !== null && sameDay <= startedAt && to !== from;
+  const endedAt = nextDay ? moment(day, zone, to, true) : sameDay;
   const minutes = startedAt && endedAt ? Math.floor((endedAt.getTime() - startedAt.getTime()) / 60_000) : 0;
   const future = endedAt !== null && endedAt > shiftEnd();
   // The first shift in the way: an open one lasts until now and on.
@@ -107,7 +108,7 @@ export default function (p: {
         </Stack>
         <Typography variant="caption" sx={{ color: valid ? 'text.secondary' : 'error.main', mt: -1 }}>
           {future ? t('errors.shift_in_future') : minutes > 0 ? format.minutes(minutes) : t('myDay.shift.endAfterStart')}
-          {' · '}{t('myDay.shift.oneDay')}
+          {nextDay && ` · ${t('myDay.shift.nextDay')}`}
         </Typography>
         <TextField
           autoFocus

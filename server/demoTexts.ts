@@ -69,6 +69,7 @@ const ru = {
   shifts: {
     mine: ['Планёрка, отчёт, ревью макетов', 'Встречи с кандидатами', 'Бюджет на 2026', 'Созвон с подрядчиком, отчёт'],
     pavel: 'Главная, API',
+    night: 'Ночной выпуск сайта',
     marina: 'Склад, найм, ревью',
   },
   scores: {
@@ -145,6 +146,7 @@ const en: typeof ru = {
   shifts: {
     mine: ['Stand-up, report, mockup review', 'Meetings with candidates', 'Budget for 2026', 'Call with the contractor, report'],
     pavel: 'Homepage, API',
+    night: 'Night release of the site',
     marina: 'Warehouse, hiring, reviews',
   },
   scores: {

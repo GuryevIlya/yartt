@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { Day, Id } from '#shared/employee.ts';
-import { DayMinutes, Minutes, MyTime, PlanAbout } from '#shared/observer.ts';
+import { Id } from '#shared/employee.ts';
+import { Minutes, MyTime, PlanAbout, ShiftMinutes } from '#shared/observer.ts';
 import * as Times from '../services/Time.ts';
 import { authedProcedure, router } from '../trpc.ts';
 
@@ -15,18 +15,18 @@ export default router({
     .query(({ input, ctx }) => Times.myTime(ctx.employeeId, input.taskId)),
 
   /**
-   * Sets the signed-in employee's own time on a task for a day: the day's
-   * whole time, replacing what was there — one entry per task and day; 0
-   * removes it.
+   * Sets the signed-in employee's own time on a task in one of their
+   * shifts: the shift's whole time on it, replacing what was there — one
+   * entry per task and shift; 0 removes it (decision 100).
+   * @throws not_found — not a shift of theirs.
    * @throws no_access
-   * @throws spent_in_future
-   * @throws spent_over_day — the day's tasks together would have more than 24 hours.
-   * @throws day_scored
+   * @throws spent_over_shift — the shift's tasks together would have more than it lasts (logged and left in params).
+   * @throws shift_scored
    */
   set: authedProcedure
-    .input(z.object({ taskId: Id, day: Day, minutes: DayMinutes }))
+    .input(z.object({ taskId: Id, shiftId: Id, minutes: ShiftMinutes }))
     .output(z.void())
-    .mutation(({ input, ctx }) => Times.setDay(ctx.employeeId, input.taskId, input.day, input.minutes)),
+    .mutation(({ input, ctx }) => Times.setShift(ctx.employeeId, input.taskId, input.shiftId, input.minutes)),
 
   /**
    * Sets how much more time the signed-in employee plans to spend on the

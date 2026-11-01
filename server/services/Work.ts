@@ -3,8 +3,8 @@ import { OpenShift, type AddShiftInput, type CloseShiftInput, type UpdateShiftIn
 import { AppError } from '../errors.ts';
 import { sql, type Sql } from '../pg.ts';
 
-// The timesheet is the employee's until the day is scored: the triggers
-// forbid a shift in the future and any change on a scored day. Moments are
+// The timesheet is the employee's until a shift is scored: the triggers
+// forbid a shift in the future and any change of a scored one. Moments are
 // cut to the minute and never later than now, so a clock a few seconds
 // ahead in the browser does not make a shift "future".
 const at = (db: Sql, value: Date) => db`LEAST(date_trunc('minute', ${value}::timestamptz), date_trunc('minute', NOW()))`;
@@ -50,7 +50,7 @@ export async function close(employeeId: number, input: CloseShiftInput): Promise
   });
 }
 
-/** Adds a closed shift at once, to any day not scored: a suggestion confirmed, a forgotten shift. */
+/** Adds a closed shift at once: a suggestion confirmed, a forgotten shift. */
 export async function add(employeeId: number, input: AddShiftInput): Promise<void> {
   await sql.begin(async (tx) => {
     const db = tx as unknown as Sql;
@@ -62,7 +62,7 @@ export async function add(employeeId: number, input: AddShiftInput): Promise<voi
   });
 }
 
-/** Corrects a closed shift of a day not scored: its start, end and what was done. */
+/** Corrects a closed shift not scored: its start, end and what was done. */
 export async function update(employeeId: number, input: UpdateShiftInput): Promise<void> {
   await sql.begin(async (tx) => {
     const db = tx as unknown as Sql;
@@ -76,7 +76,7 @@ export async function update(employeeId: number, input: UpdateShiftInput): Promi
   });
 }
 
-/** Deletes a shift, open or closed, of a day not scored. */
+/** Deletes a shift, open or closed, not scored and with no time logged in it. */
 export async function remove(employeeId: number, startedAt: Date): Promise<void> {
   const rows = await sql`
     DELETE FROM work WHERE employee_id = ${employeeId} AND started_at = ${at(sql, startedAt)} RETURNING employee_id

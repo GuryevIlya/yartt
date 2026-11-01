@@ -42,7 +42,7 @@ persona goal it serves. Status: **now** — stage one, **next** — stage two,
 | Dependencies, linked by anyone who sees both tasks, with or without the latest deadline its owner can live with; broken, it puts both tasks at risk, forbidding nothing; the owners of both are told of a new one, the waiting one of every move | Marina: see what blocks what; Pavel: a deadline of his own in her task without asking her | now (done) |
 | A new-task form: tags as the title, priority, deadline, context, participants brought in at once; the similar tasks under the title; who knows the subject — those who worked on tasks with these tags — offered as participants, in the form and in a task's people; opened from the search or tied to a task as its dependency; a dependency found by tags or number | everyone: write a task down whole, link it where it belongs | now (done) |
 | Unsaved comments, new tasks and edits are kept as drafts when going to another page | everyone: following a link never costs the typed text | now (done) |
-| Shifts of any day not scored are added, corrected and deleted; the manager withdraws a score to let a day be fixed | Pavel: a mistyped shift is fixed; Marina: lets it be fixed without losing the reason | now (done) |
+| Shifts not scored are added, corrected and deleted; the manager withdraws a shift's score to let it be fixed | Pavel: a mistyped shift is fixed; Marina: lets it be fixed without losing the reason | now (done) |
 | My team: my own row; time in tasks as a share of each timesheet; the team line averages people, never adds hours | Marina: compare people fairly, see her own report | now (done) |
 | My team as a tree with each team's line, ticks and one-click teams; sparklines; how late the timesheet is written; how fast mentions are answered | Marina: see where a sub-team is heading and which habits slip | now (done) |
 | My team narrowed to four comparable columns (in tasks, score, tasks, delay), teams that fold, details with charts on a click; a manager is part of their team's line; a team's score is its manager's; only people who were there in the range | Marina: read the team at a glance and dig in only where something stands out | now (done) |
@@ -88,16 +88,17 @@ persona goal it serves. Status: **now** — stage one, **next** — stage two,
 ## Time and scores
 
 All optional: a team keeps a timesheet, logs time and gets scores only if
-its manager wants that.
+its manager wants that. Time is logged in shifts, so logging time means
+keeping the timesheet (decision 100).
 
 | Feature | Serves | Status |
 |---|---|---|
 | Timesheet: a shift suggested from the first and last activity, confirmed with one click | Pavel: log the day in seconds | now (done) |
-| Log own time to a task for a day | Marina: see where effort goes | now (done) |
+| Log own time to a task in one of one's shifts, never more than the shift lasts; a shift may run past midnight, counted in each day by its share | Marina: see where effort goes | now (done) |
 | Own time left per task, next to the time spent, with what is left to do in one's words | Marina: compare plans with reality | now (done) |
 | My day: TODO, what I wait for from others (my requests, my comments with mentions not reviewed yet), current tasks (mine and others), today and the last day before it — the ribbon of shifts, visits and what was done, every task once; all days in History | Pavel: know what to do next; log the day in seconds | now (done) |
 | Employee page: their days and scores, seen by the employee and managers above | Marina: honest feedback with facts | now (done) |
-| Score a past day of a direct report on their page, 0–100, with an optional reason; correct it later, every version is emailed | Marina: honest feedback with facts | now (done) |
+| Score closed shifts of a direct report on their page, 0–100, with an optional reason — a day's at once or one by one; correct it later, every version is emailed | Marina: honest feedback with facts | now (done) |
 | Workload and weighted score for any period, with a chart by day or week | Marina, Oleg: workload and quality side by side | now (done) |
 | Team summary in My day: the subtree for a range — hours, score, days to score, tasks closed in time and after the deadline | Marina, Oleg: the whole team in one table | now (done) |
 | Avatars | everyone: recognize people faster | now (done) |

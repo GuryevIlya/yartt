@@ -295,7 +295,8 @@ function scope(viewerId: number, from: string, to: string) {
        WHERE c.created_at >= r.since AND c.created_at < r.until AND c.task_id IN (SELECT id FROM v)
     ),
     sp AS (
-      SELECT s.task_id, s."by", s.day, s.value FROM spent_minutes s
+      -- A shift past midnight puts its share of an entry in each day (decision 100).
+      SELECT s.task_id, s."by", s.day, s.minutes AS value FROM spent_day s
        WHERE s.day BETWEEN ${from}::date AND ${to}::date AND s.task_id IN (SELECT id FROM v)
     ),
     tp AS (
@@ -317,7 +318,7 @@ function scope(viewerId: number, from: string, to: string) {
              GREATEST(
                (SELECT max((c.created_at AT TIME ZONE r.time_zone)::date) FROM comment c
                   JOIN human h ON h.employee_id = c.created_by WHERE c.task_id = v.id),
-               (SELECT max(s.day) FROM spent_minutes s WHERE s.task_id = v.id),
+               (SELECT max(s.day) FROM spent_day s WHERE s.task_id = v.id),
                (v.closed_at AT TIME ZONE r.time_zone)::date
              ) AS last_day
         FROM v CROSS JOIN r
@@ -460,7 +461,7 @@ export async function detail(viewerId: number, input: TagDetailInput): Promise<T
   const persons = PersonRow.array().parse(await sql`
     ${base},
     total AS (
-      SELECT s."by", sum(s.value) AS minutes FROM spent_minutes s
+      SELECT s."by", sum(s.minutes) AS minutes FROM spent_day s
        WHERE s.day BETWEEN ${from}::date AND ${to}::date GROUP BY s."by"
     ),
     mine AS (

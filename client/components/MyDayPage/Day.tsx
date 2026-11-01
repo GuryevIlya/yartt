@@ -1,11 +1,11 @@
 import { AlarmAdd, ChevronRight, DeleteOutline, Edit, ExpandMore, MoreTime, PlayArrow, Stop } from '@mui/icons-material';
-import { Alert, Box, Button, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DayHistory } from '#shared/myDay.ts';
+import type { DayHistory, Shift } from '#shared/myDay.ts';
 import type { TaskHeader } from '#shared/task.ts';
-import { midnightOf, useFormat, useZone } from '#client/hooks/format.ts';
+import { dayOf, midnightOf, useFormat, useZone } from '#client/hooks/format.ts';
 import { useTaskRefresh } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import ScoreDialog from '../EmployeePage/ScoreDialog.tsx';
@@ -71,13 +71,14 @@ function gapShift(shifts: { startedAt: Date; spentMinutes: number | null }[], vi
 
 /**
  * One day of History (decision 54), compact: its totals, the ribbon of
- * shifts, visits and what was done, its shifts, and every task once — the
- * time logged to it that day, a click to log more. Tasks opened and not
- * logged are folded; the visits one by one are a click away. Today a
- * shift is started and finished now, from here; any day not scored gets a
- * shift by hand, and a past day offers the one its activity suggests.
+ * shifts, visits and what was done, and its shifts — a shift past midnight
+ * in both its days (decision 100) — each with the tasks logged in it, a
+ * click to log more, and its score. Tasks opened and not logged are
+ * folded; the visits one by one are a click away. Today a shift is started
+ * and finished now, from here; a shift is added by hand to any day, and a
+ * past day offers the one its activity suggests. A scored shift is frozen.
  * Someone else's day (`employeeId`) is read-only; their direct manager
- * scores it (`canScore`).
+ * scores its shifts, the day's at once (`canScore`).
  */
 export default function (p: {
   day: DayHistory;
@@ -93,8 +94,8 @@ export default function (p: {
   const zone = useZone();
   const refresh = useTaskRefresh();
   const [dialog, setDialog] = useState<Dialog | null>(null);
-  const [scoring, setScoring] = useState(false);
-  const [logging, setLogging] = useState<TaskHeader | null>(null);
+  const [scoring, setScoring] = useState<Shift[] | null>(null);
+  const [logging, setLogging] = useState<{ task: TaskHeader; shiftId: number } | null>(null);
   const [showOpened, setShowOpened] = useState(false);
   const [showVisits, setShowVisits] = useState(false);
   const start = useMutation(trpc.Work.start.mutationOptions({ onSuccess: refresh }));
@@ -104,22 +105,20 @@ export default function (p: {
 
   const { day } = p;
   const mine = p.employeeId === undefined;
-  // A withdrawn score (value NULL) keeps its reason but frees the day.
-  const scored = day.score !== null && day.score.value !== null;
-  const editable = mine && !scored;
-  // The database requires a past day with closed shifts and no open one.
-  const scorable = p.canScore && !scored && !p.isToday
-    && day.shifts.some((s) => s.spentMinutes !== null) && !day.shifts.some((s) => s.spentMinutes === null);
+  // A withdrawn score (value NULL) keeps its reason but frees the shift.
+  const standing = (s: Shift) => s.score !== null && s.score.value !== null;
   const shifts = [...day.shifts].sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
   const open = shifts.find((s) => s.spentMinutes === null);
-  const closedMinutes = shifts.reduce((sum, s) => sum + (s.spentMinutes ?? 0), 0);
-  const loggedMinutes = day.entries.reduce((sum, e) => sum + e.minutes, 0);
+  // The manager scores the day's closed shifts not scored yet, at once.
+  const unscored = shifts.filter((s) => s.spentMinutes !== null && !standing(s));
+  const scorable = p.canScore && p.employeeId !== undefined && unscored.length > 0;
+  // Where time can go today: my shifts of the day that are not scored.
+  const loggable = mine ? shifts.filter((s) => !standing(s)) : [];
+  const choices = loggable.map((s) => ({
+    id: s.id, startedAt: s.startedAt, spentMinutes: s.spentMinutes,
+    loggedMinutes: day.entries.filter((e) => e.shiftId === s.id).reduce((sum, e) => sum + e.minutes, 0),
+  }));
 
-  // Every task once: the time logged to it that day, in the order it was first logged.
-  const logged = [...new Set(day.entries.map((e) => e.taskId))].map((taskId) => {
-    const entries = day.entries.filter((e) => e.taskId === taskId);
-    return { taskId, entries, minutes: entries.reduce((sum, e) => sum + e.minutes, 0) };
-  });
   // Opened and not logged: a hint of time to log, so a task looked up after it closed is not one.
   const opened = [...new Set(day.visits.flatMap((v) => v.taskId === null ? [] : [v.taskId]))]
     .filter((id) => !day.entries.some((e) => e.taskId === id))
@@ -127,6 +126,12 @@ export default function (p: {
       const deadline = p.tasks.get(id)?.deadline;
       return !deadline || day.visits.some((v) => v.taskId === id && v.at < deadline);
     });
+  // The shift a visit falls in, or the day's last one I can log in.
+  const shiftFor = (taskId: number) => {
+    const at = day.visits.find((v) => v.taskId === taskId)?.at.getTime() ?? 0;
+    return loggable.find((s) => at >= s.startedAt.getTime() && (s.spentMinutes === null || at <= s.startedAt.getTime() + s.spentMinutes * 60_000))
+      ?? loggable[loggable.length - 1];
+  };
 
   // A past day: what the first and last activity suggest, or the stretch of activity outside its shifts.
   const suggestion = p.isToday ? null
@@ -137,11 +142,14 @@ export default function (p: {
   const happened = day.shifts.length + day.entries.length + day.visits.length + day.actions.length > 0;
   const task = (id: number) => p.tasks.get(id);
   const minutesSince = (at: Date) => Math.max(0, Math.floor((Date.now() - at.getTime()) / 60_000));
-  const closeOpen = (shift: (typeof shifts)[number]) => setDialog({
+  const closeOpen = (shift: Shift) => setDialog({
     mode: 'close',
     from: shift.startedAt,
     to: p.isToday || !day.lastActivity || day.lastActivity <= shift.startedAt ? shiftEnd() : day.lastActivity,
   });
+  // A moment of a shift: the time on this day, the date and time on another.
+  const moment = (at: Date) => (dayOf(at, zone) === day.day ? format.time(at) : format.dateTime(at));
+  const endOf = (s: Shift) => new Date(s.startedAt.getTime() + (s.spentMinutes ?? 0) * 60_000);
 
   // A task as its whole title in text, a link to it; hovered, its context and everyone's time.
   const title = (header: TaskHeader) => (
@@ -162,12 +170,14 @@ export default function (p: {
     </TaskHint>
   );
 
-  // A task of the day with its one entry: the time, when it was last set on hover.
-  const taskRow = (taskId: number) => {
+  // A task with its entry in a shift: the time, when it was last set on hover. No shift — opened, not logged.
+  const taskRow = (taskId: number, shift: Shift | undefined) => {
     const header = task(taskId);
-    const entry = day.entries.find((e) => e.taskId === taskId);
+    const entry = shift && day.entries.find((e) => e.taskId === taskId && e.shiftId === shift.id);
+    const target = shift ?? shiftFor(taskId);
+    const editable = mine && target !== undefined && !standing(target);
     return header && (
-      <Stack key={taskId} direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+      <Stack key={`${taskId}-${shift?.id ?? 'opened'}`} direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
         {title(header)}
         <Tooltip title={entry ? t('myDay.history.entryChanged', { at: format.dateTime(entry.updatedAt) }) : ''}>
           <Typography variant="body2" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
@@ -176,12 +186,12 @@ export default function (p: {
         </Tooltip>
         {editable && (
           <Tooltip title={t('task.myTime.log')}>
-            <IconButton size="small" onClick={() => setLogging(header)}><MoreTime fontSize="small" /></IconButton>
+            <IconButton size="small" onClick={() => setLogging({ task: header, shiftId: target.id })}><MoreTime fontSize="small" /></IconButton>
           </Tooltip>
         )}
         {editable && entry && (
           <Tooltip title={t('myDay.history.removeEntry')}>
-            <IconButton size="small" disabled={setTime.isPending} onClick={() => setTime.mutate({ taskId, day: day.day, minutes: 0 })}>
+            <IconButton size="small" disabled={setTime.isPending} onClick={() => setTime.mutate({ taskId, shiftId: target.id, minutes: 0 })}>
               <DeleteOutline fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -196,19 +206,8 @@ export default function (p: {
         <Typography sx={{ fontWeight: 600, flexGrow: 1, '&::first-letter': { textTransform: 'uppercase' } }}>
           {p.isToday ? t('myDay.history.today') : format.day(day.day)}
         </Typography>
-        {scorable && p.employeeId !== undefined && (
-          <Button size="small" variant="outlined" onClick={() => setScoring(true)}>{t('employee.score.action')}</Button>
-        )}
-        {day.score && scored && (
-          <Tooltip title={[day.score.reason, p.canScore && t('employee.score.edit')].filter(Boolean).join(' · ')} describeChild>
-            <Chip
-              size="small"
-              color="primary"
-              variant="outlined"
-              label={t('myDay.history.score', { value: day.score.value })}
-              {...(p.canScore && p.employeeId !== undefined && { onClick: () => setScoring(true) })}
-            />
-          </Tooltip>
+        {scorable && (
+          <Button size="small" variant="outlined" onClick={() => setScoring(unscored)}>{t('employee.score.action')}</Button>
         )}
         {/* Today: the shift starts now and finishes now; nothing can follow an open one. */}
         {mine && p.isToday && !p.openShiftFrom && (
@@ -216,7 +215,7 @@ export default function (p: {
             {t('myDay.shift.start')}
           </Button>
         )}
-        {editable && (
+        {mine && (
           <Tooltip title={t('myDay.shift.addHint')} describeChild>
             <IconButton
               size="small"
@@ -229,85 +228,89 @@ export default function (p: {
         )}
       </Stack>
 
-      {day.score && !scored && (
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          {t(mine ? 'myDay.history.withdrawnMine' : 'myDay.history.withdrawn')}
-        </Typography>
-      )}
-
-      {/* The day's totals side by side: worked in closed shifts, and logged to tasks. */}
-      {(closedMinutes > 0 || loggedMinutes > 0) && (
+      {/* The day's totals side by side: worked in closed shifts, and logged in them; a shift past midnight by its share. */}
+      {(day.workedMinutes > 0 || day.loggedMinutes > 0) && (
         <Stack direction="row" sx={{ flexWrap: 'wrap', columnGap: 2 }}>
-          {closedMinutes > 0 && (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('myDay.history.worked', { time: format.minutes(closedMinutes) })}</Typography>
+          {day.workedMinutes > 0 && (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('myDay.history.worked', { time: format.minutes(day.workedMinutes) })}</Typography>
           )}
-          {loggedMinutes > 0 && (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('myDay.history.logged', { time: format.minutes(loggedMinutes) })}</Typography>
+          {day.loggedMinutes > 0 && (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('myDay.history.logged', { time: format.minutes(day.loggedMinutes) })}</Typography>
           )}
         </Stack>
-      )}
-      {closedMinutes > 0 && loggedMinutes > closedMinutes && (
-        <Alert severity="warning" sx={{ py: 0 }}>
-          {t('myDay.history.overLogged', { logged: format.minutes(loggedMinutes), worked: format.minutes(closedMinutes) })}
-        </Alert>
       )}
 
       {(happened || p.isToday) && (
         <DayRibbon day={day.day} isToday={p.isToday} shifts={shifts} visits={day.visits} actions={day.actions} tasks={p.tasks} />
       )}
 
-      {shifts.map((shift) => (
-        <Stack key={shift.startedAt.getTime()} direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography variant="body2">
-              {shift.spentMinutes === null
-                ? t(mine ? 'myDay.shift.open' : 'myDay.shift.openOther', { from: format.time(shift.startedAt), time: format.minutes(minutesSince(shift.startedAt)) })
-                : t('myDay.shift.closed', {
-                    from: format.time(shift.startedAt),
-                    to: format.time(new Date(shift.startedAt.getTime() + shift.spentMinutes * 60_000)),
-                    time: format.minutes(shift.spentMinutes),
-                  })}
-            </Typography>
-            {shift.about && (
-              <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap' }}>{shift.about}</Typography>
+      {shifts.map((shift) => {
+        const frozen = standing(shift);
+        const entries = day.entries.filter((e) => e.shiftId === shift.id);
+        return (
+          <Stack key={shift.id} spacing={0.5}>
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+              <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                <Typography variant="body2">
+                  {shift.spentMinutes === null
+                    ? t(mine ? 'myDay.shift.open' : 'myDay.shift.openOther', { from: moment(shift.startedAt), time: format.minutes(minutesSince(shift.startedAt)) })
+                    : t('myDay.shift.closed', { from: moment(shift.startedAt), to: moment(endOf(shift)), time: format.minutes(shift.spentMinutes) })}
+                </Typography>
+                {shift.about && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap' }}>{shift.about}</Typography>
+                )}
+                {shift.score && !frozen && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {t(mine ? 'myDay.history.withdrawnMine' : 'myDay.history.withdrawn')}
+                  </Typography>
+                )}
+              </Box>
+              {shift.score && frozen && (
+                <Tooltip title={[shift.score.reason, p.canScore && t('employee.score.edit')].filter(Boolean).join(' · ')} describeChild>
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label={t('myDay.history.score', { value: shift.score.value })}
+                    {...(p.canScore && p.employeeId !== undefined && { onClick: () => setScoring([shift]) })}
+                  />
+                </Tooltip>
+              )}
+              {mine && shift === open && (
+                <Button size="small" variant="contained" startIcon={<Stop />} sx={{ flexShrink: 0 }} onClick={() => closeOpen(shift)}>
+                  {t('myDay.shift.close')}
+                </Button>
+              )}
+              {mine && !frozen && shift.spentMinutes !== null && (
+                <Tooltip title={t('myDay.shift.edit')}>
+                  <IconButton size="small" onClick={() => setDialog({ mode: 'edit', from: shift.startedAt, to: endOf(shift), about: shift.about })}>
+                    <Edit fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {mine && !frozen && (
+                <Tooltip title={t(shift === open ? 'myDay.shift.remove' : 'myDay.shift.delete')}>
+                  <IconButton size="small" disabled={removeShift.isPending} onClick={() => {
+                    const asked = shift.spentMinutes === null
+                      ? t('myDay.shift.removeConfirm', { from: moment(shift.startedAt) })
+                      : t('myDay.shift.deleteConfirm', { from: moment(shift.startedAt), to: moment(endOf(shift)) });
+                    if (window.confirm(asked)) removeShift.mutate({ startedAt: shift.startedAt });
+                  }}>
+                    <DeleteOutline fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+            {entries.length > 0 && (
+              <Stack spacing={0.5} sx={{ pl: 1.5, borderLeft: 2, borderColor: 'divider' }}>
+                {[...new Set(entries.map((e) => e.taskId))].map((taskId) => taskRow(taskId, shift))}
+              </Stack>
             )}
-          </Box>
-          {mine && shift === open && (
-            <Button size="small" variant="contained" startIcon={<Stop />} sx={{ flexShrink: 0 }} onClick={() => closeOpen(shift)}>
-              {t('myDay.shift.close')}
-            </Button>
-          )}
-          {editable && shift.spentMinutes !== null && (
-            <Tooltip title={t('myDay.shift.edit')}>
-              <IconButton size="small" onClick={() => setDialog({
-                mode: 'edit',
-                from: shift.startedAt,
-                to: new Date(shift.startedAt.getTime() + shift.spentMinutes! * 60_000),
-                about: shift.about,
-              })}>
-                <Edit fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-          {editable && (
-            <Tooltip title={t(shift === open ? 'myDay.shift.remove' : 'myDay.shift.delete')}>
-              <IconButton size="small" disabled={removeShift.isPending} onClick={() => {
-                const asked = shift.spentMinutes === null
-                  ? t('myDay.shift.removeConfirm', { from: format.time(shift.startedAt) })
-                  : t('myDay.shift.deleteConfirm', {
-                      from: format.time(shift.startedAt),
-                      to: format.time(new Date(shift.startedAt.getTime() + shift.spentMinutes * 60_000)),
-                    });
-                if (window.confirm(asked)) removeShift.mutate({ startedAt: shift.startedAt });
-              }}>
-                <DeleteOutline fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-        </Stack>
-      ))}
+          </Stack>
+        );
+      })}
 
-      {mine && suggestion && !scored && (
+      {mine && suggestion && (
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <Typography variant="body2" sx={{ color: 'text.secondary', flexGrow: 1 }}>
             {t('myDay.shift.suggested', { from: format.time(suggestion.from), to: format.time(suggestion.to) })}
@@ -328,18 +331,21 @@ export default function (p: {
         </Stack>
       )}
 
-      {logged.length > 0 && (
-        <Stack spacing={0.5}>{logged.map((l) => taskRow(l.taskId))}</Stack>
-      )}
-
-      {/* Opened and not logged: folded, a reminder to log it. */}
+      {/* Opened and not logged: folded, a reminder to log it — in a shift: without one the time has nowhere to go. */}
       {opened.length > 0 && (
         <Box>
           <Button size="small" color="inherit" sx={{ color: 'text.secondary' }} startIcon={showOpened ? <ExpandMore /> : <ChevronRight />}
             aria-expanded={showOpened} onClick={() => setShowOpened((v) => !v)}>
             {t('myDay.history.opened', { count: opened.length })}
           </Button>
-          {showOpened && <Stack spacing={0.5}>{opened.map((id) => taskRow(id))}</Stack>}
+          {showOpened && (
+            <Stack spacing={0.5}>
+              {mine && loggable.length === 0 && (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('myDay.history.noShiftToLog')}</Typography>
+              )}
+              {opened.map((id) => taskRow(id, undefined))}
+            </Stack>
+          )}
         </Box>
       )}
 
@@ -380,22 +386,23 @@ export default function (p: {
             ...day.shifts.filter((s) => dialog.mode === 'add' || s.startedAt.getTime() !== dialog.from.getTime()),
             ...(p.openShiftFrom && !day.shifts.some((s) => s.startedAt.getTime() === p.openShiftFrom!.getTime())
               && dialog.from.getTime() !== p.openShiftFrom.getTime()
-              ? [{ startedAt: p.openShiftFrom, spentMinutes: null, about: null }] : []),
+              ? [{ startedAt: p.openShiftFrom, spentMinutes: null }] : []),
           ]}
           onClose={() => setDialog(null)}
         />
       )}
       {logging && (
         <LogTimeDialog
-          taskId={logging.id}
-          task={logging}
-          day={day.day}
-          current={() => day.entries.find((e) => e.taskId === logging.id)?.minutes ?? 0}
+          taskId={logging.task.id}
+          task={logging.task}
+          shifts={choices}
+          shiftId={logging.shiftId}
+          current={(shiftId) => day.entries.find((e) => e.taskId === logging.task.id && e.shiftId === shiftId)?.minutes ?? 0}
           onClose={() => setLogging(null)}
         />
       )}
       {scoring && p.employeeId !== undefined && (
-        <ScoreDialog employeeId={p.employeeId} day={day.day} current={day.score} onClose={() => setScoring(false)} />
+        <ScoreDialog employeeId={p.employeeId} day={day.day} shifts={scoring} onClose={() => setScoring(null)} />
       )}
     </Stack>
   );

@@ -69,7 +69,8 @@ export type Range = { days: number } | { from: string; to: string };
 
 /**
  * Metrics of a range. Workload and quality stay apart; the score is weighted
- * by the timesheet hours of the scored days.
+ * by the minutes of the scored shifts within the range. A shift past
+ * midnight counts in each of its days by its share (decision 100).
  */
 export async function stats(ids: number[], range: Range, db: Sql = sql): Promise<Map<number, Stats>> {
   if (ids.length === 0) return new Map();
@@ -82,29 +83,26 @@ export async function stats(ids: number[], range: Range, db: Sql = sql): Promise
         FROM employee WHERE id = ANY(${ids})
     ),
     -- Each person's closed shifts by day, within the range only.
-    w AS (
-      SELECT e.id AS employee_id, (w.started_at AT TIME ZONE e.time_zone)::date AS day, sum(w.spent_minutes) AS minutes
-        FROM work w JOIN e ON e.id = w.employee_id
-       WHERE w.spent_minutes IS NOT NULL
-         -- Two days of margin for time zones; the exact days are cut below.
-         AND w.started_at >= (e.since - 2)::timestamptz AND w.started_at < (e.until + 2)::timestamptz
+    wr AS (
+      SELECT d.employee_id, d.day, sum(d.minutes) AS minutes
+        FROM shift_day d JOIN e ON e.id = d.employee_id
+       WHERE d.closed AND d.day BETWEEN e.since AND e.until
        GROUP BY 1, 2
     ),
-    wr AS (SELECT w.* FROM w JOIN e ON e.id = w.employee_id WHERE w.day BETWEEN e.since AND e.until),
     -- Grouped once per person, not a subquery per person: the summary has hundreds.
     wa AS (SELECT employee_id, sum(minutes)::int AS minutes, count(*)::int AS days FROM wr GROUP BY 1),
     sa AS (
-      SELECT s."by" AS employee_id, sum(s.value)::int AS minutes
-        FROM spent_minutes s JOIN e ON e.id = s."by"
+      SELECT s."by" AS employee_id, sum(s.minutes)::int AS minutes
+        FROM spent_day s JOIN e ON e.id = s."by"
        WHERE s.day BETWEEN e.since AND e.until
        GROUP BY 1
     ),
     sc AS (
-      SELECT s.employee_id, count(*)::int AS days,
-             (sum(s.value * wr.minutes) / NULLIF(sum(wr.minutes), 0))::float8 AS weighted
-        FROM score s JOIN e ON e.id = s.employee_id
-        LEFT JOIN wr ON wr.employee_id = s.employee_id AND wr.day = s.day
-       WHERE s.day BETWEEN e.since AND e.until AND s.value IS NOT NULL
+      SELECT d.employee_id, count(DISTINCT d.day)::int AS days,
+             (sum(s.value * d.minutes) / NULLIF(sum(d.minutes), 0))::float8 AS weighted
+        FROM shift_day d JOIN e ON e.id = d.employee_id
+        JOIN score s ON s.shift_id = d.shift_id AND s.value IS NOT NULL
+       WHERE d.day BETWEEN e.since AND e.until
        GROUP BY 1
     )
     SELECT e.id AS employee_id,
@@ -130,20 +128,27 @@ async function memberDays(ids: number[], from: string, to: string): Promise<z.in
          d AS (SELECT e.id, e.time_zone, g::date AS day
                  FROM e, generate_series(${from}::date, ${to}::date, INTERVAL '1 day') g),
          w AS (
-           SELECT w.employee_id, (w.started_at AT TIME ZONE e.time_zone)::date AS day, sum(w.spent_minutes) AS minutes
-             FROM work w JOIN e ON e.id = w.employee_id
-            WHERE w.spent_minutes IS NOT NULL
+           SELECT employee_id, day, sum(minutes) AS minutes,
+                  -- The day's score: its scored shifts, weighted by their minutes in it.
+                  sum(sc.value * minutes) FILTER (WHERE sc.value IS NOT NULL)
+                    / NULLIF(sum(minutes) FILTER (WHERE sc.value IS NOT NULL), 0) AS score
+             FROM shift_day
+             LEFT JOIN score sc USING (shift_id)
+            WHERE employee_id = ANY(${ids}) AND closed AND day BETWEEN ${from}::date AND ${to}::date
             GROUP BY 1, 2
          ),
-         s AS (SELECT "by" AS employee_id, day, sum(value) AS minutes FROM spent_minutes WHERE "by" = ANY(${ids}) GROUP BY 1, 2)
+         s AS (
+           SELECT "by" AS employee_id, day, sum(minutes) AS minutes FROM spent_day
+            WHERE "by" = ANY(${ids}) AND day BETWEEN ${from}::date AND ${to}::date
+            GROUP BY 1, 2
+         )
     SELECT d.id AS employee_id, d.day::text, COALESCE(w.minutes, 0)::int AS work_minutes,
-           COALESCE(s.minutes, 0)::int AS spent_minutes, sc.value AS score,
+           COALESCE(s.minutes, 0)::int AS spent_minutes, round(w.score)::int AS score,
            b.minutes AS backlog_minutes
       FROM d
       JOIN backlog_by_day(${ids}, ${from}::date, ${to}::date) b ON b.employee_id = d.id AND b.day = d.day
       LEFT JOIN w ON w.employee_id = d.id AND w.day = d.day
       LEFT JOIN s ON s.employee_id = d.id AND s.day = d.day
-      LEFT JOIN score sc ON sc.employee_id = d.id AND sc.day = d.day
      ORDER BY d.id, d.day
   `);
 }
@@ -151,8 +156,9 @@ async function memberDays(ids: number[], from: string, to: string): Promise<z.in
 /**
  * The delays of each day of a range, for the charts under My team: the
  * median lateness of the day's timesheet, of replies to the day's mentions
- * (working time only), and of the person's scores of their reports for
- * that day. The same measures as the summary's, day by day.
+ * (working time only), and of the person's scores of their reports'
+ * shifts begun that day, from each shift's end. The same measures as the
+ * summary's, day by day.
  */
 async function delaysByDay(ids: number[], from: string, to: string): Promise<z.infer<typeof DelayRow>[]> {
   return DelayRow.array().parse(await sql`
@@ -178,11 +184,12 @@ async function delaysByDay(ids: number[], from: string, to: string): Promise<z.i
             GROUP BY 1, 2
          ),
          sw AS (
-           SELECT s."by" AS employee_id, s.day,
+           SELECT s."by" AS employee_id, (w.started_at AT TIME ZONE r.time_zone)::date AS day,
                   percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM
-                    s.added_at - ((s.day + 1)::timestamp AT TIME ZONE r.time_zone)) / 60) AS minutes
-             FROM score s JOIN employee r ON r.id = s.employee_id
-            WHERE s."by" = ANY(${ids}) AND s.day BETWEEN ${from}::date AND ${to}::date
+                    s.added_at - (w.started_at + w.spent_minutes * INTERVAL '1 minute')) / 60) AS minutes
+             FROM score s JOIN work w ON w.id = s.shift_id JOIN employee r ON r.id = w.employee_id
+            WHERE s."by" = ANY(${ids})
+              AND (w.started_at AT TIME ZONE r.time_zone)::date BETWEEN ${from}::date AND ${to}::date
             GROUP BY 1, 2
          )
     SELECT 'record' AS kind, employee_id, day::text, minutes::float8 FROM rec WHERE day BETWEEN ${from}::date AND ${to}::date
@@ -218,20 +225,12 @@ export async function summary(viewerId: number, from: string, to: string): Promi
   // before the deadline — in time; after it, overdue first — late.
   const extra = new Map(ExtraRow.array().parse(await sql`
     WITH e AS (SELECT id, time_zone, local_today(id) AS today FROM employee WHERE id = ANY(${ids})),
-         -- Days of the range with shifts, all closed and before today, not scored: grouped once.
-         days AS (
-           SELECT w.employee_id, (w.started_at AT TIME ZONE e.time_zone)::date AS day,
-                  bool_and(w.spent_minutes IS NOT NULL) AS closed
-             FROM work w JOIN e ON e.id = w.employee_id
-            WHERE w.started_at >= (${from}::date - 2)::timestamptz AND w.started_at < (${to}::date + 2)::timestamptz
-            GROUP BY 1, 2
-         ),
+         -- Days of the range before today with a closed shift not scored (decision 100).
          unscored AS (
-           SELECT d.employee_id, count(*)::int AS n
-             FROM days d JOIN e ON e.id = d.employee_id
+           SELECT d.employee_id, count(DISTINCT d.day)::int AS n
+             FROM shift_day d JOIN e ON e.id = d.employee_id
             WHERE d.closed AND d.day < e.today AND d.day BETWEEN ${from}::date AND ${to}::date
-              AND NOT EXISTS (SELECT 1 FROM score s
-                               WHERE s.employee_id = d.employee_id AND s.day = d.day AND s.value IS NOT NULL)
+              AND NOT EXISTS (SELECT 1 FROM score s WHERE s.shift_id = d.shift_id AND s.value IS NOT NULL)
             GROUP BY 1
          ),
          asked AS (
@@ -276,9 +275,10 @@ export async function summary(viewerId: number, from: string, to: string): Promi
                AND EXISTS (SELECT 1 FROM work w WHERE w.employee_id = e.id))::float8 AS reply_minutes,
            (SELECT count(*)::int FROM replies r WHERE r.employee_id = e.id AND r.replied_at IS NULL) AS unanswered,
            (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM
-                     s.added_at - ((s.day + 1)::timestamp AT TIME ZONE r.time_zone)) / 60)
-              FROM score s JOIN employee r ON r.id = s.employee_id
-             WHERE s."by" = e.id AND s.day BETWEEN ${from}::date AND ${to}::date)::float8 AS score_wait_minutes,
+                     s.added_at - (w.started_at + w.spent_minutes * INTERVAL '1 minute')) / 60)
+              FROM score s JOIN work w ON w.id = s.shift_id JOIN employee r ON r.id = w.employee_id
+             WHERE s."by" = e.id
+               AND (w.started_at AT TIME ZONE r.time_zone)::date BETWEEN ${from}::date AND ${to}::date)::float8 AS score_wait_minutes,
            backlog_minutes(e.id, NOW()) AS backlog_minutes,
            backlog_minutes(e.id, LEAST(NOW(), (${to}::date + 1)::timestamp AT TIME ZONE e.time_zone))
              - backlog_minutes(e.id, ${from}::date::timestamp AT TIME ZONE e.time_zone) AS backlog_growth_minutes,
@@ -315,60 +315,73 @@ export async function history(viewerId: number, employeeId: number, page: number
 }
 
 const ScoreRow = z.object({ value: z.number().nullable(), reason: z.string().nullable() });
+const ShiftOf = z.object({ id: z.number(), day: z.string(), startedAt: z.date(), minutes: z.number().nullable() });
 const Now = z.object({ at: z.date() });
 
+/** The report's shifts by id, with the day each began; not_found if one is not theirs. */
+async function shiftsOf(db: Sql, employeeId: number, shiftIds: number[]): Promise<z.infer<typeof ShiftOf>[]> {
+  const rows = ShiftOf.array().parse(await db`
+    SELECT w.id, (w.started_at AT TIME ZONE e.time_zone)::date::text AS day, w.started_at, w.spent_minutes AS minutes
+      FROM work w JOIN employee e ON e.id = w.employee_id
+     WHERE w.id = ANY(${shiftIds}) AND w.employee_id = ${employeeId}
+     ORDER BY w.started_at
+  `);
+  if (rows.length !== new Set(shiftIds).size) throw new AppError('not_found');
+  return rows;
+}
+
 /**
- * The direct manager scores a past day or corrects the score (the trigger
- * checks the manager, the day and the timesheet). Every version goes to the
- * employee with its time, reason and the previous value: their mail keeps
- * the history, the table only the current value. An unchanged score is a no-op.
+ * The direct manager scores closed shifts of a report — a day's at once —
+ * or corrects their scores (decision 100; the trigger checks the manager
+ * and the shift). Every version goes to the employee with its time, reason
+ * and the previous value, one email per shift: their mail keeps the
+ * history, the table only the current value. An unchanged score is a no-op.
  */
 export async function score(viewerId: number, input: ScoreInput): Promise<void> {
   const reason = input.reason || null;
   await sql.begin(async (tx) => {
     const db = tx as unknown as Sql;
-    const [previous] = ScoreRow.array().parse(await db`
-      SELECT value, reason FROM score WHERE employee_id = ${input.employeeId} AND day = ${input.day} FOR UPDATE
-    `);
-    if (previous && previous.value === input.value && previous.reason === reason) return;
-    if (previous) {
-      await db`
-        UPDATE score SET value = ${input.value}, reason = ${reason}, "by" = ${viewerId}
-         WHERE employee_id = ${input.employeeId} AND day = ${input.day}
-      `;
-    } else {
-      await db`
-        INSERT INTO score (employee_id, day, "by", value, reason)
-        VALUES (${input.employeeId}, ${input.day}, ${viewerId}, ${input.value}, ${reason})
-      `;
+    for (const shift of await shiftsOf(db, input.employeeId, input.shiftIds)) {
+      const [previous] = ScoreRow.array().parse(await db`
+        SELECT value, reason FROM score WHERE shift_id = ${shift.id} FOR UPDATE
+      `);
+      if (previous && previous.value === input.value && previous.reason === reason) continue;
+      if (previous) {
+        await db`UPDATE score SET value = ${input.value}, reason = ${reason}, "by" = ${viewerId} WHERE shift_id = ${shift.id}`;
+      } else {
+        await db`INSERT INTO score (shift_id, "by", value, reason) VALUES (${shift.id}, ${viewerId}, ${input.value}, ${reason})`;
+      }
+      await notifyScore(db, viewerId, input.employeeId, shift, input.value, reason, previous ?? null);
     }
-    await notifyScore(db, viewerId, input.employeeId, input.day, input.value, reason, previous ?? null);
   });
 }
 
 async function notifyScore(
-  db: Sql, by: number, employeeId: number, day: string, value: number | null, reason: string | null,
+  db: Sql, by: number, employeeId: number, shift: z.infer<typeof ShiftOf>, value: number | null, reason: string | null,
   previous: { value: number | null; reason: string | null } | null,
 ): Promise<void> {
   const [now] = Now.array().parse(await db`SELECT NOW() AS at`);
   await db`SELECT notify(${employeeId}, NULL, ${db.json({
-    kind: 'score', by, day, value, reason, at: now!.at.toISOString(), previous,
+    kind: 'score', by, day: shift.day, startedAt: shift.startedAt.toISOString(), minutes: shift.minutes ?? 0,
+    value, reason, at: now!.at.toISOString(), previous,
   })})`;
 }
 
 /**
- * The direct manager withdraws a score so the employee can correct the
- * day's timesheet; the reason stays and shows up when the day is scored
- * again. Mailed like every version. A day without a standing score is a no-op.
+ * The direct manager withdraws a shift's score so the employee can correct
+ * the shift and its time entries; the reason stays and shows up when it is
+ * scored again. Mailed like every version. A shift without a standing
+ * score is a no-op.
  */
-export async function unscore(viewerId: number, employeeId: number, day: string): Promise<void> {
+export async function unscore(viewerId: number, employeeId: number, shiftId: number): Promise<void> {
   await sql.begin(async (tx) => {
     const db = tx as unknown as Sql;
+    const [shift] = await shiftsOf(db, employeeId, [shiftId]);
     const [previous] = ScoreRow.array().parse(await db`
-      SELECT value, reason FROM score WHERE employee_id = ${employeeId} AND day = ${day} FOR UPDATE
+      SELECT value, reason FROM score WHERE shift_id = ${shiftId} FOR UPDATE
     `);
     if (!previous || previous.value === null) return;
-    await db`UPDATE score SET value = NULL, "by" = ${viewerId} WHERE employee_id = ${employeeId} AND day = ${day}`;
-    await notifyScore(db, viewerId, employeeId, day, null, previous.reason, previous);
+    await db`UPDATE score SET value = NULL, "by" = ${viewerId} WHERE shift_id = ${shiftId}`;
+    await notifyScore(db, viewerId, employeeId, shift!, null, previous.reason, previous);
   });
 }

@@ -101,15 +101,18 @@ test.describe('My day', () => {
     await expect(page.getByText('Проверка e2e')).toBeVisible();
   });
 
-  test('history: time is logged to a task I opened, right from My day', async ({ page }) => {
+  test('history: time is logged to a task I opened, right from My day, in a shift', async ({ page }) => {
     const history = page.locator('.MuiPaper-root').filter({ has: page.getByRole('heading', { name: 'Табель' }) });
     const entries = history.getByRole('button', { name: 'Удалить списание' });
-    // Opened and nothing logged: folded under one line.
-    await history.getByRole('button', { name: /Открывались без списания/ }).first().click();
+    // The last day has no shift: the opened tasks wait for one, and the day offers it (decision 100).
+    const opened = history.getByRole('button', { name: /Открывались без списания/ });
+    await opened.last().click();
+    await expect(history.getByText(/Время списывается в смену/)).toBeVisible();
+    await history.getByRole('button', { name: 'Подтвердить' }).click();
+    await expect(history.getByText(/Время списывается в смену/)).toHaveCount(0);
     await page.waitForLoadState('networkidle');
     const before = await entries.count();
-    const opened = history.getByRole('button', { name: /Открывались без списания/ }).first().locator('xpath=..');
-    await opened.getByRole('button', { name: 'Списать время' }).first().click();
+    await opened.last().locator('xpath=..').getByRole('button', { name: 'Списать время' }).first().click();
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: '30м' }).click();
     await dialog.getByRole('button', { name: 'Сохранить' }).click();
@@ -125,9 +128,14 @@ test.describe('My day', () => {
     const before = await edits.count();
     await history.getByRole('button', { name: 'Добавить смену' }).nth(1).click();
     const dialog = page.getByRole('dialog');
-    // A shift is of one day: only its times are picked.
+    // Only the times are picked; an end before the start is the next day's (decision 100).
     await expect(dialog.getByLabel('Начало')).toHaveAttribute('type', 'time');
-    await expect(dialog.getByText(/в пределах одного дня/)).toBeVisible();
+    const [from, to] = [await dialog.getByLabel('Начало').inputValue(), await dialog.getByLabel('Конец').inputValue()];
+    await dialog.getByLabel('Начало').fill('22:00');
+    await dialog.getByLabel('Конец').fill('02:00');
+    await expect(dialog.getByText(/4ч · заканчивается на следующий день/)).toBeVisible();
+    await dialog.getByLabel('Начало').fill(from);
+    await dialog.getByLabel('Конец').fill(to);
     await dialog.getByLabel('Что сделано').fill('Забытая смена');
     await dialog.getByRole('button', { name: 'Сохранить' }).click();
     await expect(history.getByText('Забытая смена')).toBeVisible();
@@ -136,7 +144,7 @@ test.describe('My day', () => {
     // A shift over the whole day is in the way of that one: named, and not saved.
     await history.getByRole('button', { name: 'Добавить смену' }).nth(1).click();
     await dialog.getByLabel('Начало').fill('00:00');
-    await dialog.getByLabel('Конец').fill('00:00');
+    await dialog.getByLabel('Конец').fill('23:59');
     await expect(dialog.getByRole('alert')).toContainText(/Смена пересекается с вашей сменой \d\d:\d\d–\d\d:\d\d/);
     await expect(dialog.getByRole('button', { name: 'Сохранить' })).toBeDisabled();
     await dialog.getByRole('button', { name: 'Отмена' }).click();

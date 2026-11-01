@@ -102,8 +102,10 @@ function rawEvents(taskId: number, filter: FeedFilter) {
       FROM task_mention tm JOIN comment c ON c.task_id = tm.task_id AND c.id = tm.comment_id
      WHERE tm.value = ${taskId} AND ${all}
     UNION ALL
-    SELECT 'spent', s.added_at, NULL, NULL, NULL, s."by", s.value, s.day::text, NULL, NULL, NULL, NULL
-      FROM spent_minutes s
+    -- An entry is shown by the day its shift began.
+    SELECT 'spent', s.added_at, NULL, NULL, NULL, s."by", s.value, (w.started_at AT TIME ZONE e.time_zone)::date::text,
+           NULL, NULL, NULL, NULL
+      FROM spent_minutes s JOIN work w ON w.id = s.shift_id JOIN employee e ON e.id = w.employee_id
      WHERE s.task_id = ${taskId} AND ${all}
     UNION ALL
     SELECT 'plan', e.entered_at, NULL, NULL, NULL, e."by", e.value, NULL, NULL, e.about, NULL, NULL

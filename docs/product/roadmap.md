@@ -37,17 +37,6 @@ In this order after stage 6 (S — a day, M — a few days, L — a week or more
 
 Nothing approved is waiting.
 
-## Proposals
-
-- **Shifts across midnight; scores and time entries by shift (L).** A
-  shift may run past midnight and is shown in both days; the manager
-  scores shifts, time entries belong to a shift, and the day is only
-  how they are shown. Reverses decision 72, changes decision 6 (time
-  is logged only within a shift). Waits for the answers on the limit of
-  entries per shift, scoring several shifts of a day at once, the
-  migration of entries on days without a shift, and the time zone the
-  times are shown in.
-
 ## Decided against
 
 - More tabs — reminders, a company org chart, "all tasks" (decision 31).

@@ -225,9 +225,9 @@ export async function experts(viewerId: number, names: string[]): Promise<Expert
     w AS (
       SELECT s."by" AS employee_id, k.id AS task_id,
              (SELECT count(*) FROM unnest(k.tag_ids) x WHERE x IN (SELECT id FROM t)) AS shared
-        FROM spent_minutes s JOIN task k ON k.id = s.task_id
+        FROM spent_minutes s JOIN task k ON k.id = s.task_id JOIN work sw ON sw.id = s.shift_id
        WHERE k.tag_ids && (SELECT array_agg(id) FROM t)
-         AND s.day >= CURRENT_DATE - 365
+         AND sw.started_at >= NOW() - INTERVAL '365 days'
        GROUP BY s."by", k.id
     )
     SELECT w.employee_id, count(*)::int AS tasks

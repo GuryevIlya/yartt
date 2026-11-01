@@ -13,17 +13,19 @@ export const MAX_RANGE_DAYS = 366;
 /**
  * Workload and quality side by side, never mixed (decision 6): the
  * timesheet hours, the time logged to tasks, and the score weighted by
- * the hours of the scored days.
+ * the minutes of the scored shifts; a shift past midnight counts in each
+ * day by its share (decision 100).
  */
 export const Stats = z.object({
-  /** Closed shifts in the period. */
+  /** Minutes of closed shifts within the period. */
   workMinutes: z.number().int(),
   /** Days with a closed shift. */
   workDays: z.number().int(),
   /** Time logged to tasks. */
   spentMinutes: z.number().int(),
+  /** Days with a scored shift. */
   scoredDays: z.number().int(),
-  /** SUM(score × hours) / SUM(hours) over the scored days; NULL — nothing scored. */
+  /** SUM(score × minutes) / SUM(minutes) over the scored shifts within the period; NULL — nothing scored. */
   weightedScore: z.number().nullable(),
 });
 export type Stats = z.infer<typeof Stats>;
@@ -59,7 +61,7 @@ export const Member = z.object({
   /** The signed-in employee themselves, on top: their own report. */
   self: z.boolean(),
   stats: Stats,
-  /** Past days with a closed timesheet and no score — what the direct manager may score. */
+  /** Past days with a closed shift not scored — what the direct manager may score (decision 100). */
   unscoredDays: z.number().int(),
   /** Their tasks closed in the range by their deadline (decision 93: only the owner closes a task). */
   finished: z.number().int(),
@@ -125,14 +127,15 @@ export type PeriodStats = z.infer<typeof PeriodStats>;
 export const EmployeeHistoryInput = HistoryInput.extend(EmployeeInput.shape);
 export type EmployeeHistoryInput = z.infer<typeof EmployeeHistoryInput>;
 
+/** The same score for one or more shifts of a report, a day's at once (decision 100). */
 export const ScoreInput = z.object({
   employeeId: Id,
-  day: Day,
+  shiftIds: Id.array().min(1).max(50),
   value: z.number().int().min(0).max(100),
   reason: z.string().trim().max(2000).nullable(),
 });
 export type ScoreInput = z.infer<typeof ScoreInput>;
 
-/** A score withdrawn: the day's timesheet can be corrected; the reason stays. */
-export const UnscoreInput = z.object({ employeeId: Id, day: Day });
+/** A score withdrawn: the shift and its time entries can be corrected; the reason stays. */
+export const UnscoreInput = z.object({ employeeId: Id, shiftId: Id });
 export type UnscoreInput = z.infer<typeof UnscoreInput>;

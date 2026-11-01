@@ -169,13 +169,14 @@ export const helpEn: Help = {
           steps: [
             '"Start the shift" and "Finish" mark this moment. Add a forgotten shift with the clock icon of a day. If you worked '
               + 'but wrote no shift, yartt suggests one itself: "Looks like a shift".',
-            'A shift lies within one day and ends by 00:00: work after midnight is a shift of the next day. Shifts do not overlap; '
-              + 'when another is in the way, yartt names its times.',
-            'A task gets one entry a day. "Log time" shows what is there: a new value replaces it, 0 removes it. '
-              + 'A day takes at most 24 hours, all tasks together.',
+            'A shift may run past midnight. Then it shows in both days, and its hours are split between them by how many fell in '
+              + 'each. A shift never lasts longer than a day. Shifts do not overlap; when another is in the way, yartt names its times.',
+            'Time on a task is logged in a shift, one entry a task and shift. "Log time" shows what is there: a new value replaces '
+              + 'it, 0 removes it. No more can go into a shift than it lasts, so write the shift first.',
             '"My plan" is how much more you mean to spend on a task and, if you like, on what. When the plan does not fit your time '
               + 'before the deadline, the task is "At risk".',
-            'A day can be fixed until your manager scores it. A scored day is fixed only once the score is withdrawn.',
+            'A shift and the time in it can be corrected until your manager scores it. To correct a scored shift, ask your manager '
+              + 'to withdraw the score.',
             'All your days are in History.',
           ],
         },
@@ -490,7 +491,7 @@ export const helpEn: Help = {
         {
           q: 'Why does an employee choose their own manager?',
           a: 'Choosing a manager opens to them what one sees oneself: one\'s own tasks, the tasks one takes part in and the tasks of '
-            + 'one\'s people. The manager gets nothing beyond that, except the right to score one\'s days and to dismiss one. So the '
+            + 'one\'s people. The manager gets nothing beyond that, except the right to score one\'s shifts and to dismiss one. So the '
             + 'choice is for whoever opens their data. If managers took people themselves, there would have to be rules on who may '
             + 'take whom, and a company structure someone keeps and checks. That is an administrator\'s job, and yartt has no '
             + 'administrators. The chosen manager is notified, so no swap goes unseen.',
@@ -498,7 +499,7 @@ export const helpEn: Help = {
         {
           q: "How do directors see each other's tasks?",
           a: 'They pick each other as managers in the profile: managers may form a ring. Then each sees everything to do with the '
-            + 'others, as a manager does. The rights stay with the direct manager: in a ring each may score the days of, and '
+            + 'others, as a manager does. The rights stay with the direct manager: in a ring each may score the shifts of, and '
             + 'dismiss, whoever picked them as manager.',
         },
         {
@@ -515,9 +516,10 @@ export const helpEn: Help = {
       title: 'Time and scores',
       items: [
         {
-          q: 'Do I have to keep the timesheet and score days?',
+          q: 'Do I have to keep the timesheet and score shifts?',
           a: 'No. The timesheet, entries, plans and scores are optional. Without them you keep tasks with tags and access by '
-            + 'invitation; time and scores come in when you want transparency.',
+            + 'invitation; time and scores come in when you want transparency. Only, time on tasks is logged in a shift: whoever '
+            + 'logs time keeps the timesheet too.',
         },
         {
           q: 'Why do a task\'s hours add up, while people are not compared by hours?',
@@ -529,15 +531,16 @@ export const helpEn: Help = {
             + 'time, scores and counts.',
         },
         {
-          q: 'Why is time on a task one entry a day?',
-          a: 'The timesheet is about the day: how much went to the task today. One entry keeps time from being counted twice by '
-            + 'accident, and a correction is replacing the value.',
+          q: 'Why is time logged in a shift?',
+          a: 'A shift tells when a person worked, and an entry tells what that time went to. An entry without a shift can be '
+            + 'neither checked nor scored, so each belongs to its shift and cannot exceed it. A task has one entry a shift: time '
+            + 'is not counted twice by accident, and a correction is replacing the value.',
         },
         {
           q: 'Why can time be logged for past days?',
           a: 'A task is often written down after the work began, and a timesheet is filled in at the end of a day or a week. A ban '
             + 'would hit the honest. Late filling shows anyway: an entry has its date, My team shows how late the timesheet is '
-            + 'written, and a scored day can no longer change.',
+            + 'written, and a scored shift can no longer change.',
         },
         {
           q: 'Why does an hour budget forbid nothing?',
@@ -546,12 +549,13 @@ export const helpEn: Help = {
             + 'stop being true. What to spend hours on beyond a budget is for people to decide, not a counter.',
         },
         {
-          q: 'Why is the day scored, and by what?',
+          q: 'Why are shifts scored, and by what?',
           a: 'A task takes months and ten people: it is unclear whom to score and for what. A task\'s result depends on plans, '
             + 'colleagues and chance; the day\'s decisions depend on the person. So decisions are scored: were the priorities right, '
             + 'was help asked for in time, was nothing needless taken on. The manager writes a reason with every score, so scores '
             + 'do not slide into liking and disliking. A task may fail while the scores are good: then the plans are the problem, '
-            + 'not the person.',
+            + 'not the person. A manager usually gives all the shifts of a day one score at once, and scores them apart when '
+            + 'the day went differently.',
         },
         {
           q: 'Why no metrics of estimate accuracy, deadline moves or priorities?',

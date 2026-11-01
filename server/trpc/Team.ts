@@ -40,14 +40,13 @@ export default router({
     .query(({ input, ctx }) => Team.history(ctx.employeeId, input.employeeId, input.page, input.size)),
 
   /**
-   * The direct manager scores a past day of a report, 0–100, with an
-   * optional reason, or corrects the score. Every version is mailed to the
-   * report with its time and the previous value. A standing score freezes
-   * the day's timesheet and time entries; scoring a withdrawn day again
-   * checks the day anew.
+   * The direct manager scores closed shifts of a report — a day's at
+   * once — 0–100, with an optional reason, or corrects their scores
+   * (decision 100). Every version is mailed to the report with its time and
+   * the previous value, one email per shift. A standing score freezes the
+   * shift and its time entries; scoring a withdrawn one again checks it anew.
+   * @throws not_found — a shift is not the report's.
    * @throws not_manager
-   * @throws score_day_not_past
-   * @throws no_work_for_day
    * @throws shift_open
    */
   score: authedProcedure
@@ -56,13 +55,14 @@ export default router({
     .mutation(({ input, ctx }) => Team.score(ctx.employeeId, input)),
 
   /**
-   * The direct manager withdraws a score, keeping its reason: the report
-   * may correct that day's timesheet and time entries, then the day is
-   * scored again. Mailed to the report like every version.
+   * The direct manager withdraws a shift's score, keeping its reason: the
+   * report may correct the shift and its time entries, then it is scored
+   * again. Mailed to the report like every version.
+   * @throws not_found — not the report's shift.
    * @throws not_manager
    */
   unscore: authedProcedure
     .input(UnscoreInput)
     .output(z.void())
-    .mutation(({ input, ctx }) => Team.unscore(ctx.employeeId, input.employeeId, input.day)),
+    .mutation(({ input, ctx }) => Team.unscore(ctx.employeeId, input.employeeId, input.shiftId)),
 });

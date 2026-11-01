@@ -314,20 +314,26 @@ const DayRow = z.object({ day: z.string() });
 const TodayRow = z.object({ today: z.string() });
 const ShiftRow = z.object({
   day: z.string(),
+  id: z.number(),
   startedAt: z.date(),
   spentMinutes: z.number().nullable(),
   about: z.string().nullable(),
+  scoreValue: z.number().nullable(),
+  scoreReason: z.string().nullable(),
+  scored: z.boolean(),
 });
-const EntryRow = z.object({ day: z.string(), id: z.number(), taskId: z.number(), minutes: z.number(), updatedAt: z.date() });
+const EntryRow = z.object({ id: z.number(), shiftId: z.number(), taskId: z.number(), minutes: z.number(), updatedAt: z.date() });
+const TotalRow = z.object({ day: z.string(), worked: z.number(), logged: z.number() });
 const VisitRow = z.object({ day: z.string(), taskId: z.number().nullable(), at: z.date() });
 const ActivityRow = z.object({ day: z.string(), first: z.date(), last: z.date() });
 const ActionRow = z.object({ day: z.string(), kind: z.enum(['comment', 'time']), taskId: z.number(), at: z.date() });
-const ScoreRow = z.object({ day: z.string(), value: z.number().nullable(), reason: z.string().nullable() });
 
 /**
- * My days, newest first, `size` days with any activity per page: shifts,
- * time logged to tasks, visits, what was done and the score. Today is
- * always there — it is where a shift is started. Days are in my time zone.
+ * My days, newest first, `size` days with any activity per page: shifts
+ * with their scores — a shift past midnight in both its days (decision
+ * 100) — time logged in them, visits, what was done, and the day's worked
+ * and logged minutes by the shifts' shares. Today is always there — it is
+ * where a shift is started. Days are in my time zone.
  */
 export async function history(me: number, page: number, size: number): Promise<History> {
   const [row] = TodayRow.array().parse(await sql`SELECT local_today(${me})::text AS today`);
@@ -336,8 +342,7 @@ export async function history(me: number, page: number, size: number): Promise<H
 
   const all = sql`
     SELECT ${today}::date AS day
-    UNION SELECT (started_at AT TIME ZONE ${tz})::date FROM work WHERE employee_id = ${me}
-    UNION SELECT day FROM spent_minutes WHERE "by" = ${me}
+    UNION SELECT day FROM shift_day WHERE employee_id = ${me}
     UNION SELECT (at AT TIME ZONE ${tz})::date FROM visit WHERE employee_id = ${me}
     UNION SELECT (created_at AT TIME ZONE ${tz})::date FROM comment WHERE created_by = ${me}
   `;
@@ -353,16 +358,27 @@ export async function history(me: number, page: number, size: number): Promise<H
   `);
 
   const shifts = ShiftRow.array().parse(await sql`
-    SELECT (started_at AT TIME ZONE ${tz})::date::text AS day, started_at, spent_minutes, about
-      FROM work
-     WHERE employee_id = ${me} AND (started_at AT TIME ZONE ${tz})::date = ANY(${days}::date[])
-     ORDER BY started_at
+    SELECT d.day::text, w.id, w.started_at, w.spent_minutes, w.about,
+           sc.value AS score_value, sc.reason AS score_reason, sc.shift_id IS NOT NULL AS scored
+      FROM shift_day d
+      JOIN work w ON w.id = d.shift_id
+      LEFT JOIN score sc ON sc.shift_id = w.id
+     WHERE d.employee_id = ${me} AND d.day = ANY(${days}::date[])
+     ORDER BY w.started_at
   `);
   const entries = EntryRow.array().parse(await sql`
-    SELECT day::text, id, task_id, value AS minutes, updated_at
+    SELECT id, shift_id, task_id, value AS minutes, updated_at
       FROM spent_minutes
-     WHERE "by" = ${me} AND day = ANY(${days}::date[])
+     WHERE shift_id = ANY(${[...new Set(shifts.map((s) => s.id))]}::int[])
      ORDER BY id
+  `);
+  const totals = TotalRow.array().parse(await sql`
+    SELECT d.day::text,
+           COALESCE(sum(d.minutes) FILTER (WHERE d.closed), 0)::float8 AS worked,
+           COALESCE((SELECT sum(s.minutes) FROM spent_day s WHERE s."by" = ${me} AND s.day = d.day), 0)::float8 AS logged
+      FROM shift_day d
+     WHERE d.employee_id = ${me} AND d.day = ANY(${days}::date[])
+     GROUP BY d.day
   `);
   const visits = VisitRow.array().parse(await sql`
     SELECT (at AT TIME ZONE ${tz})::date::text AS day, task_id, at
@@ -392,22 +408,23 @@ export async function history(me: number, page: number, size: number): Promise<H
      WHERE day = ANY(${days}::date[])
      ORDER BY at
   `);
-  const scores = ScoreRow.array().parse(await sql`
-    SELECT day::text, value, reason FROM score WHERE employee_id = ${me} AND day = ANY(${days}::date[])
-  `);
-
   const result: DayHistory[] = days.map((day) => {
     const a = activity.find((r) => r.day === day);
-    const s = scores.find((r) => r.day === day);
+    const total = totals.find((r) => r.day === day);
+    const ofDay = shifts.filter((r) => r.day === day);
     return {
       day,
-      shifts: shifts.filter((r) => r.day === day).map(({ day: _, ...shift }) => shift),
-      entries: entries.filter((r) => r.day === day).map(({ day: _, ...entry }) => entry),
+      shifts: ofDay.map((r) => ({
+        id: r.id, startedAt: r.startedAt, spentMinutes: r.spentMinutes, about: r.about,
+        score: r.scored ? { value: r.scoreValue, reason: r.scoreReason } : null,
+      })),
+      entries: entries.filter((e) => ofDay.some((s) => s.id === e.shiftId)),
       visits: visits.filter((r) => r.day === day).map(({ day: _, ...visit }) => visit),
       actions: actions.filter((r) => r.day === day).map(({ day: _, ...action }) => action),
       firstActivity: a?.first ?? null,
       lastActivity: a?.last ?? null,
-      score: s ? { value: s.value, reason: s.reason } : null,
+      workedMinutes: Math.round(total?.worked ?? 0),
+      loggedMinutes: Math.round(total?.logged ?? 0),
     };
   });
 

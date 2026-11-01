@@ -96,7 +96,11 @@ export async function renderMail(message: Message): Promise<{ subject: string; t
 function renderScore(message: Message, p: Extract<NotificationPayload, { kind: 'score' }>, by: string, forName: string) {
   const { locale, timeZone } = message.to;
   const t = TRANSLATIONS[locale].mail.score;
-  const day = new Date(`${p.day}T12:00:00Z`).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  // A shift, in the recipient's time zone (decision 100); before 0.6 a day was scored.
+  const day = p.startedAt === undefined
+    ? new Date(`${p.day}T12:00:00Z`).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+    : `${new Date(p.startedAt).toLocaleString(locale, { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone })}`
+      + `–${new Date(new Date(p.startedAt).getTime() + (p.minutes ?? 0) * 60_000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone })}`;
   const at = new Date(p.at).toLocaleString(locale, { dateStyle: 'long', timeStyle: 'short', timeZone });
   const params = { by, day, value: String(p.value ?? ''), previous: String(p.previous?.value ?? '') };
   // A score given again after a withdrawal reads as a first one.

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import { sql } from '../server/pg.ts';
 import { KEYBOARD_KEYS, KEYBOARDS, retype } from '../shared/keyboards.ts';
-import { client, createEmployee } from './helpers.ts';
+import { client, createEmployee, dayAgo, logTime } from './helpers.ts';
 
 async function tag(name: string): Promise<number> {
   const [row] = await sql<{ id: number }[]>`INSERT INTO tag (name) VALUES (${name}) RETURNING id`;
@@ -187,13 +187,15 @@ describe('tag summary', () => {
     const onlyA = await devApi.Task.create({ tags: [a, `phrase ${randomUUID().slice(0, 6)}`] });
     const hidden = await (await client((await createEmployee()).id)).Task.create({ tags: [a, `phrase ${randomUUID().slice(0, 6)}`] });
     const today = (await devApi.MyDay.history({ page: 1 })).today;
-    await devApi.Time.set({ taskId: both, day: today, minutes: 90 });
+    // Logged yesterday, in a shift (decision 100): the period starts yesterday.
+    const yesterday = await dayAgo(dev.id, 1);
+    await logTime(dev.id, both, yesterday, 90);
     await devApi.Comment.create({ taskId: onlyA, html: '<p>Done</p>', replyToId: null, files: [], mentionIds: [], taskIds: [] });
     await devApi.Task.close({ id: onlyA });
     expect(hidden).toBeGreaterThan(0);
 
     const ids = (await sql<{ id: number }[]>`SELECT id FROM tag WHERE name IN (${a}, ${b}) ORDER BY name`).map((r) => r.id);
-    const summary = await api.Tags.stats({ since: today, tagIds: ids, page: 1 });
+    const summary = await api.Tags.stats({ since: yesterday, tagIds: ids, page: 1 });
     const line = (kind: string, name?: string) => summary.rows.find((r) => r.group.kind === kind && (!name || r.tags[0]!.name === name))!;
     // The hidden task of a stranger is not counted: only what I see (dev's tasks, through the manager chain).
     // The dev logged 90 minutes under a (and under b): the line's hours are everyone's together.
@@ -205,24 +207,24 @@ describe('tag summary', () => {
     expect(line('any')).toMatchObject({ open: 1, finished: 1 });
 
     // Unpicked: rubrics only — the phrases of one task are not lines.
-    const all = await api.Tags.stats({ since: today, tagIds: [], page: 1 });
+    const all = await api.Tags.stats({ since: yesterday, tagIds: [], page: 1 });
     // Any column sorts, the largest (the latest) first.
     for (const sort of ['open', 'closed', 'comments', 'hours', 'last'] as const) {
-      const sorted = await api.Tags.stats({ since: today, tagIds: ids, page: 1, sort });
+      const sorted = await api.Tags.stats({ since: yesterday, tagIds: ids, page: 1, sort });
       expect(sorted.rows.filter((r) => r.group.kind === 'tag')).toHaveLength(2);
     }
-    const byClosed = await api.Tags.stats({ since: today, tagIds: ids, page: 1, sort: 'closed' });
+    const byClosed = await api.Tags.stats({ since: yesterday, tagIds: ids, page: 1, sort: 'closed' });
     expect(byClosed.rows[0]!.tags[0]!.name).toBe(a);
     expect(all.rows.every((r) => !r.tags[0]!.name.startsWith('phrase'))).toBe(true);
 
     await devApi.Time.setLeft({ taskId: both, minutes: 120 });
-    const detail = await api.Tags.detail({ since: today, group: { kind: 'tag', tagId: ids[0]! } });
-    expect(detail.days).toEqual([today]);
+    const detail = await api.Tags.detail({ since: yesterday, group: { kind: 'tag', tagId: ids[0]! } });
+    expect(detail.days).toEqual([yesterday, today]);
     // Each person's time and plan, each with its detail: the comments of the day, the tasks the plan covers.
     expect(detail.persons).toEqual([{
       employeeId: dev.id, minutes: 90, share: 1, leftMinutes: 120, comments: 1,
-      daily: [90], dailyTasks: [1], dailyComments: [1], planned: [120], plannedTasks: [1],
+      daily: [90, 0], dailyTasks: [1, 0], dailyComments: [0, 1], planned: [0, 120], plannedTasks: [0, 1],
     }]);
-    expect((await api.Tags.stats({ since: today, tagIds: ids, page: 1 })).rows[0]).toMatchObject({ planners: 1, leftMinutes: 120 });
+    expect((await api.Tags.stats({ since: yesterday, tagIds: ids, page: 1 })).rows[0]).toMatchObject({ planners: 1, leftMinutes: 120 });
   });
 });

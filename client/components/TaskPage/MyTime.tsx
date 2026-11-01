@@ -15,8 +15,9 @@ import { LimitFigures } from '../MyDayPage/TagLimits.tsx';
 
 /**
  * My own time on the task, above the observer list (decision 17): all I
- * logged, today's entry — the same one the timesheet shows, set and
- * replaced, never added up (decision 60) — and my plan of time left. Under
+ * logged, my entry in my latest shift — the same one the timesheet shows,
+ * set and replaced, never added up (decision 60); time goes into a shift
+ * (decision 100) — and my plan of time left. Under
  * them, the hour budgets the task falls under (decision 69): seen while
  * planning, and in the plan dialog with the forecast my new plan makes.
  */
@@ -33,8 +34,9 @@ export default function (p: { taskId: number }) {
   const [about, setAbout, clearAbout] = useDraft(`plan-about:${p.taskId}`, '');
   const setLeft = useMutation(trpc.Time.setLeft.mutationOptions({ onSuccess: () => { refresh(); clearAbout(); setDialog(null); } }));
   const minutes = parseMinutes(text);
-  const ofDay = (day: string) => mine.data?.days.find((d) => d.day === day)?.minutes ?? 0;
-  const todayEntry = mine.data?.days.find((d) => d.day === today());
+  const inShift = (shiftId: number) => mine.data?.entries.find((e) => e.shiftId === shiftId)?.minutes ?? 0;
+  const latest = mine.data?.shifts[0];
+  const latestEntry = latest && mine.data?.entries.find((e) => e.shiftId === latest.id);
 
   const openPlan = () => {
     setText(mine.data?.leftMinutes ? format.minutes(mine.data.leftMinutes) : '');
@@ -52,9 +54,11 @@ export default function (p: { taskId: number }) {
       {mine.data && (
         <Stack direction="row" spacing={2} sx={{ color: 'text.secondary', flexWrap: 'wrap' }}>
           <Typography variant="body2">{t('task.myTime.spent', { time: format.minutes(mine.data.spentMinutes) })}</Typography>
-          <Tooltip title={todayEntry ? t('myDay.history.entryChanged', { at: format.dateTime(todayEntry.updatedAt) }) : ''}>
-            <Typography variant="body2">{t('task.myTime.today', { time: format.minutes(todayEntry?.minutes ?? 0) })}</Typography>
-          </Tooltip>
+          {latest && (
+            <Tooltip title={latestEntry ? t('myDay.history.entryChanged', { at: format.dateTime(latestEntry.updatedAt) }) : ''}>
+              <Typography variant="body2">{t('task.myTime.lastShift', { time: format.minutes(latestEntry?.minutes ?? 0) })}</Typography>
+            </Tooltip>
+          )}
           <Typography variant="body2">
             {mine.data.leftMinutes === null ? t('task.myTime.noPlan') : t('task.myTime.plan', { time: format.minutes(mine.data.leftMinutes) })}
           </Typography>
@@ -82,7 +86,7 @@ export default function (p: { taskId: number }) {
       )}
 
       {dialog === 'log' && (
-        <LogTimeDialog taskId={p.taskId} day={today()} pickDay current={ofDay} onClose={() => setDialog(null)} />
+        <LogTimeDialog taskId={p.taskId} shifts={mine.data?.shifts ?? []} current={inShift} onClose={() => setDialog(null)} />
       )}
       <Dialog open={dialog === 'plan'} onClose={() => setDialog(null)} maxWidth="xs" fullWidth>
         <DialogTitle>{t('task.myTime.setPlan')}</DialogTitle>

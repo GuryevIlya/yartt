@@ -24,6 +24,7 @@ const CONSTRAINT_CODES: Record<string, ErrorCode> = {
   chk_tag_name: 'invalid_data',
   uq_observer_open: 'already_observer',
   excl_work_overlap: 'shift_overlap',
+  chk_work_length: 'shift_too_long',
   // Two shifts starting at the same minute, written at once: the trigger saw neither.
   work_pkey: 'shift_overlap',
   chk_dependency_not_self: 'dependency_cycle',

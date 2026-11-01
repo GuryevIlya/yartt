@@ -3,8 +3,8 @@ import { AddShiftInput, CloseShiftInput, OpenShift, ShiftKey, StartShiftInput, U
 import * as Work from '../services/Work.ts';
 import { authedProcedure, router } from '../trpc.ts';
 
-// The signed-in employee's own timesheet. A day's shifts are theirs to add,
-// correct and delete until the day is scored; withdrawing the score frees it.
+// The signed-in employee's own timesheet. Shifts are theirs to add, correct
+// and delete until scored; withdrawing the score frees one (decision 100).
 export default router({
   /** The signed-in employee's open shift (when it started), or null: for the top line. */
   open: authedProcedure
@@ -16,7 +16,6 @@ export default router({
    * @throws shift_overlap_open — a shift is already open.
    * @throws shift_overlap_with — a closed shift covers the moment (its times in params).
    * @throws shift_overlap — two starts at once.
-   * @throws day_scored
    */
   start: authedProcedure
     .input(StartShiftInput)
@@ -28,8 +27,7 @@ export default router({
    * @throws not_found — no open shift.
    * @throws invalid_data — the end is not after the start.
    * @throws shift_overlap_with, shift_overlap_open — another shift is in the way (its times in params).
-   * @throws shift_crosses_day — the shift ends after the midnight of its day.
-   * @throws day_scored
+   * @throws shift_too_long — longer than 24 hours.
    */
   close: authedProcedure
     .input(CloseShiftInput)
@@ -37,12 +35,11 @@ export default router({
     .mutation(({ input, ctx }) => Work.close(ctx.employeeId, input)),
 
   /**
-   * Adds a closed shift at once to any day — a suggestion confirmed, a
-   * forgotten or a second shift.
+   * Adds a closed shift at once — a suggestion confirmed, a forgotten or a
+   * second shift; it may run past midnight (decision 100).
    * @throws invalid_data — the end is not after the start.
    * @throws shift_overlap_with, shift_overlap_open — another shift is in the way (its times in params).
-   * @throws shift_crosses_day — the shift ends after the midnight of its day.
-   * @throws day_scored
+   * @throws shift_too_long — longer than 24 hours.
    */
   add: authedProcedure
     .input(AddShiftInput)
@@ -54,8 +51,9 @@ export default router({
    * @throws not_found — no closed shift starting then.
    * @throws invalid_data — the end is not after the start.
    * @throws shift_overlap_with, shift_overlap_open — another shift is in the way (its times in params).
-   * @throws shift_crosses_day — the shift ends after the midnight of its day.
-   * @throws day_scored — the shift's day, old or new, is scored.
+   * @throws shift_too_long — longer than 24 hours.
+   * @throws shift_shorter_than_entries — less than the time logged in it (in params).
+   * @throws shift_scored
    */
   update: authedProcedure
     .input(UpdateShiftInput)
@@ -65,7 +63,8 @@ export default router({
   /**
    * Deletes a shift, open or closed, by its start.
    * @throws not_found
-   * @throws day_scored
+   * @throws shift_has_entries — time is logged in it.
+   * @throws shift_scored
    */
   remove: authedProcedure
     .input(ShiftKey)

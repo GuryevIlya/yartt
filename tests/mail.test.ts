@@ -72,12 +72,13 @@ describe('mail', () => {
       to,
       taskId: null,
       payload: {
-        kind: 'score', by: boss.id, day: '2026-10-12', value: 90, reason: 'Good call on the release',
+        // A shift, in the recipient's time zone (decision 100).
+        kind: 'score', by: boss.id, day: '2026-10-12', startedAt: '2026-10-12T06:00:00.000Z', minutes: 480, value: 90, reason: 'Good call on the release',
         at: '2026-10-15T07:30:00.000Z', previous: { value: 60, reason: 'Wrong priorities' },
       },
     });
-    expect(mail.subject).toBe('Score for October 12, 2026 changed: 90%');
-    expect(mail.text).toContain('Marina changes the score for October 12, 2026: was 60%, now 90%.');
+    expect(mail.subject).toBe('Score for the shift October 12, 2026 at 09:00 AM–05:00 PM changed: 90%');
+    expect(mail.text).toContain('Marina changes the score for the shift October 12, 2026 at 09:00 AM–05:00 PM: was 60%, now 90%.');
     expect(mail.text).toContain('Reason: Good call on the release');
     expect(mail.text).toContain('Previous reason: Wrong priorities');
     expect(mail.text).toContain('10:30'); // Moscow time

@@ -55,6 +55,22 @@ async function day(employeeId: number, daysAgo: number): Promise<string> {
   return row!.value;
 }
 
+/** The shift of the employee that starts at `startedAt`: time is logged in it, it is scored. */
+async function shiftAt(employeeId: number, startedAt: Date): Promise<number> {
+  const [row] = Row.array().parse(await sql`SELECT id FROM work WHERE employee_id = ${employeeId} AND started_at = ${startedAt}`);
+  return row!.id;
+}
+
+/** The closed shifts the employee began `daysAgo` days back: a day's shifts are scored at once. */
+async function shiftsOf(employeeId: number, daysAgo: number): Promise<number[]> {
+  return Row.array().parse(await sql`
+    SELECT w.id FROM work w JOIN employee e ON e.id = w.employee_id
+     WHERE w.employee_id = ${employeeId} AND w.spent_minutes IS NOT NULL
+       AND (w.started_at AT TIME ZONE e.time_zone)::date = local_today(${employeeId}) - ${daysAgo}::int
+     ORDER BY w.started_at
+  `).map((r) => r.id);
+}
+
 /** Visits cannot be logged in the past through the API (log_visit uses NOW()). */
 async function visit(employeeId: number, taskId: number | null, moment: Date): Promise<void> {
   await sql`INSERT INTO visit (employee_id, task_id, at) VALUES (${employeeId}, ${taskId}, ${moment})`;
@@ -368,7 +384,8 @@ export async function seedDemo(lang: DemoLanguage): Promise<void> {
 
   // --- days: visits, time logged, shifts ----------------------------------
 
-  // Me: shifts on most days; two days left without one — they show a suggested shift.
+  // Me: shifts on most days, time logged in them (decision 100); two days left without
+  // one — they show a suggested shift, and the tasks opened there wait to be logged.
   const myDays = await workdays(me, 10);
   for (const [i, d] of myDays.entries()) {
     await visit(me, null, await at(me, d, `09:0${i % 6}`));
@@ -376,20 +393,17 @@ export async function seedDemo(lang: DemoLanguage): Promise<void> {
     await visit(me, report, await at(me, d, '14:40'));
     if (i % 3 === 0) await visit(me, stock, await at(me, d, '16:05'));
     await visit(me, null, await at(me, d, `18:1${i % 6}`));
-    await I.Time.set({ taskId: site, day: await day(me, d), minutes: 90 + (i % 4) * 30 });
-    await I.Time.set({ taskId: report, day: await day(me, d), minutes: 60 + (i % 3) * 15 });
-    if (i % 4 === 0) await I.Time.set({ taskId: hiring, day: await day(me, d), minutes: 45 });
     if (i === myDays.length - 1 || i === myDays.length - 4) continue;
-    await I.Work.add({
-      startedAt: await at(me, d, '09:00'),
-      endedAt: await at(me, d, `18:${10 + (i % 5) * 5}`),
-      about: t.shifts.mine[i % 4]!,
-    });
+    const startedAt = await at(me, d, '09:00');
+    await I.Work.add({ startedAt, endedAt: await at(me, d, `18:${10 + (i % 5) * 5}`), about: t.shifts.mine[i % 4]! });
+    const shiftId = await shiftAt(me, startedAt);
+    await I.Time.set({ taskId: site, shiftId, minutes: 90 + (i % 4) * 30 });
+    await I.Time.set({ taskId: report, shiftId, minutes: 60 + (i % 3) * 15 });
+    if (i % 4 === 0) await I.Time.set({ taskId: hiring, shiftId, minutes: 45 });
   }
-  // Today: came in, opened a task, logged time — the shift is not started yet.
+  // Today: came in and opened a task — the shift is not started yet.
   await visit(me, null, await todayAgo(me, 95));
   await visit(me, site, await todayAgo(me, 70));
-  await I.Time.set({ taskId: report, day: await day(me, 0), minutes: 45 });
 
   // Pavel: closed shifts, and the last workday's shift is still open.
   const pavelDays = await workdays(pavel, 7);
@@ -402,10 +416,18 @@ export async function seedDemo(lang: DemoLanguage): Promise<void> {
       await visit(pavel, site, await at(pavel, d, '20:10'));
       await visit(pavel, null, await at(pavel, d, '21:05'));
     }
-    await P.Time.set({ taskId: site, day: await day(pavel, d), minutes: 300 + (i % 3) * 30 });
-    await P.Time.set({ taskId: auth, day: await day(pavel, d), minutes: 90 });
-    if (i === pavelDays.length - 1) await P.Work.start({ startedAt: await at(pavel, d, '09:20') });
-    else await P.Work.add({ startedAt: await at(pavel, d, '09:20'), endedAt: await at(pavel, d, '18:30'), about: t.shifts.pavel });
+    const startedAt = await at(pavel, d, '09:20');
+    if (i === pavelDays.length - 1) await P.Work.start({ startedAt });
+    else await P.Work.add({ startedAt, endedAt: await at(pavel, d, '18:30'), about: t.shifts.pavel });
+    const shiftId = await shiftAt(pavel, startedAt);
+    await P.Time.set({ taskId: site, shiftId, minutes: 300 + (i % 3) * 30 });
+    await P.Time.set({ taskId: auth, shiftId, minutes: 90 });
+    // A release night: a second shift that runs past midnight, in both days (decision 100).
+    if (i === 2) {
+      const night = await at(pavel, d, '22:00');
+      await P.Work.add({ startedAt: night, endedAt: new Date(night.getTime() + 210 * 60_000), about: t.shifts.night });
+      await P.Time.set({ taskId: site, shiftId: await shiftAt(pavel, night), minutes: 180 });
+    }
   }
 
   // Marina: closed shifts.
@@ -413,8 +435,9 @@ export async function seedDemo(lang: DemoLanguage): Promise<void> {
   for (const d of marinaDays) {
     await visit(marina, null, await at(marina, d, '08:50'));
     await visit(marina, stock, await at(marina, d, '11:00'));
-    await M.Time.set({ taskId: stock, day: await day(marina, d), minutes: 120 });
-    await M.Work.add({ startedAt: await at(marina, d, '08:50'), endedAt: await at(marina, d, '17:45'), about: t.shifts.marina });
+    const startedAt = await at(marina, d, '08:50');
+    await M.Work.add({ startedAt, endedAt: await at(marina, d, '17:45'), about: t.shifts.marina });
+    await M.Time.set({ taskId: stock, shiftId: await shiftAt(marina, startedAt), minutes: 120 });
   }
 
   // The shifts above were written now, days after they ended. Make them look written on time —
@@ -428,9 +451,10 @@ export async function seedDemo(lang: DemoLanguage): Promise<void> {
   `;
   await sql`ALTER TABLE work ENABLE TRIGGER work_check`;
 
-  // Scores: I score some of Marina's days, Marina some of Pavel's; the rest wait. A score freezes its day.
+  // Scores: I score some of Marina's days, Marina some of Pavel's — each day's shifts at once
+  // (decision 100); the rest wait. A score freezes its shifts.
   const score = async (employeeId: number, by: number, daysAgo: number, value: number, reason: string | null) =>
-    as(by).Team.score({ employeeId, day: await day(employeeId, daysAgo), value, reason });
+    as(by).Team.score({ employeeId, shiftIds: await shiftsOf(employeeId, daysAgo), value, reason });
   await score(marina, me, marinaDays[0]!, 90, null);
   await score(marina, me, marinaDays[1]!, 70, t.scores.late);
   await score(marina, me, marinaDays[3]!, 100, null);

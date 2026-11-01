@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import { sql } from '../server/pg.ts';
-import { client, createEmployee } from './helpers.ts';
+import { client, createEmployee, dayAgo, logTime, shiftOn } from './helpers.ts';
 
 async function createTask(ownerId: number): Promise<number> {
   return (await client(ownerId)).Task.create({ tags: [`d-${randomUUID().slice(0, 8)}`] });
@@ -292,7 +292,7 @@ describe('current tasks', () => {
 
     // Everyone's time on the line, logged → left, for whoever sees the task; nothing for whoever does not.
     const ownerApi = await client(owner.id);
-    await ownerApi.Time.set({ taskId: task, day: (await ownerApi.MyDay.history({ page: 1 })).today, minutes: 30 });
+    await logTime(owner.id, task, await dayAgo(owner.id, 1), 30);
     expect((await devApi.MyDay.current({ tab: 'mine', page: 1 })).hours).toEqual([{ taskId: task, spentMinutes: 30, leftMinutes: 240 }]);
     const tagIds = (await ownerApi.Task.get({ id: task })).tags.map((tag) => tag.id);
     expect((await ownerApi.Task.search({ tagIds, tab: 'mine', page: 1 })).hours).toEqual([{ taskId: task, spentMinutes: 30, leftMinutes: 240 }]);
@@ -352,7 +352,6 @@ describe('history', () => {
     const id = await createTask(me.id);
     await api.Visit.log({ taskId: null });
     await api.Visit.log({ taskId: id });
-    await api.Time.set({ taskId: id, day: empty.today, minutes: 30 });
     // An hour ago, but not before today began in their time zone: the shift must be today's.
     const [midnight] = await sql<{ at: Date }[]>`
       SELECT local_today(id)::timestamp AT TIME ZONE time_zone AS at FROM employee WHERE id = ${me.id}
@@ -360,10 +359,13 @@ describe('history', () => {
     const startedAt = new Date(Math.max(Date.now() - 3_600_000, midnight!.at.getTime()));
     await api.Work.start({ startedAt });
     await expect(api.Work.start({ startedAt: new Date() })).rejects.toMatchObject({ message: 'shift_overlap_open' });
+    // Time goes into the shift (decision 100): an open one holds what has passed since it began.
+    const shiftId = await shiftOn(me.id, empty.today);
+    await api.Time.set({ taskId: id, shiftId, minutes: 1 });
 
     const [today] = (await api.MyDay.history({ page: 1 })).days;
     expect(today!.visits.map((v) => v.taskId)).toEqual([null, id]);
-    expect(today!.entries).toMatchObject([{ taskId: id, minutes: 30 }]);
+    expect(today!.entries).toMatchObject([{ taskId: id, shiftId, minutes: 1 }]);
     expect(today!.shifts).toMatchObject([{ spentMinutes: null }]);
     expect(today!.firstActivity).not.toBeNull();
 
@@ -373,11 +375,11 @@ describe('history', () => {
     expect(closed!.shifts[0]!.spentMinutes).toBe(Math.floor(Date.now() / 60_000) - Math.floor(startedAt.getTime() / 60_000));
     await expect(api.Work.remove({ startedAt: new Date(0) })).rejects.toMatchObject({ message: 'not_found' });
 
-    // One entry a day: a new value replaces it, 0 removes it.
-    await api.Time.set({ taskId: id, day: empty.today, minutes: 50 });
-    expect((await api.MyDay.history({ page: 1 })).days[0]!.entries).toMatchObject([{ taskId: id, minutes: 50 }]);
-    await api.Time.set({ taskId: id, day: empty.today, minutes: 0 });
+    // The shift is never shorter than the time in it; 0 removes the entry, then it may be deleted.
+    await expect(api.Work.remove({ startedAt })).rejects.toMatchObject({ message: 'shift_has_entries' });
+    await api.Time.set({ taskId: id, shiftId, minutes: 0 });
     expect((await api.MyDay.history({ page: 1 })).days[0]!.entries).toEqual([]);
+    await api.Work.remove({ startedAt });
   });
 
   test('what was done, for the ribbon: comments and time logged, in order; My day asks for two days', async () => {
@@ -386,13 +388,13 @@ describe('history', () => {
     const id = await createTask(me.id);
     const { today } = await api.MyDay.history({ page: 1 });
     await api.Comment.create({ taskId: id, html: '<p>Started</p>', replyToId: null, files: [], mentionIds: [], taskIds: [] });
-    await api.Time.set({ taskId: id, day: today, minutes: 15 });
+    await logTime(me.id, id, today, 1);
     const [day] = (await api.MyDay.history({ page: 1, size: 2 })).days;
     expect(day!.actions.map((a) => [a.kind, a.taskId])).toEqual([['comment', id], ['time', id]]);
 
     // A day logged earlier: two days fit, the third is on the next page.
     for (const back of [3, 5]) {
-      await sql`INSERT INTO spent_minutes (task_id, "by", day, value) VALUES (${id}, ${me.id}, ${today}::date - ${back}::int, 10)`;
+      await logTime(me.id, id, await dayAgo(me.id, back), 10);
     }
     const two = await api.MyDay.history({ page: 1, size: 2 });
     expect(two.days.map((d) => d.day)).toHaveLength(2);
@@ -457,15 +459,18 @@ describe('history', () => {
     expect((await api.Work.open())?.startedAt.getTime()).toBe(at(20).getTime());
 
     const days = (await api.MyDay.history({ page: 1 })).days;
-    const shifts = days.flatMap((d) => d.shifts).sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+    // The open shift runs past midnight: it is in both days, the same shift (decision 100).
+    const all = days.flatMap((d) => d.shifts);
+    const shifts = [...new Map(all.map((s) => [s.id, s])).values()].sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
     expect(shifts.map((s) => s.spentMinutes)).toEqual([120, null]);
+    expect(all.filter((s) => s.id === shifts[1]!.id)).toHaveLength(2);
     await api.Work.close({ startedAt: shifts[1]!.startedAt, endedAt: at(21), about: 'Evening' });
     expect(await api.Work.open()).toBeNull();
     const range = { employeeId: me.id, from: days[days.length - 1]!.day, to: days[0]!.day };
     expect((await api.Team.stats(range)).stats.workMinutes).toBe(180);
   });
 
-  test('a shift belongs to one day; an overlap names the shift in the way', async () => {
+  test('a shift may run past midnight, never longer than a day; an overlap names the shift in the way', async () => {
     const me = await createEmployee();
     const api = await client(me.id);
     const hour = 3_600_000;
@@ -477,12 +482,17 @@ describe('history', () => {
     // A shift around all of the day's shifts says which one is in the way, with its times.
     await expect(api.Work.add({ startedAt: at(8), endedAt: at(18), about: null }))
       .rejects.toMatchObject({ message: 'shift_overlap_with', cause: { params: { from: '10:00', to: '12:30' } } });
-    // Up to midnight is the day's; a minute later is the next day's.
+    // Past midnight is fine (decision 100): the shift is in both days, each with its share.
     await api.Work.add({ startedAt: at(20), endedAt: at(24), about: null });
-    await expect(api.Work.add({ startedAt: at(0), endedAt: at(24, 1), about: null }))
-      .rejects.toMatchObject({ message: 'shift_crosses_day' });
-    await expect(api.Work.update({ startedAt: at(20), newStartedAt: at(20), endedAt: at(25), about: null }))
-      .rejects.toMatchObject({ message: 'shift_crosses_day' });
+    await api.Work.update({ startedAt: at(20), newStartedAt: at(20), endedAt: at(25), about: null });
+    const days = (await api.MyDay.history({ page: 1 })).days;
+    const evening = days.flatMap((d) => d.shifts.filter((s) => s.startedAt.getTime() === at(20).getTime()).map(() => d.day));
+    expect(evening).toHaveLength(2);
+    expect(days.find((d) => d.day === evening[0])!.workedMinutes + days.find((d) => d.day === evening[1])!.workedMinutes)
+      .toBe(150 + 300);
+    // Longer than a day is a slip, not work.
+    await expect(api.Work.add({ startedAt: at(-72), endedAt: at(-48, 1), about: null }))
+      .rejects.toMatchObject({ message: 'shift_too_long' });
 
     await api.Work.start({ startedAt: new Date(Date.now() - 60_000) });
     await expect(api.Work.start({ startedAt: new Date() })).rejects.toMatchObject({ message: 'shift_overlap_open' });
@@ -498,38 +508,45 @@ describe('history', () => {
     expect(['shift_overlap', 'shift_overlap_open']).toContain((failed as PromiseRejectedResult).reason.message);
   });
 
-  test('a day has 24 hours: all tasks of the day together, the entry replaced counted once', async () => {
+  test('a shift holds the time logged in it: all tasks of the shift together, the entry replaced counted once', async () => {
     const me = await createEmployee();
     const api = await client(me.id);
     const first = await createTask(me.id);
     const second = await createTask(me.id);
-    await api.Time.set({ taskId: first, day: '2026-01-02', minutes: 20 * 60 });
+    const shiftId = await shiftOn(me.id, '2026-01-02');
+    await api.Time.set({ taskId: first, shiftId, minutes: 20 * 60 });
     // Replacing the same entry is not adding to it.
-    await api.Time.set({ taskId: first, day: '2026-01-02', minutes: 22 * 60 });
-    await api.Time.set({ taskId: second, day: '2026-01-02', minutes: 2 * 60 });
-    await expect(api.Time.set({ taskId: second, day: '2026-01-02', minutes: 2 * 60 + 1 }))
-      .rejects.toMatchObject({ message: 'spent_over_day', cause: { params: { logged: '22:00', left: '2:00' } } });
-    // Another day is a day of its own.
-    await api.Time.set({ taskId: second, day: '2026-01-03', minutes: 24 * 60 });
+    await api.Time.set({ taskId: first, shiftId, minutes: 22 * 60 });
+    await api.Time.set({ taskId: second, shiftId, minutes: 2 * 60 });
+    await expect(api.Time.set({ taskId: second, shiftId, minutes: 2 * 60 + 1 }))
+      .rejects.toMatchObject({ message: 'spent_over_shift', cause: { params: { logged: '22:00', left: '2:00' } } });
+    // Nor can the shift shrink under it; another shift is a shift of its own; someone else's is not mine.
+    const [w] = await sql<{ startedAt: Date }[]>`SELECT started_at FROM work WHERE id = ${shiftId}`;
+    await expect(api.Work.update({ startedAt: w!.startedAt, newStartedAt: w!.startedAt, endedAt: new Date(w!.startedAt.getTime() + 23 * 3_600_000), about: null }))
+      .rejects.toMatchObject({ message: 'shift_shorter_than_entries', cause: { params: { logged: '24:00' } } });
+    await logTime(me.id, second, '2026-01-03', 24 * 60);
+    await expect((await client((await createEmployee()).id)).Time.set({ taskId: first, shiftId, minutes: 1 })).rejects.toMatchObject({ message: 'not_found' });
   });
 
-  test('one entry per task and day: replaced, not added; 0 removes it; the last change is kept', async () => {
+  test('one entry per task and shift: replaced, not added; 0 removes it; the last change is kept', async () => {
     const me = await createEmployee();
     const other = await createEmployee();
     const id = await createTask(me.id);
     const api = await client(me.id);
-    await api.Time.set({ taskId: id, day: '2026-01-01', minutes: 10 });
+    const shiftId = await shiftOn(me.id, '2026-01-01');
+    await api.Time.set({ taskId: id, shiftId, minutes: 10 });
     await sql`UPDATE spent_minutes SET updated_at = NOW() - INTERVAL '1 day' WHERE "by" = ${me.id}`;
-    await api.Time.set({ taskId: id, day: '2026-01-01', minutes: 40 });
+    await api.Time.set({ taskId: id, shiftId, minutes: 40 });
     const rows = await sql<{ value: number; updatedAt: Date }[]>`SELECT value, updated_at FROM spent_minutes WHERE "by" = ${me.id}`;
     expect(rows.map((r) => r.value)).toEqual([40]);
     expect(rows[0]!.updatedAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
-    expect((await api.Time.mine({ taskId: id })).days).toMatchObject([{ day: '2026-01-01', minutes: 40 }]);
+    expect((await api.Time.mine({ taskId: id })).entries).toMatchObject([{ shiftId, minutes: 40 }]);
     // Someone else's entry is never theirs to change: setting 0 touches only their own.
-    await (await client(other.id)).Time.set({ taskId: id, day: '2026-01-01', minutes: 0 }).catch(() => {});
+    await (await client(other.id)).Time.set({ taskId: id, shiftId, minutes: 0 }).catch(() => {});
     expect(await sql`SELECT 1 FROM spent_minutes WHERE "by" = ${me.id}`).toHaveLength(1);
-    await expect(sql`UPDATE spent_minutes SET day = '2026-01-02' WHERE "by" = ${me.id}`).rejects.toMatchObject({ hint: 'spent_immutable' });
-    await api.Time.set({ taskId: id, day: '2026-01-01', minutes: 0 });
+    const elsewhere = await shiftOn(me.id, '2026-01-02');
+    await expect(sql`UPDATE spent_minutes SET shift_id = ${elsewhere} WHERE "by" = ${me.id}`).rejects.toMatchObject({ hint: 'spent_immutable' });
+    await api.Time.set({ taskId: id, shiftId, minutes: 0 });
     expect(await sql`SELECT 1 FROM spent_minutes WHERE "by" = ${me.id}`).toHaveLength(0);
   });
 });

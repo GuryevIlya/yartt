@@ -45,6 +45,8 @@ test.describe('wide', () => {
     const visits = sheet.getByRole('button', { name: /^Активность · \d+$/ });
     await expect(visits).toHaveCount(2);
     for (const button of await visits.all()) await button.click();
+    // And the tasks opened without an entry: enough for the timesheet to outgrow the window.
+    for (const button of await sheet.getByRole('button', { name: /^Открывались без списания/ }).all()) await button.click();
     const main = page.locator('main').first();
     const scrolled = () => Promise.all([main.evaluate((e) => e.scrollTop), sheet.evaluate((e) => e.scrollTop)]);
 

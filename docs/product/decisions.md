@@ -59,7 +59,7 @@ being typed in.
 
 *Implemented:* `visit`, `log_visit()` in `db.sql`; `Visit.log`.
 
-### 6. Scores and time entries are optional
+### 6. Scores and time entries are optional — changed by 100
 
 The manager decides whether to score days and which ones, and whether the
 team keeps a timesheet and logs time. Nothing in the product requires
@@ -405,7 +405,7 @@ stays mounted under a task.
 
 *Implemented:* `client/hooks/drafts.ts` (`useDraft`).
 
-### 37. The timesheet is the employee's until the day is scored
+### 37. The timesheet is the employee's until the day is scored — changed by 100
 
 The timesheet only moved forward: a closed shift could be neither
 corrected nor deleted, a second shift was offered only for a past day
@@ -1209,7 +1209,7 @@ suggestion.
 *Implemented:* `TagInput` in `client/components/App/TagInput.tsx`.
 
 
-### 72. A shift belongs to one day, and an overlap names the shift in the way
+### 72. A shift belongs to one day, and an overlap names the shift in the way — reversed by 100
 
 A shift was two date-and-time fields, so it could start one day and end
 the next, or last a week by a slip of the date. It counted towards the
@@ -1934,3 +1934,56 @@ in no zone.
 *Implemented:* `setZone()`, `useZone()`, `clockOf()`, `zoned()` in
 `client/hooks/format.ts`; `e2e/timeZone.spec.ts` runs the browser in
 another zone.
+
+### 100. A day is how shifts are shown: time is logged and scored by shift
+
+Decision 72 kept a shift within one day, ending by midnight, so that a
+day's totals stayed the day's. Night work had to be cut in two at
+00:00, and a shift that crossed midnight in another time zone (decision
+99) could not be written at all. And a day was the unit of everything
+else: time was logged to a day without saying when within it, the
+timesheet was optional (decision 6), so an entry could stand with no
+shift behind it, and a manager scored a day whose shifts and entries
+were not tied together.
+
+Now the shift is the unit:
+
+- **A shift may run past midnight.** It is never longer than 24 hours
+  (a slip of the date is not a week of work). It shows in each day it
+  touches, and every sum by day — the day's totals, My team, budgets of
+  tags, the tag summary, the payroll export — takes the share of its
+  minutes that fell in the day, in the employee's time zone, so nothing
+  is counted twice.
+- **Time is logged in a shift.** An entry is one per task and shift and
+  belongs to the days of its shift by the same shares. All entries of a
+  shift together are at most its length — an open shift's, the time
+  since it began; a shift is never made shorter than the time in it and
+  is not deleted while time is logged in it. Logging time therefore
+  means keeping the timesheet: an entry without a shift could be neither
+  checked nor scored.
+- **The manager scores shifts.** "Score" on a day gives one score to all
+  its closed shifts not scored yet, each of which can be left out; a
+  shift's score chip opens it alone. Any closed shift can be scored. A
+  standing score freezes the shift and its entries; withdrawing it frees
+  them, as before (decision 37). The weighted score is weighted by the
+  minutes of the scored shifts within the range, and a day's score in
+  the charts is that of its shifts. Every version is mailed, one email
+  per shift, with its times in the employee's time zone.
+
+The day stays where people read: My day, History, the charts and the
+weekly email count days, now days with a shift waiting for a score.
+
+What came before 0.6 is moved as it was: a day's entries go to its
+longest shift, a day with entries and no shift gets one from 09:00 as
+long as its entries, and a day's score goes to each of its closed
+shifts. Older days may hold more in a shift than it lasts: the limit is
+checked on writing.
+
+*Reverses decision 72; changes decisions 6 and 37.*
+
+*Implemented:* `work.id`, `chk_work_length`, `day_split()`, the views
+`shift_day` and `spent_day`, `spent_minutes.shift_id`,
+`check_shift_minutes()`, `score.shift_id`, `trg_work_check()`,
+`trg_score_check()` (`db.sql`, migration `0.5-0.6`); `Time.set` and
+`Team.score` by shift; `client/components/MyDayPage/Day.tsx`,
+`LogTimeDialog.tsx`, `ShiftDialog.tsx`, `EmployeePage/ScoreDialog.tsx`.
