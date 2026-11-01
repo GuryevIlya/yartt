@@ -167,6 +167,25 @@ bring the person back. If the heir is in the person's own team, they first
 leave it for the person's place (under the person's manager, or at the
 top). Everyone affected is notified as usual.
 
+## Notifications that did not go
+
+A notification the mail server refuses (a deleted mailbox, a full one) or
+the webhook does not take waits aside for another attempt, after 1, 5 and
+15 minutes, then every hour, while the others go on. After three days it
+is given up; the log says so each time. To see what did not go, with the
+last error:
+
+```sh
+docker exec yartt node server/admin.ts deliveries
+```
+
+Once the cause is fixed (the mail server is back, the address is
+corrected), try them all again at once:
+
+```sh
+docker exec yartt node server/admin.ts deliveries --retry
+```
+
 ## Upgrades
 
 Replace the container with one from the new image. Schema migrations run on start, all of

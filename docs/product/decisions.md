@@ -2012,3 +2012,29 @@ the forwarded link dangerous and is one more click every time.
 *Implemented:* `token.browser`, `issue_token()`, `login()` (`db.sql`,
 migration `0.5-0.6`); the `yartt_login` cookie (`server/ctx.ts`),
 `Auth.requestLogin`, `Auth.login`; the error `login_other_browser`.
+
+### 102. A notification that cannot be delivered waits aside
+
+A delivery error stopped the batch, and the failed notification was the
+first in line the next time, two seconds later. One mailbox the mail
+server refused for good (a person whose mailbox was deleted but who was
+not dismissed here) stopped every notification of the company, and a
+webhook that failed after its email went sent that email again on every
+try.
+
+Now a person's notification that fails waits in notification_failure for
+its next attempt, after 1, 5 and 15 minutes, then every hour, and the
+queue goes on. If the email went and the webhook failed, the next
+attempt goes to the webhook only. After three days it is given up: a
+notification that old has lost its point, and the log says so. The
+administrator sees what did not go, with the last error, and tries it
+all again once the cause is fixed (`node server/admin.ts deliveries`).
+
+A temporary failure is not told from a permanent one: the mail servers'
+codes are not reliable enough to give up at once, and a few attempts
+cost nothing. A bot's webhook keeps its single attempt (decision 49:
+someone's program may be down for days).
+
+*Implemented:* `notification_failure`, `fail_notification()` (`db.sql`,
+migration `0.5-0.6`); `deliverNotifications()` in `server/worker.ts`,
+`DeliveryError` in `server/delivery.ts`; `server/admin.ts deliveries`.

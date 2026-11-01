@@ -33,6 +33,15 @@ export type Payload = NotificationPayload
 /** Only by email: a link that proves the mailbox must not arrive anywhere else; a request about the address itself. */
 const MAIL_ONLY = new Set<Payload['kind']>(['email_confirm', 'sso_email', 'email_changing', 'email_outside_domains']);
 
+/** The webhook failed after the email went: a retry sends only to the webhook. */
+export class DeliveryError extends Error {
+  readonly mailed: boolean;
+  constructor(mailed: boolean, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.mailed = mailed;
+  }
+}
+
 export type Message = {
   to: Recipient;
   taskId: number | null;
@@ -54,12 +63,18 @@ export async function deliver(message: Message, options: { mail?: boolean } = {}
     return;
   }
 
+  let mailed = false;
   if (mailEnabled && message.to.email !== null && options.mail !== false) {
     const mail = await renderMail(message);
     await sendMail(message.to.email, mail.subject, mail.text);
+    mailed = true;
   }
   if (env.WEBHOOK_URL && to && !MAIL_ONLY.has(kind)) {
-    await sendWebhook({ kind, to, taskId: message.taskId, data });
+    try {
+      await sendWebhook({ kind, to, taskId: message.taskId, data });
+    } catch (error) {
+      throw new DeliveryError(mailed, error);
+    }
   }
   if (!mailEnabled && (!env.WEBHOOK_URL || !to || MAIL_ONLY.has(kind))) {
     console.log(`[delivery] ${JSON.stringify({ kind, to: message.to.email, taskId: message.taskId, data })}`);

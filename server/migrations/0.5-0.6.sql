@@ -7,6 +7,8 @@
 -- owner is kept and shown in its feed (decision 96). Shifts may run past
 -- midnight; time is logged and scored by shift (decision 100). A
 -- sign-in link works only in the browser that asked for it (decision 101).
+-- A notification that cannot be delivered no longer holds the queue
+-- (decision 102).
 
 ALTER TABLE mention ADD COLUMN created_at TIMESTAMPTZ;
 UPDATE mention m SET created_at = c.created_at
@@ -955,6 +957,129 @@ for it (p_browser — the key of its cookie) and returns a session token for
 the cookie. NULL — the token is invalid. Another browser gets
 login_other_browser and the token stays: a mail scanner opening the link
 first does not use it up. An email-change token never signs anyone in.';
+
+
+-- A notification that cannot be delivered waits for its next attempt
+-- aside, and the queue goes on (decision 102).
+CREATE TABLE notification_failure (
+    notification_id BIGINT PRIMARY KEY REFERENCES notification(id) ON DELETE CASCADE,
+    attempts INT NOT NULL CHECK (attempts > 0),
+    first_failed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_failed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    next_attempt_at TIMESTAMPTZ,
+    mailed BOOLEAN NOT NULL DEFAULT FALSE,
+    error TEXT NOT NULL
+);
+CREATE INDEX idx_notification_failure_next ON notification_failure(next_attempt_at);
+
+COMMENT ON TABLE notification_failure IS
+'A person''s notification that could not be delivered: the mail server
+refused it (a mailbox deleted, a full one) or the webhook did not take it.
+It waits here for its next attempt while the queue goes on: one broken
+address never holds the others. Attempts after 1, 5 and 15 minutes, then
+every hour, for three days (fail_notification()); then it is given up
+and stays for the administrator to see (node server/admin.ts
+deliveries). Delivered at last, the row goes. A bot''s webhook is not
+here: it gets one attempt (bot_usage counts the failure).';
+
+COMMENT ON COLUMN notification_failure.attempts IS
+'How many attempts failed.';
+
+COMMENT ON COLUMN notification_failure.first_failed_at IS
+'When the first attempt failed: three days after it the notification is given up.';
+
+COMMENT ON COLUMN notification_failure.last_failed_at IS
+'When the last attempt failed.';
+
+COMMENT ON COLUMN notification_failure.next_attempt_at IS
+'When to try again. NULL — given up.';
+
+COMMENT ON COLUMN notification_failure.mailed IS
+'The email went and the webhook failed: the next attempt sends only to the
+webhook, so nobody gets the same email twice.';
+
+COMMENT ON COLUMN notification_failure.error IS
+'What the last attempt failed with, for the administrator.';
+
+COMMENT ON INDEX idx_notification_failure_next IS
+'For the worker: the notifications due for another attempt.';
+
+CREATE OR REPLACE FUNCTION fail_notification(p_id BIGINT, p_error TEXT, p_mailed BOOLEAN)
+RETURNS TIMESTAMPTZ AS $$
+DECLARE
+    v_attempts INT;
+    v_first TIMESTAMPTZ;
+    v_next TIMESTAMPTZ;
+BEGIN
+    INSERT INTO notification_failure AS f (notification_id, attempts, mailed, error)
+    VALUES (p_id, 1, p_mailed, p_error)
+    ON CONFLICT (notification_id) DO UPDATE
+       SET attempts = f.attempts + 1, last_failed_at = NOW(),
+           mailed = f.mailed OR EXCLUDED.mailed, error = EXCLUDED.error
+    RETURNING attempts, first_failed_at INTO v_attempts, v_first;
+
+    v_next := NOW() + CASE v_attempts WHEN 1 THEN INTERVAL '1 minute'
+                                      WHEN 2 THEN INTERVAL '5 minutes'
+                                      WHEN 3 THEN INTERVAL '15 minutes'
+                                      ELSE INTERVAL '1 hour' END;
+    IF v_next > v_first + INTERVAL '3 days' THEN
+        v_next := NULL;
+    END IF;
+    UPDATE notification_failure SET next_attempt_at = v_next WHERE notification_id = p_id;
+    RETURN v_next;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION fail_notification(BIGINT, TEXT, BOOLEAN) IS
+'Records a failed attempt to deliver a person''s notification and
+returns when to try again: after 1, 5 and 15 minutes, then every hour;
+NULL — three days have passed since the first failure, it is given up.
+p_mailed — the email went this time (the webhook failed).';
+
+COMMENT ON TABLE notification IS
+'Notification queue. Not an inbox.
+Created only through notify(), which handles absence and dismissal.
+payload JSONB — context; kind is stored inside payload.
+The worker takes WHERE sent_at IS NULL (FOR UPDATE SKIP LOCKED), sends
+it by email and/or to the webhook and sets sent_at; a finished_at_change
+waits deadline_settles() first, and change_deadline() replaces it
+meanwhile. One that fails waits for its next attempt in
+notification_failure while the queue goes on. The user handles the
+notification — closed_at. Cleaned up after a year.
+
+RULES:
+  - comment -> the task owner (unless they wrote it).
+  - mention -> the mentioned employee, always.
+  - task attached to a comment -> the owner of the attached task
+    (unless they wrote the comment).
+  - reminder (remind) -> whoever set it.
+  - access request -> the task owner.
+  - access opened (added by the owner, request approved, the task made
+    public while a request waited) -> the employee.
+  - access closed (removed, request rejected, the task made private
+    without them) -> the employee.
+  - finished_at set / moved / cleared -> owners of dependent tasks, once
+    it settles (deadline_settles(): the worker holds it that long).
+  - a task closed by its owner (close_task) -> the owners of the tasks
+    waiting for it (dependency_done).
+  - a new dependency -> the owner of the task waited for (with the latest
+    deadline the waiting task can live with, if set; dependency_added),
+    and the owner of the waiting task (waits_added) — but not whoever
+    added it.
+  - owner change -> the new owner. If the manager initiated it — the
+    previous owner too.
+  - score -> the scored employee.
+  - invite -> the invitee.
+  - welcome -> someone added without an invite: the first employee, or
+    whoever the installation''s administrator adds outside the API.
+  - a new report (someone set their manager) -> the new manager.
+  - a bot''s key a year old -> the bot''s manager, once a year of its age.
+If the recipient is away, a copy goes to their manager (recursively).
+Dismissed employees get no notifications.
+
+Delivery: an email in the employee.locale language (SMTP_URL) and/or the
+outgoing webhook (WEBHOOK_URL), whose receiver picks other channels
+(Telegram, Slack, ...); a bot gets its own webhook only.';
 
 
 -- The specification (COMMENT ON SCHEMA) as of this version.

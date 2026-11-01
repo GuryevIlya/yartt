@@ -119,24 +119,32 @@ const PendingNotification = z.object({
   webhookSecret: z.string().nullable(),
   /** Asked to change an address outside the domains within the last day. */
   toldToday: z.boolean(),
+  /** An earlier attempt sent the email, the webhook failed: only the webhook now. */
+  mailed: z.boolean(),
   fullName: z.string(),
   // An unsupported language falls back to the default one.
   locale: Locale.catch('ru'),
   timeZone: z.string(),
 });
 
+const NextAttempt = z.object({ next: z.date().nullable() });
+
 const BATCH_SIZE = 20;
+
+/** The email went before the webhook failed (DeliveryError in delivery.ts). */
+const mailedBefore = (error: unknown) => typeof error === 'object' && error !== null && 'mailed' in error && error.mailed === true;
 
 // Delivers notifications (email and/or webhook) and returns how many were
 // processed. FOR UPDATE SKIP LOCKED: several workers never take the same
-// notification. A delivery error stops the batch: delivered ones are
-// committed, the rest stay in the queue. A bot's webhook is someone's
-// program and may be down for days: it gets one attempt, a failure is
-// logged and passed over, so people's notifications never wait for it. A payload that does not parse is
-// logged and skipped, so it cannot block the queue. A deadline change is
-// held until the deadline settles (deadline_settles() in db.sql). The demo's people are
-// made up: there nothing goes out, the queue is only marked sent (the bell
-// in the interface reads closed_at, not sent_at).
+// notification. A person's notification that fails waits aside for its
+// next attempt (notification_failure, fail_notification() in db.sql) and
+// the queue goes on: one broken address never holds the others. A bot's
+// webhook is someone's program and may be down for days: it gets one
+// attempt, a failure is logged and passed over. A payload that does not
+// parse is logged and skipped, so it cannot block the queue. A deadline
+// change is held until the deadline settles (deadline_settles() in db.sql).
+// The demo's people are made up: there nothing goes out, the queue is only
+// marked sent (the bell in the interface reads closed_at, not sent_at).
 export async function deliverNotifications(sql: Sql): Promise<number> {
   if (env.DEMO_DATA) {
     await sql`UPDATE notification SET sent_at = NOW() WHERE sent_at IS NULL`;
@@ -146,12 +154,16 @@ export async function deliverNotifications(sql: Sql): Promise<number> {
     const rows = PendingNotification.array().parse(await tx`
       SELECT n.id, n.employee_id, n.task_id, n.payload, e.kind, e.email, e.dismissed_at IS NOT NULL AS dismissed,
              e.full_name, e.locale, e.time_zone, b.webhook_url, b.webhook_secret,
-             COALESCE(h.outside_domains_told_at > NOW() - INTERVAL '1 day', FALSE) AS told_today
+             COALESCE(h.outside_domains_told_at > NOW() - INTERVAL '1 day', FALSE) AS told_today,
+             COALESCE(f.mailed, FALSE) AS mailed
         FROM notification n
         JOIN employee e ON e.id = n.employee_id
         LEFT JOIN bot b ON b.employee_id = e.id
         LEFT JOIN human h ON h.employee_id = e.id
+        LEFT JOIN notification_failure f ON f.notification_id = n.id
        WHERE n.sent_at IS NULL
+         -- One that failed waits for its next attempt; a given-up one stays for the administrator.
+         AND (f.notification_id IS NULL OR f.next_attempt_at <= NOW())
          -- A deadline change waits to settle: another one soon after replaces it.
          AND NOT (n.payload->>'kind' = 'finished_at_change' AND n.added_at > NOW() - deadline_settles())
        ORDER BY n.id
@@ -159,7 +171,6 @@ export async function deliverNotifications(sql: Sql): Promise<number> {
          FOR UPDATE OF n SKIP LOCKED
     `);
 
-    let done = 0;
     for (const row of rows) {
       // Dismissed after the notification was created: nobody to deliver to.
       const payload = NotificationPayload.safeParse(row.payload);
@@ -177,18 +188,27 @@ export async function deliverNotifications(sql: Sql): Promise<number> {
             await tx`UPDATE human SET outside_domains_told_at = NOW() WHERE employee_id = ${row.employeeId}`;
             for (const other of rows) if (other.employeeId === row.employeeId) other.toldToday = true;
           }
-          await deliver({ to, taskId: row.taskId, payload: payload.data }, { mail: !outside });
+          await deliver({ to, taskId: row.taskId, payload: payload.data }, { mail: !outside && !row.mailed });
           if (webhook) await Bots.countDelivery(tx as unknown as Sql, row.employeeId, false);
+          await tx`DELETE FROM notification_failure WHERE notification_id = ${row.id}`;
         } catch (error) {
+          if (row.kind === 'human') {
+            const reason = error instanceof Error ? error.message : String(error);
+            const [attempt] = NextAttempt.array().parse(await tx`
+              SELECT fail_notification(${row.id}, ${reason.slice(0, 1000)}, ${mailedBefore(error)}) AS next
+            `);
+            console.error(attempt?.next
+              ? `[worker] notification ${row.id} delivery failed, next attempt at ${attempt.next.toISOString()}:`
+              : `[worker] notification ${row.id} delivery failed for three days, given up:`, error);
+            continue;
+          }
           console.error(`[worker] notification ${row.id} delivery failed:`, error);
-          if (row.kind === 'human') break;
           if (webhook) await Bots.countDelivery(tx as unknown as Sql, row.employeeId, true);
         }
       }
       await tx`UPDATE notification SET sent_at = NOW() WHERE id = ${row.id}`;
-      done++;
     }
-    return done;
+    return rows.length;
   });
 }
 

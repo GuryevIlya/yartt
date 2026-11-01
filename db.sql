@@ -2422,9 +2422,11 @@ COMMENT ON TABLE notification IS
 Created only through notify(), which handles absence and dismissal.
 payload JSONB — context; kind is stored inside payload.
 The worker takes WHERE sent_at IS NULL (FOR UPDATE SKIP LOCKED), sends
-to the webhook and sets sent_at; a finished_at_change waits
-deadline_settles() first, and change_deadline() replaces it meanwhile. The user handles the notification —
-closed_at. Cleaned up after a year.
+it by email and/or to the webhook and sets sent_at; a finished_at_change
+waits deadline_settles() first, and change_deadline() replaces it
+meanwhile. One that fails waits for its next attempt in
+notification_failure while the queue goes on. The user handles the
+notification — closed_at. Cleaned up after a year.
 
 RULES:
   - comment -> the task owner (unless they wrote it).
@@ -2456,9 +2458,9 @@ RULES:
 If the recipient is away, a copy goes to their manager (recursively).
 Dismissed employees get no notifications.
 
-Delivery is only through the outgoing webhook (URL and secret in the
-config). Channels (email, Telegram, Slack, ...) and texts in the
-employee.locale language are up to the webhook receiver.';
+Delivery: an email in the employee.locale language (SMTP_URL) and/or the
+outgoing webhook (WEBHOOK_URL), whose receiver picks other channels
+(Telegram, Slack, ...); a bot gets its own webhook only.';
 
 COMMENT ON COLUMN notification.id IS
 'Notification id.';
@@ -2487,6 +2489,50 @@ COMMENT ON COLUMN notification.payload IS
   score | invite | welcome | new_report | weekly_digest | bot_key_old.
 Payload keys are camelCase (employeeId, dependencyId, ...).
 A copy for an absent employee''s manager has for = the recipient id.';
+
+
+CREATE TABLE notification_failure (
+    notification_id BIGINT PRIMARY KEY REFERENCES notification(id) ON DELETE CASCADE,
+    attempts INT NOT NULL CHECK (attempts > 0),
+    first_failed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_failed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    next_attempt_at TIMESTAMPTZ,
+    mailed BOOLEAN NOT NULL DEFAULT FALSE,
+    error TEXT NOT NULL
+);
+CREATE INDEX idx_notification_failure_next ON notification_failure(next_attempt_at);
+
+COMMENT ON TABLE notification_failure IS
+'A person''s notification that could not be delivered: the mail server
+refused it (a mailbox deleted, a full one) or the webhook did not take it.
+It waits here for its next attempt while the queue goes on: one broken
+address never holds the others. Attempts after 1, 5 and 15 minutes, then
+every hour, for three days (fail_notification()); then it is given up
+and stays for the administrator to see (node server/admin.ts
+deliveries). Delivered at last, the row goes. A bot''s webhook is not
+here: it gets one attempt (bot_usage counts the failure).';
+
+COMMENT ON COLUMN notification_failure.attempts IS
+'How many attempts failed.';
+
+COMMENT ON COLUMN notification_failure.first_failed_at IS
+'When the first attempt failed: three days after it the notification is given up.';
+
+COMMENT ON COLUMN notification_failure.last_failed_at IS
+'When the last attempt failed.';
+
+COMMENT ON COLUMN notification_failure.next_attempt_at IS
+'When to try again. NULL — given up.';
+
+COMMENT ON COLUMN notification_failure.mailed IS
+'The email went and the webhook failed: the next attempt sends only to the
+webhook, so nobody gets the same email twice.';
+
+COMMENT ON COLUMN notification_failure.error IS
+'What the last attempt failed with, for the administrator.';
+
+COMMENT ON INDEX idx_notification_failure_next IS
+'For the worker: the notifications due for another attempt.';
 
 
 -- ============================================================================
@@ -2672,6 +2718,39 @@ already (mentioned in the same comment): the copies stop before them.';
 -- ----------------------------------------------------------------------------
 -- grant_observer — grant active access
 -- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fail_notification(p_id BIGINT, p_error TEXT, p_mailed BOOLEAN)
+RETURNS TIMESTAMPTZ AS $$
+DECLARE
+    v_attempts INT;
+    v_first TIMESTAMPTZ;
+    v_next TIMESTAMPTZ;
+BEGIN
+    INSERT INTO notification_failure AS f (notification_id, attempts, mailed, error)
+    VALUES (p_id, 1, p_mailed, p_error)
+    ON CONFLICT (notification_id) DO UPDATE
+       SET attempts = f.attempts + 1, last_failed_at = NOW(),
+           mailed = f.mailed OR EXCLUDED.mailed, error = EXCLUDED.error
+    RETURNING attempts, first_failed_at INTO v_attempts, v_first;
+
+    v_next := NOW() + CASE v_attempts WHEN 1 THEN INTERVAL '1 minute'
+                                      WHEN 2 THEN INTERVAL '5 minutes'
+                                      WHEN 3 THEN INTERVAL '15 minutes'
+                                      ELSE INTERVAL '1 hour' END;
+    IF v_next > v_first + INTERVAL '3 days' THEN
+        v_next := NULL;
+    END IF;
+    UPDATE notification_failure SET next_attempt_at = v_next WHERE notification_id = p_id;
+    RETURN v_next;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION fail_notification(BIGINT, TEXT, BOOLEAN) IS
+'Records a failed attempt to deliver a person''s notification and
+returns when to try again: after 1, 5 and 15 minutes, then every hour;
+NULL — three days have passed since the first failure, it is given up.
+p_mailed — the email went this time (the webhook failed).';
+
+
 CREATE OR REPLACE FUNCTION grant_observer(
     p_task_id INT,
     p_employee_id INT,
