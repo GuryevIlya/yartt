@@ -403,10 +403,11 @@ describe('team', () => {
     member = (await summary()).find((m) => m.employeeId === dev.id)!;
     expect(member.backlogMinutes).toBe(90);
 
-    // The day ended two days ago and was scored now: about 1–2 days of waiting, on the manager's row.
+    // The shift ended at 17:00 two days ago and was scored now: a day and seven
+    // hours of waiting plus the time of day, on the manager's row.
     const leadRow = (await summary()).find((m) => m.employeeId === lead.id)!;
-    expect(leadRow.scoreWaitMinutes).toBeGreaterThan(1440);
-    expect(leadRow.scoreWaitMinutes).toBeLessThan(2 * 1440);
+    expect(leadRow.scoreWaitMinutes).toBeGreaterThanOrEqual(1440 + 7 * 60 - 1);
+    expect(leadRow.scoreWaitMinutes).toBeLessThan(2 * 1440 + 7 * 60);
   });
 
   test('the weekly email: Monday from 09:00 in the manager\'s time zone, once, only when there is something', async () => {
