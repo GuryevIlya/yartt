@@ -17,6 +17,7 @@ export const ERROR_CODES = [
   'sso_only',
   'sso_failed',
   'sso_other_browser',
+  'login_other_browser',
   'dismissed',
 
   // employees

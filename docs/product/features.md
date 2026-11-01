@@ -8,7 +8,7 @@ persona goal it serves. Status: **now** — stage one, **next** — stage two,
 
 | Feature | Serves | Status |
 |---|---|---|
-| Sign-in by a one-time link, no passwords | everyone: nothing to forget | now (done) |
+| Sign-in by a one-time link, no passwords; it works only in the browser that asked for it, so a mail scanner does not use it up and a forwarded email lets nobody in | everyone: nothing to forget | now (done) |
 | Invite a colleague by email, from the top line | Marina: bring the team in herself | now (done) |
 | "I'll be away" from the top line: the day I'm back in one click, seen on every page | everyone: going on leave takes a second, and nothing waits unseen meanwhile | now (done) |
 | Profile behind the avatar: name, sign-in email (a new one confirmed by a link sent there), about me (position, contacts); back at work on (vacation, sick leave), time zone, language, pronoun applied at once | Pavel: control what others see | now (done) |

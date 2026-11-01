@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { FIRST, signIn, sql } from './helpers.ts';
+import { FIRST, loginLink, signIn, sql } from './helpers.ts';
 
 test.describe('sign-in', () => {
   test('a link is requested by email; the page does not tell whether the email exists', async ({ page }) => {
@@ -11,8 +11,8 @@ test.describe('sign-in', () => {
   });
 
   test('the link signs in once; log out returns to the sign-in page', async ({ page }) => {
-    const [row] = await sql<{ token: string }[]>`SELECT issue_token(${FIRST}) AS token`;
-    await page.goto(`/login/${row!.token}`);
+    const link = (await loginLink(page))!;
+    await page.goto(link);
     await expect(page.getByRole('heading', { name: /Ждёт меня/ })).toBeVisible();
     await expect(page).toHaveTitle(/яртт/);
 
@@ -21,7 +21,7 @@ test.describe('sign-in', () => {
     await expect(page).toHaveURL(/\/login$/);
 
     // The same link again: single-use.
-    await page.goto(`/login/${row!.token}`);
+    await page.goto(link);
     await expect(page.getByText(/Ссылка недействительна/)).toBeVisible();
   });
 
@@ -41,9 +41,19 @@ test.describe('sign-in', () => {
   });
 
   test('a dismissed employee cannot sign in', async ({ page }) => {
-    const [row] = await sql<{ token: string | null }[]>`SELECT issue_token('sergey@example.com') AS token`;
-    expect(row!.token).toBeNull();
+    expect(await loginLink(page, 'sergey@example.com')).toBeNull();
     await signIn(page);
+  });
+
+  test('a link opened in another browser signs nobody in and still works where it was asked for', async ({ page, browser }) => {
+    const link = (await loginLink(page))!;
+    const elsewhere = await browser.newPage();
+    await elsewhere.goto(link);
+    await expect(elsewhere.getByText(/Откройте ссылку в том браузере, где запрашивали вход/)).toBeVisible();
+    await elsewhere.close();
+
+    await page.goto(link);
+    await expect(page.getByRole('heading', { name: /Ждёт меня/ })).toBeVisible();
   });
 });
 

@@ -155,7 +155,7 @@ describe('employee', () => {
     const dev = await createEmployee({ managerId: boss.id });
     const api = await client(boss.id);
     await api.Employee.dismiss({ id: dev.id });
-    const [token] = await sql<{ token: string | null }[]>`SELECT issue_token(${dev.email}) AS token`;
+    const [token] = await sql<{ token: string | null }[]>`SELECT issue_token(${dev.email}, 'browser') AS token`;
     expect(token?.token).toBeNull();
 
     const successor = await api.Employee.invite({ email: dev.email, fullName: 'Successor' });

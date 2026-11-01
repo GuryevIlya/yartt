@@ -13,6 +13,10 @@ const COOKIE_MAX_AGE_MS = 400 * 24 * 60 * 60 * 1000;
 // in this browser (decision 86): an hour, as in the database.
 const SSO_PENDING_COOKIE = 'yartt_sso_pending';
 const SSO_PENDING_MAX_AGE_MS = 60 * 60 * 1000;
+// The browser that asks for a sign-in link keeps a key here: the link signs
+// in only where it was asked for (decision 101), for its 10 minutes.
+const LOGIN_BROWSER_COOKIE = 'yartt_login';
+const LOGIN_BROWSER_MAX_AGE_MS = 15 * 60 * 1000;
 
 export type Context = {
   employeeId: number | null;
@@ -25,6 +29,9 @@ export type Context = {
   ssoPending: string | null;
   setSsoPendingCookie: (token: string) => void;
   clearSsoPendingCookie: () => void;
+  /** The key of the browser that asked for sign-in links (Auth.requestLogin). */
+  loginBrowser: string | null;
+  setLoginBrowserCookie: (key: string) => void;
 };
 
 export default async function ctx(req: Request, res: Response): Promise<Context> {
@@ -52,5 +59,7 @@ export default async function ctx(req: Request, res: Response): Promise<Context>
     ssoPending: bearer ? null : cookies[SSO_PENDING_COOKIE] ?? null,
     setSsoPendingCookie: (token) => res.cookie(SSO_PENDING_COOKIE, token, { ...cookieOptions, maxAge: SSO_PENDING_MAX_AGE_MS }),
     clearSsoPendingCookie: () => res.clearCookie(SSO_PENDING_COOKIE, cookieOptions),
+    loginBrowser: bearer ? null : cookies[LOGIN_BROWSER_COOKIE] ?? null,
+    setLoginBrowserCookie: (key) => res.cookie(LOGIN_BROWSER_COOKIE, key, { ...cookieOptions, maxAge: LOGIN_BROWSER_MAX_AGE_MS }),
   };
 }

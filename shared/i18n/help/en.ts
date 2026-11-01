@@ -118,7 +118,8 @@ export const helpEn: Help = {
         {
           title: 'Sign in',
           steps: [
-            'There are no passwords: enter your work email and a sign-in link is sent. If the company signs in through its own accounts '
+            'There are no passwords: enter your work email and a sign-in link is sent. Open it in the same browser: it does not work in '
+              + 'another one, so a forwarded email lets nobody in as you. If the company signs in through its own accounts '
               + '(SSO), press the button to sign in with them.',
             'The company account gives no confirmed email? The first time, yartt asks for your work email and sends a link to it. '
               + 'Open it in the same browser.',

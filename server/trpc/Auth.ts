@@ -17,24 +17,31 @@ export default router({
     .query(() => ({ sso: env.OIDC_ISSUER ? { name: env.OIDC_NAME } : null })),
 
   /**
-   * Sends a one-time sign-in link (valid for 10 minutes) through the webhook.
-   * Always succeeds, so it cannot be used to check whether an email exists.
+   * Sends a one-time sign-in link (valid for 10 minutes) by email and/or
+   * the webhook; it works only in this browser (decision 101), which keeps
+   * a key for it in a cookie. Always succeeds, so it cannot be used to
+   * check whether an email exists.
    * @throws sso_only — sign-in goes through the identity provider.
    */
   requestLogin: procedure
     .input(z.object({ email: Email }))
     .output(z.void())
-    .mutation(({ input }) => Auth.requestLogin(input.email)),
+    .mutation(({ input, ctx }) => {
+      const browser = ctx.loginBrowser ?? Auth.newBrowserKey();
+      ctx.setLoginBrowserCookie(browser);
+      return Auth.requestLogin(input.email, browser);
+    }),
 
   /**
    * Redeems the token from the sign-in link and sets the session cookie.
    * @throws invalid_token — the token is unknown, used or older than 10 minutes.
+   * @throws login_other_browser — opened outside the browser that asked for it; the link still works there.
    */
   login: procedure
     .input(z.object({ token: z.string().min(1).max(200) }))
     .output(z.void())
     .mutation(async ({ input, ctx }) => {
-      ctx.setSessionCookie(await Auth.login(input.token));
+      ctx.setSessionCookie(await Auth.login(input.token, ctx.loginBrowser));
     }),
 
   /**

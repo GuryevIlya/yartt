@@ -1987,3 +1987,28 @@ checked on writing.
 `trg_score_check()` (`db.sql`, migration `0.5-0.6`); `Time.set` and
 `Team.score` by shift; `client/components/MyDayPage/Day.tsx`,
 `LogTimeDialog.tsx`, `ShiftDialog.tsx`, `EmployeePage/ScoreDialog.tsx`.
+
+### 101. A sign-in link works only in the browser that asked for it
+
+The page of a sign-in link redeemed its token as soon as it opened. Mail
+scanners of large companies (Defender Safe Links, Mimecast, Proofpoint)
+open every link of an incoming email in a real browser that runs the
+page's scripts: the scanner used the link up and got the session, and
+the person met "The link is invalid". The same link forwarded, or read
+by the receiver of the webhook, signed in whoever opened it.
+
+Now asking for a link leaves a random key in this browser's cookie, and
+the token keeps its hash. The link signs in only where the key is; any
+other browser is told to open it where it was asked for, or to ask for a
+new one there, and the token is not used up, so the scanner that came
+first takes nothing away. Asking again from the same browser keeps its
+key, so every link sent to it works.
+
+Opening the email on a phone after asking on a laptop no longer signs
+the phone in: the link is asked for where it is needed. A confirmation
+on the page ("Sign in" pressed by hand) was the other way out; it keeps
+the forwarded link dangerous and is one more click every time.
+
+*Implemented:* `token.browser`, `issue_token()`, `login()` (`db.sql`,
+migration `0.5-0.6`); the `yartt_login` cookie (`server/ctx.ts`),
+`Auth.requestLogin`, `Auth.login`; the error `login_other_browser`.

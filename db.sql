@@ -338,6 +338,11 @@ AUTHENTICATION
     read-only SQL injection) does not let anyone sign in.
   - Issuing and checking tokens — functions issue_token, login,
     authenticate.
+  - A sign-in link works only in the browser that asked for it: the
+    request leaves a random key in that browser''s cookie, the token keeps
+    its hash. A link opened anywhere else (a mail scanner following links,
+    someone the email was forwarded to, the webhook''s receiver) signs
+    nobody in and is not used up.
 
 
 ============================================================================
@@ -353,10 +358,12 @@ the API is implemented.
       browser (begin_external_sign_in(), send_external_email(),
       confirm_external_email()); no sign-in links, no invites (people come
       in by signing in).
-    - Otherwise: request sign-in by email -> issue_token(), send the link through the
-      webhook directly (not through notification — the token must not lie
-      in the database in plain text).
-    - Follow the link from the email -> login(), set the cookie.
+    - Otherwise: request sign-in by email -> a key for this browser''s
+      cookie, issue_token(), send the link through the webhook directly
+      (not through notification — the token must not lie in the database
+      in plain text).
+    - Follow the link from the email -> login() with the browser''s key,
+      set the cookie.
     - Every request -> authenticate().
     - Log out -> deletes the session.
     - Log out everywhere -> deletes all sessions of the employee.
@@ -1114,7 +1121,10 @@ CREATE TABLE token (
     hash BYTEA PRIMARY KEY,
     employee_id INT NOT NULL REFERENCES human(employee_id),
     sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    email CITEXT
+    email CITEXT,
+    browser BYTEA,
+
+    CONSTRAINT chk_token_browser CHECK ((email IS NULL) = (browser IS NOT NULL))
 );
 CREATE INDEX idx_token_employee ON token(employee_id);
 CREATE INDEX idx_token_sent_at ON token(sent_at);
@@ -1140,6 +1150,14 @@ email one for a day.';
 
 COMMENT ON COLUMN token.email IS
 'The new address an email-change token confirms; NULL — a sign-in token.';
+
+COMMENT ON COLUMN token.browser IS
+'SHA-256 of the key the browser that asked for a sign-in link keeps in its
+cookie: login() signs in only there. NULL for an email-change token: it
+signs nobody in, so any browser may follow it.';
+
+COMMENT ON CONSTRAINT chk_token_browser ON token IS
+'A sign-in token is always bound to a browser, an email-change token never.';
 
 COMMENT ON INDEX idx_token_sent_at IS
 'For the cron cleanup of old tokens.';
@@ -3684,7 +3702,7 @@ FOR EACH ROW EXECUTE FUNCTION trg_tag_limit_immutable();
 -- ----------------------------------------------------------------------------
 -- auth
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION issue_token(p_email CITEXT)
+CREATE OR REPLACE FUNCTION issue_token(p_email CITEXT, p_browser TEXT)
 RETURNS TEXT AS $$
 DECLARE
     v_employee_id INT;
@@ -3704,14 +3722,15 @@ BEGIN
     END IF;
 
     v_token := encode(gen_random_bytes(32), 'hex');
-    INSERT INTO token (hash, employee_id)
-    VALUES (digest(v_token, 'sha256'), v_employee_id);
+    INSERT INTO token (hash, employee_id, browser)
+    VALUES (digest(v_token, 'sha256'), v_employee_id, digest(p_browser, 'sha256'));
     RETURN v_token;
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION issue_token(CITEXT) IS
-'Issues a magic token for the sign-in link (sent to the webhook directly).
+COMMENT ON FUNCTION issue_token(CITEXT, TEXT) IS
+'Issues a magic token for the sign-in link (sent to the webhook directly),
+bound to the browser that asked (p_browser — the key of its cookie).
 NULL — no such employee (or dismissed, or refused by the identity provider
 — idp_blocked_at), or 5 links in the last 15 minutes
 already (the same answer, so the limit reveals nothing).
@@ -3735,28 +3754,36 @@ hash. Called once the person is known — by a sign-in link (login()) or
 by the identity provider (sign_in_external(), confirm_external_email()).';
 
 
-CREATE OR REPLACE FUNCTION login(p_token TEXT)
+CREATE OR REPLACE FUNCTION login(p_token TEXT, p_browser TEXT)
 RETURNS TEXT AS $$
 DECLARE
     v_employee_id INT;
+    v_browser BYTEA;
 BEGIN
-    DELETE FROM token
+    SELECT employee_id, browser INTO v_employee_id, v_browser FROM token
      WHERE hash = digest(p_token, 'sha256')
        AND email IS NULL
        AND sent_at > NOW() - INTERVAL '10 minutes'
-    RETURNING employee_id INTO v_employee_id;
+       FOR UPDATE;
 
     IF v_employee_id IS NULL THEN
         RETURN NULL;
     END IF;
+    IF p_browser IS NULL OR v_browser <> digest(p_browser, 'sha256') THEN
+        RAISE EXCEPTION 'sign-in link opened outside the browser that asked for it'
+            USING HINT = 'login_other_browser';
+    END IF;
+    DELETE FROM token WHERE hash = digest(p_token, 'sha256');
     RETURN start_session(v_employee_id);
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION login(TEXT) IS
-'Redeems a magic token (at most 10 minutes old) and returns a session
-token for the cookie. NULL — the token is invalid. An email-change token
-never signs anyone in.';
+COMMENT ON FUNCTION login(TEXT, TEXT) IS
+'Redeems a magic token (at most 10 minutes old) in the browser that asked
+for it (p_browser — the key of its cookie) and returns a session token for
+the cookie. NULL — the token is invalid. Another browser gets
+login_other_browser and the token stays: a mail scanner opening the link
+first does not use it up. An email-change token never signs anyone in.';
 
 
 CREATE OR REPLACE FUNCTION request_email_change(p_employee_id INT, p_email CITEXT)

@@ -403,9 +403,6 @@ INSERT INTO task ("context", "context_image_ids", "handed_at", "id", "owner_id",
 -- task_mention
 INSERT INTO task_mention ("comment_id", "task_id", "value") SELECT "comment_id", "task_id", "value" FROM json_populate_record(NULL::task_mention, '{"comment_id" : 1, "task_id" : 7, "value" : 1}');
 
--- token
-INSERT INTO token ("email", "employee_id", "hash", "sent_at") SELECT "email", "employee_id", "hash", "sent_at" FROM json_populate_record(NULL::token, E'{"email" : null, "employee_id" : 1, "hash" : "\\\\x28eba8ae9a45ff3dde6f180371f89254abfaa1a785a634811d0fe69276b9496e", "sent_at" : "2026-10-17T17:02:20.690841+00:00"}');
-
 -- user_tag
 INSERT INTO user_tag ("color", "employee_id", "tag_id", "weight") SELECT "color", "employee_id", "tag_id", "weight" FROM json_populate_record(NULL::user_tag, '{"color" : "#1e88e5", "employee_id" : 1, "tag_id" : 1, "weight" : 3}');
 INSERT INTO user_tag ("color", "employee_id", "tag_id", "weight") SELECT "color", "employee_id", "tag_id", "weight" FROM json_populate_record(NULL::user_tag, '{"color" : "#43a047", "employee_id" : 1, "tag_id" : 4, "weight" : 2}');

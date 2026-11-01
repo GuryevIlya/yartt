@@ -8,11 +8,14 @@ const createCaller = createCallerFactory(trpc);
 
 export type TestClient = ReturnType<typeof createCaller> & {
   cookie: { value: string | null };
+  /** The key requestLogin() leaves in this "browser" (decision 101). */
+  browser: { value: string | null };
 };
 
 // Client with a "browser" cookie: login() sets it, logout() clears it.
 export async function client(employeeId: number | null = null, sessionToken: string | null = null, bot: Context['bot'] = null): Promise<TestClient> {
   const cookie = { value: sessionToken };
+  const browser = { value: null as string | null };
   const ctx: Context = {
     employeeId,
     bot,
@@ -22,10 +25,12 @@ export async function client(employeeId: number | null = null, sessionToken: str
     ssoPending: null,
     setSsoPendingCookie: () => {},
     clearSsoPendingCookie: () => {},
+    get loginBrowser() { return browser.value; },
+    setLoginBrowserCookie: (key) => { browser.value = key; },
   };
   // The caller is a Proxy where any property is a procedure path; expose cookie ourselves.
   return new Proxy(createCaller(ctx), {
-    get: (target, prop, receiver) => (prop === 'cookie' ? cookie : Reflect.get(target, prop, receiver)),
+    get: (target, prop, receiver) => (prop === 'cookie' ? cookie : prop === 'browser' ? browser : Reflect.get(target, prop, receiver)),
   }) as TestClient;
 }
 

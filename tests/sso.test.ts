@@ -195,7 +195,7 @@ describe('sign-in through the identity provider', () => {
     expect(await bot()).toBeNull();
     expect((await (await client(me.id)).Auth.me())?.idpBlockedAt).toBeInstanceOf(Date);
     // Back to sign-in links in an outage, they are still refused.
-    expect((await sql<{ token: string | null }[]>`SELECT issue_token(${ann.email!}) AS token`)[0]!.token).toBeNull();
+    expect((await sql<{ token: string | null }[]>`SELECT issue_token(${ann.email!}, 'browser') AS token`)[0]!.token).toBeNull();
 
     // Let in again: signing in clears it.
     await signIn(ann);

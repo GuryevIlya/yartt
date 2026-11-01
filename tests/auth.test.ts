@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { sql } from '../server/pg.ts';
 import type { Message } from '../server/delivery.ts';
-import { client, clientBySession, createEmployee } from './helpers.ts';
+import { client, clientBySession, createEmployee, type TestClient } from './helpers.ts';
 
 const sent: Message[] = [];
 vi.mock('../server/delivery.ts', () => ({
@@ -10,8 +10,9 @@ vi.mock('../server/delivery.ts', () => ({
 
 beforeEach(() => { sent.length = 0; });
 
-async function loginLink(email: string): Promise<string> {
-  await (await client()).Auth.requestLogin({ email });
+/** The token of a sign-in link asked for in this browser. */
+async function loginLink(email: string, browser: TestClient): Promise<string> {
+  await browser.Auth.requestLogin({ email });
   const message = sent.findLast((m) => m.payload.kind === 'login' && m.to.email?.toLowerCase() === email.toLowerCase());
   const url = message?.payload.kind === 'login' ? message.payload.url : '';
   return url.slice(url.lastIndexOf('/') + 1);
@@ -20,10 +21,10 @@ async function loginLink(email: string): Promise<string> {
 describe('auth', () => {
   test('magic link -> session -> me', async () => {
     const { id, email } = await createEmployee();
-    const token = await loginLink(email.toUpperCase());
+    const anonymous = await client();
+    const token = await loginLink(email.toUpperCase(), anonymous);
     expect(token).toMatch(/^[0-9a-f]{64}$/);
 
-    const anonymous = await client();
     await anonymous.Auth.login({ token });
     expect(anonymous.cookie.value).toMatch(/^[0-9a-f]{64}$/);
 
@@ -33,20 +34,43 @@ describe('auth', () => {
 
   test('token is single-use and stored hashed', async () => {
     const { email } = await createEmployee();
-    const token = await loginLink(email);
+    const browser = await client();
+    const token = await loginLink(email, browser);
 
     const [stored] = await sql`SELECT 1 FROM token WHERE hash = ${token}`;
     expect(stored).toBeUndefined();
 
-    await (await client()).Auth.login({ token });
-    await expect((await client()).Auth.login({ token })).rejects.toMatchObject({ message: 'invalid_token' });
+    await browser.Auth.login({ token });
+    await expect(browser.Auth.login({ token })).rejects.toMatchObject({ message: 'invalid_token' });
+  });
+
+  test('a link signs in only in the browser that asked for it, and elsewhere is not used up', async () => {
+    const { id, email } = await createEmployee();
+    const browser = await client();
+    const token = await loginLink(email, browser);
+    const key = browser.browser.value;
+    expect(key).toMatch(/^[0-9a-f]{64}$/);
+
+    // A mail scanner, or whoever the email was forwarded to: no key, or another one.
+    await expect((await client()).Auth.login({ token })).rejects.toMatchObject({ message: 'login_other_browser' });
+    const other = await client();
+    await other.Auth.requestLogin({ email: `nobody-${email}` });
+    await expect(other.Auth.login({ token })).rejects.toMatchObject({ message: 'login_other_browser' });
+
+    // A second link keeps the browser's key; both work there.
+    const second = await loginLink(email, browser);
+    expect(browser.browser.value).toBe(key);
+    await browser.Auth.login({ token });
+    expect((await (await clientBySession(browser.cookie.value!)).Auth.me())?.id).toBe(id);
+    await browser.Auth.login({ token: second });
   });
 
   test('expired token is rejected', async () => {
     const { email } = await createEmployee();
-    const token = await loginLink(email);
+    const browser = await client();
+    const token = await loginLink(email, browser);
     await sql`UPDATE token SET sent_at = NOW() - INTERVAL '11 minutes' WHERE hash = digest(${token}, 'sha256')`;
-    await expect((await client()).Auth.login({ token })).rejects.toMatchObject({ message: 'invalid_token' });
+    await expect(browser.Auth.login({ token })).rejects.toMatchObject({ message: 'invalid_token' });
   });
 
   test('unknown email: same answer, nothing sent', async () => {
@@ -67,7 +91,7 @@ describe('auth', () => {
     const sessions: string[] = [];
     for (let i = 0; i < 3; i++) {
       const anonymous = await client();
-      await anonymous.Auth.login({ token: await loginLink(email) });
+      await anonymous.Auth.login({ token: await loginLink(email, anonymous) });
       sessions.push(anonymous.cookie.value!);
     }
 
@@ -91,10 +115,10 @@ describe('sign-in links are limited', () => {
   test('five links in 15 minutes; the sixth is refused like an unknown address', async () => {
     const me = await createEmployee();
     for (let i = 0; i < 5; i++) {
-      const [row] = await sql<{ token: string | null }[]>`SELECT issue_token(${me.email}) AS token`;
+      const [row] = await sql<{ token: string | null }[]>`SELECT issue_token(${me.email}, 'browser') AS token`;
       expect(row!.token).not.toBeNull();
     }
-    const [sixth] = await sql<{ token: string | null }[]>`SELECT issue_token(${me.email}) AS token`;
+    const [sixth] = await sql<{ token: string | null }[]>`SELECT issue_token(${me.email}, 'browser') AS token`;
     expect(sixth!.token).toBeNull();
   });
 
@@ -113,7 +137,7 @@ describe('sign-in links are limited', () => {
 
     // It never signs in, and a sign-in link never confirms.
     await expect((await client()).Auth.login({ token })).rejects.toMatchObject({ message: 'invalid_token' });
-    await expect((await client()).Auth.confirmEmail({ token: await loginLink(me.email) })).rejects.toMatchObject({ message: 'invalid_token' });
+    await expect((await client()).Auth.confirmEmail({ token: await loginLink(me.email, await client()) })).rejects.toMatchObject({ message: 'invalid_token' });
 
     await (await client()).Auth.confirmEmail({ token });
     expect((await api.Auth.me())?.email).toBe(next);

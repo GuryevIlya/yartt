@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { Employee, Locale } from '#shared/employee.ts';
 import { deliver } from '../delivery.ts';
@@ -13,15 +14,19 @@ const EmployeeId = z.object({ id: z.number().nullable() });
 const Recipient = Employee.pick({ id: true, fullName: true, timeZone: true })
   .extend({ email: z.string(), locale: Locale.catch('ru') });
 
+/** A new key for a browser's cookie that sign-in links are bound to. */
+export const newBrowserKey = () => randomBytes(32).toString('hex');
+
 /**
  * Sends a sign-in link (email and/or webhook) right away, not through the
  * notification queue: the token must not lie in the database in plain text.
- * Does nothing for unknown or dismissed emails, so the caller cannot tell
+ * The link works only in the browser with this key (decision 101). Does
+ * nothing for unknown or dismissed emails, so the caller cannot tell
  * whether the email exists.
  */
-export async function requestLogin(email: string): Promise<void> {
+export async function requestLogin(email: string, browser: string): Promise<void> {
   if (env.OIDC_ISSUER) throw new AppError('sso_only');
-  const [token] = Token.array().parse(await sql`SELECT issue_token(${email}) AS token`);
+  const [token] = Token.array().parse(await sql`SELECT issue_token(${email}, ${browser}) AS token`);
   if (!token?.token) return;
 
   const [employee] = Recipient.array().parse(await sql`
@@ -36,9 +41,13 @@ export async function requestLogin(email: string): Promise<void> {
   });
 }
 
-/** Redeems a sign-in token and returns a new session token. */
-export async function login(token: string): Promise<string> {
-  const [row] = Session.array().parse(await sql`SELECT login(${token}) AS session`);
+/**
+ * Redeems a sign-in token in the browser that asked for it and returns a
+ * new session token.
+ * @throws invalid_token, login_other_browser
+ */
+export async function login(token: string, browser: string | null): Promise<string> {
+  const [row] = Session.array().parse(await sql`SELECT login(${token}, ${browser}) AS session`);
   if (!row?.session) throw new AppError('invalid_token');
   return row.session;
 }
@@ -142,11 +151,12 @@ export async function demoPeople(): Promise<Employee[]> {
  * link carries — issued and redeemed at once.
  */
 export async function demoSignIn(employeeId: number): Promise<string> {
+  const browser = newBrowserKey();
   const [token] = Token.array().parse(await sql`
-    SELECT issue_token(email) AS token FROM employee WHERE id = ${employeeId} AND dismissed_at IS NULL
+    SELECT issue_token(email, ${browser}) AS token FROM employee WHERE id = ${employeeId} AND dismissed_at IS NULL
   `);
   if (!token?.token) throw new AppError('not_found');
-  return login(token.token);
+  return login(token.token, browser);
 }
 
 export async function logout(sessionToken: string): Promise<void> {

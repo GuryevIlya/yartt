@@ -19,8 +19,8 @@ describe('avatars over HTTP', () => {
   });
 
   async function cookieOf(email: string): Promise<string> {
-    const [token] = await sql<{ t: string }[]>`SELECT issue_token(${email}) AS t`;
-    const [session] = await sql<{ s: string }[]>`SELECT login(${token!.t}) AS s`;
+    const [token] = await sql<{ t: string }[]>`SELECT issue_token(${email}, 'browser') AS t`;
+    const [session] = await sql<{ s: string }[]>`SELECT login(${token!.t}, 'browser') AS s`;
     return `yartt_session=${session!.s}`;
   }
 
