@@ -178,13 +178,13 @@ describe('bots', () => {
     });
 
     test('gets its notifications as JSON signed with its own secret; a failing one does not hold the queue', async () => {
-      const got: { body: string; signature: string }[] = [];
+      const got: { body: string; signature: string; timestamp: string }[] = [];
       let status = 200;
       const hook = createServer((req, res) => {
         let body = '';
         req.on('data', (chunk) => { body += chunk; });
         req.on('end', () => {
-          got.push({ body, signature: String(req.headers['x-yartt-signature']) });
+          got.push({ body, signature: String(req.headers['x-yartt-signature']), timestamp: String(req.headers['x-yartt-timestamp']) });
           res.writeHead(status).end();
         });
       }).listen(0);
@@ -202,8 +202,9 @@ describe('bots', () => {
 
         expect(await deliverNotifications(sql)).toBe(1);
         expect(got).toHaveLength(1);
-        const { body, signature } = got[0]!;
-        expect(signature).toBe(`sha256=${createHmac('sha256', secret).update(body).digest('hex')}`);
+        const { body, signature, timestamp } = got[0]!;
+        expect(Math.abs(Number(timestamp) - Date.now() / 1000)).toBeLessThan(60);
+        expect(signature).toBe(`sha256=${createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')}`);
         expect(JSON.parse(body)).toMatchObject({
           version: 1, kind: 'mention', taskId: task, to: { employeeId: id, kind: 'bot', email: null }, data: { by: lead.id },
         });

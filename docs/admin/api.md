@@ -45,7 +45,19 @@ a `POST` with JSON, signed with the bot's own secret (shown in its
 settings, replaceable there):
 
 ```
-x-yartt-signature: sha256=<HMAC-SHA256 of the body with the secret, hex>
+x-yartt-timestamp: <when it was sent, Unix seconds>
+x-yartt-signature: sha256=<HMAC-SHA256 of "<timestamp>.<body>" with the secret, hex>
+```
+
+The receiver computes the signature over the timestamp, a dot and the
+raw body, compares it in constant time, and refuses a timestamp more
+than five minutes away from its clock: a request caught on the way
+cannot be replayed later. In Node:
+
+```js
+const expected = 'sha256=' + createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
+const ok = signature.length === expected.length && timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+  && Math.abs(Date.now() / 1000 - Number(timestamp)) < 300;
 ```
 
 ```json

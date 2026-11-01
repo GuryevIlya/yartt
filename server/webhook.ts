@@ -36,11 +36,15 @@ export async function sendWebhook(message: WebhookMessage, target?: WebhookTarge
     return;
   }
 
-  const signature = createHmac('sha256', to.secret).update(body).digest('hex');
+  // The moment is signed with the body: a receiver refuses an old one, so a
+  // request caught on the way cannot be sent to it again later.
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = createHmac('sha256', to.secret).update(`${timestamp}.${body}`).digest('hex');
   const response = await fetch(to.url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
+      'x-yartt-timestamp': timestamp,
       'x-yartt-signature': `sha256=${signature}`,
     },
     body,
