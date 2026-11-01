@@ -41,6 +41,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # What the image runs has no known high or critical advisory; tools are left out.
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm test
       # The runner has Google Chrome; the suite uses it (playwright.config.ts, channel: chrome).

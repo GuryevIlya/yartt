@@ -10,6 +10,7 @@ Run both suites before calling a change done.
 | Types | contracts between client, server and shared schemas | `tsconfig.json`, `client/tsconfig.json` | `npm run typecheck` |
 | API + database | business rules in triggers and functions, access, procedures, emails | `tests/*.test.ts` (vitest, real PostgreSQL, `createCaller`; HTTP for files and avatars) | `TEST_DATABASE_URL=… npm test` |
 | End-to-end | the built client against the real server, as a person uses it | `e2e/*.spec.ts` (Playwright, installed Chrome) | `TEST_DATABASE_URL=… npm run e2e` |
+| Dependencies | what the image runs has no known high or critical advisory (CI) | `package-lock.json` | `npm audit --omit=dev --audit-level=high` |
 
 `TEST_DATABASE_URL` is an admin connection: each suite creates its own
 database (vitest — a temporary one; end-to-end — `yartt_e2e`, filled by
