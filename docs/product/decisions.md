@@ -1857,3 +1857,27 @@ is task.handed_at, and what nothing recorded is shown without its author.
 *Implemented:* `owner_change`, `trg_task_owner_reset_review()` with
 `yartt.actor` (`db.sql`, migration `0.5-0.6`); `setActor()` in
 `server/services/Task.ts`; the `owner` event of the feed.
+
+### 97. Who knows the subject is shown under the tags
+
+"I do not know who should take it" was answered by the guide alone: look
+up tasks with the same tags, unfold a tag's people, or ask a manager.
+The data to answer it was there already: who logged time on tasks with
+these tags. Studies of bug triage find the same: the history of similar
+work is the strongest sign of who knows it.
+
+Now, under the tags of a new task and under "Add participant" of a
+private one, up to three people who logged time in the past year on tasks
+sharing the tags, a click invites one. The most shared tags over the
+most tasks come first, and the line shows how many such tasks: a count,
+not hours, so people are not compared by hours (decision 68). Only
+tasks the viewer sees count, so nobody's private work shows through;
+the viewer, the dismissed and bots are left out.
+
+Who has time for it is deliberately not weighed: a plan is the person's
+own word, and whether they take it is for them and their manager to say
+once invited.
+
+*Implemented:* `Task.experts` (`server/services/Task.ts`);
+`client/components/App/Experts.tsx` in the new task form and the task's
+people.

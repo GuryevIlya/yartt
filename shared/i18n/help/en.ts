@@ -213,7 +213,10 @@ export const helpEn: Help = {
           title: 'Find who will do it',
           steps: [
             'Not sure who will take it? The task stays yours anyway: you need the result. First find someone who knows the area.',
-            'Look up tasks with the same tags in Available tasks, the Closed tab too. Hover a task to see who worked in it.',
+            'Start with the tags. Under them, the new task form and the "Add participant" field show who knows the subject: those '
+              + 'who worked on tasks with these tags in the past year. Click a person to make them a participant.',
+            'Want to look yourself? Find tasks with the same tags in Available tasks, the Closed tab too. Hover a task to see who '
+              + 'worked in it.',
             'In the Tags block, a tag\'s row unfolds who logged time on its tasks.',
             'Found nobody? Bring in the manager of the team that fits as a participant and mention them in a comment with @: '
               + '"Who of yours could take this?". They bring the right person in, and the task stays yours.',

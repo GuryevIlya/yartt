@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  type CreateInput, type Dependency, type SearchInput, type SearchResult, Tag, type TaskDetails,
+  type CreateInput, type Dependency, Expert, type SearchInput, type SearchResult, Tag, type TaskDetails,
   type TaskHeader, type TaskPage, TaskPreview, type TitleTaken, type UpdateInput, Access, Priority,
 } from '#shared/task.ts';
 import { AppError } from '../errors.ts';
@@ -209,6 +209,34 @@ export async function similar(viewerId: number, names: string[]): Promise<TaskHe
      LIMIT ${SIMILAR}
   `).map((r) => r.id);
   return headers(viewerId, ids);
+}
+
+const EXPERTS = 5;
+
+/**
+ * Who knows the subject: those who logged time in the past year on tasks
+ * sharing tags with these, the most shared tags over the most tasks first.
+ * Only tasks the viewer sees count, so nobody's private work shows through;
+ * the viewer, the dismissed and bots are left out.
+ */
+export async function experts(viewerId: number, names: string[]): Promise<Expert[]> {
+  return Expert.array().parse(await sql`
+    WITH t AS (SELECT id FROM tag WHERE name = ANY(${[...new Set(names)]})),
+    w AS (
+      SELECT s."by" AS employee_id, k.id AS task_id,
+             (SELECT count(*) FROM unnest(k.tag_ids) x WHERE x IN (SELECT id FROM t)) AS shared
+        FROM spent_minutes s JOIN task k ON k.id = s.task_id
+       WHERE k.tag_ids && (SELECT array_agg(id) FROM t)
+         AND s.day >= CURRENT_DATE - 365
+       GROUP BY s."by", k.id
+    )
+    SELECT w.employee_id, count(*)::int AS tasks
+      FROM w JOIN employee e ON e.id = w.employee_id
+     WHERE e.dismissed_at IS NULL AND e.id <> ${viewerId} AND can_see(w.task_id, ${viewerId})
+     GROUP BY w.employee_id
+     ORDER BY sum(w.shared) DESC, count(*) DESC, w.employee_id
+     LIMIT ${EXPERTS}
+  `);
 }
 
 /** Ids of the tags with these names; missing ones are created. */

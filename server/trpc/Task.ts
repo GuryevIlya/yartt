@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Id } from '#shared/employee.ts';
-import { CreateInput, SearchInput, SearchResult, TaskHeader, TaskPage, TaskPreview, TitleInput, TitleTaken, TransferInput, UpdateInput } from '#shared/task.ts';
+import { CreateInput, Expert, SearchInput, SearchResult, TaskHeader, TaskPage, TaskPreview, TitleInput, TitleTaken, TransferInput, UpdateInput } from '#shared/task.ts';
 import * as Tasks from '../services/Task.ts';
 import { authedProcedure, router } from '../trpc.ts';
 
@@ -44,6 +44,18 @@ export default router({
     .input(TitleInput)
     .output(TaskHeader.array())
     .query(({ input, ctx }) => Tasks.similar(ctx.employeeId, input.tags)),
+
+  /**
+   * Who knows the subject of these tags: up to five people who logged time
+   * in the past year on tasks sharing them, the most shared tags over the
+   * most tasks first, with how many such tasks. Counts only tasks the
+   * caller sees; the caller, the dismissed and bots are left out. Anyone
+   * may call it: it answers "who should I invite".
+   */
+  experts: authedProcedure
+    .input(TitleInput)
+    .output(Expert.array())
+    .query(({ input, ctx }) => Tasks.experts(ctx.employeeId, input.tags)),
 
   /**
    * The task page. The header (tags, priority, deadline, owner, public or

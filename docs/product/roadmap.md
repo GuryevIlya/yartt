@@ -35,12 +35,7 @@ it is decided. Proposals wait for a decision in their own section.
 
 In this order after stage 6 (S — a day, M — a few days, L — a week or more).
 
-- [ ] **Who knows the subject (M).** Under the tags of a new task, and
-  in the field that adds a participant, two or three people who logged
-  the most time in tasks with those tags lately, with "Invite": the
-  answer to "I do not know who should take it" is in the data already.
-  Only tasks the author sees count, and dismissed people and bots are
-  left out.
+Nothing approved is waiting.
 
 ## Proposals
 

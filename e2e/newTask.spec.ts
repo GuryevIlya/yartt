@@ -55,6 +55,11 @@ test.describe('new task', () => {
     await page.getByRole('option', { name: 'склад', exact: true }).click();
     await expect(page.getByText('Похожие задачи')).toBeVisible();
     await expect(page.getByRole('link', { name: /склад · инвентаризация за октябрь/ }).filter({ visible: true }).first()).toBeVisible();
+    // Who worked on such tasks is offered, and a click brings them in (decision 97).
+    await expect(page.getByText('Кто разбирается:')).toBeVisible();
+    await page.getByRole('button', { name: 'Марина Соколова · задач: 1' }).click();
+    await expect(page.getByRole('button', { name: 'Марина Соколова · задач: 1' })).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Участники' }).locator('..').getByText('Марина Соколова')).toBeVisible();
   });
 
   test('participants are brought in from the form: the task opens with them, I stay the owner', async ({ page }) => {

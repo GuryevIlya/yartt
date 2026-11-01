@@ -120,6 +120,10 @@ export type SearchInput = z.infer<typeof SearchInput>;
 export const TitleInput = z.object({ tags: TagName.array().min(1).max(20) });
 export type TitleInput = z.infer<typeof TitleInput>;
 
+/** Someone who worked on tasks with these tags: how many such tasks they logged time on. */
+export const Expert = z.object({ employeeId: Id, tasks: z.number().int() });
+export type Expert = z.infer<typeof Expert>;
+
 /** The task with exactly these tags; NULL — none: the title is free. */
 export const TitleTaken = z.object({ id: Id }).nullable();
 export type TitleTaken = z.infer<typeof TitleTaken>;

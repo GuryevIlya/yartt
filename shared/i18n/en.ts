@@ -297,6 +297,11 @@ export const en: Translation = {
       + 'the owner. They get no notice of comments: for an answer, mention them in a comment with @.',
     create: 'Create task',
   },
+  experts: {
+    title: 'Who knows the subject:',
+    hint: 'People who logged time on tasks with these tags in the past year, those with more shared tags and tasks first. Only tasks you see count. Click a person to invite them.',
+    item: '{{name}} · tasks: {{count}}',
+  },
   taskHint: {
     private: 'A private task: its participants see the context and the time.',
     noTime: 'No time logged to it yet.',

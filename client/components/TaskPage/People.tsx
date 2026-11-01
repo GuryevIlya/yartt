@@ -12,6 +12,7 @@ import { useEmployees, usePronoun, useTaskRefresh, POLL_MS } from '#client/hooks
 import { useTRPC } from '#client/hooks/trpc.ts';
 import EmployeeAvatar from '../App/EmployeeAvatar.tsx';
 import { employeeFilter, employeeOption } from '../App/employeeOption.tsx';
+import Experts from '../App/Experts.tsx';
 
 const PAGE_SIZE = 10;
 
@@ -129,6 +130,13 @@ export default function (p: { task: TaskPage }) {
           renderInput={(params) => (
             <TextField {...params} variant="outlined" placeholder={t('task.people.add')} helperText={t('task.people.addHint')} />
           )}
+        />
+      )}
+      {inside && !p.task.isPublic && (
+        <Experts
+          tags={p.task.tags.map((tag) => tag.name)}
+          exclude={[...activeIds]}
+          onPick={(employeeId) => add.mutate({ taskId, employeeId })}
         />
       )}
 

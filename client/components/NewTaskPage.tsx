@@ -16,6 +16,7 @@ import TagInput, { useTitle } from './App/TagInput.tsx';
 import PriorityChip from './TaskPage/PriorityChip.tsx';
 import TaskLine from './TaskPage/TaskLine.tsx';
 import TakenLink from './App/TakenLink.tsx';
+import Experts from './App/Experts.tsx';
 
 type Draft = { tags: TagPart[]; input: string; priority: Priority; deadline: string; context: string; participants: number[] };
 const EMPTY: Draft = { tags: [], input: '', priority: 'NORMAL', deadline: '', context: '', participants: [] };
@@ -170,6 +171,11 @@ export default function () {
         renderInput={(params) => (
           <TextField {...params} label={t('newTask.participants')} helperText={t('newTask.participantsHint')} />
         )}
+      />
+      <Experts
+        tags={picked}
+        exclude={participants}
+        onPick={(id) => change({ participants: [...participants, id] })}
       />
 
       {relatedId !== undefined && (

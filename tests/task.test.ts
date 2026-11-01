@@ -50,6 +50,30 @@ describe('access', () => {
     expect((await api.Task.similar({ tags: [b] })).map((task) => task.id)).toEqual([exact, both]);
   });
 
+  test('who knows the subject: shared tags over tasks, only tasks the caller sees, never the caller (decision 97)', async () => {
+    const [me, pavel, ivan, olga] = [await createEmployee(), await createEmployee(), await createEmployee(), await createEmployee()];
+    const [api, P, I, O] = [await client(me.id), await client(pavel.id), await client(ivan.id), await client(olga.id)];
+    const [a, b] = [`a-${randomUUID().slice(0, 8)}`, `b-${randomUUID().slice(0, 8)}`];
+    const today = (await api.MyDay.history({ page: 1 })).today;
+    const both = await P.Task.create({ tags: [a, b, `x-${randomUUID().slice(0, 8)}`] });
+    await P.Observer.add({ taskId: both, employeeId: ivan.id });
+    await P.Observer.add({ taskId: both, employeeId: me.id });
+    const one = await I.Task.create({ tags: [a, `y-${randomUUID().slice(0, 8)}`] });
+    await I.Observer.add({ taskId: one, employeeId: me.id });
+    // Olga's task is private and I am not in it: her work there does not show through.
+    const hidden = await O.Task.create({ tags: [a, b, `z-${randomUUID().slice(0, 8)}`] });
+    for (const [who, task] of [[P, both], [I, both], [I, one], [api, both], [O, hidden]] as const) {
+      await who.Time.set({ taskId: task, day: today, minutes: 60 });
+    }
+
+    // Ivan: two tags on one task and one on another; Pavel: two on one.
+    expect(await api.Task.experts({ tags: [a, b] })).toEqual([
+      { employeeId: ivan.id, tasks: 2 },
+      { employeeId: pavel.id, tasks: 1 },
+    ]);
+    expect(await O.Task.experts({ tags: [a, b] })).toEqual([]);
+  });
+
   test('participants come in with the new task, each told who brought them', async () => {
     const owner = await createEmployee();
     const dev = await createEmployee();

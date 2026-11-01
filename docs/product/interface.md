@@ -331,7 +331,10 @@ picked tags, the most in common first, open before closed — so a new
 task is written next to what exists. A title another task has is named under the field and
 "Create task" waits. Priority, deadline, context and participants —
 brought in at once, each told, as a participant brings people in later
-— are optional; a
+— are optional. Under the participants, "Who knows the subject": up to
+three people who logged time in the past year on tasks sharing the
+picked tags, with how many such tasks, a click brings one in (decision
+97); a private task's people offer the same under "Add participant". A
 dependency the form was opened with can be dropped; opened from a task,
 the title starts as that task's tags, to be told apart with a phrase or
 one more tag. "Create task" opens
