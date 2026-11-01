@@ -48,7 +48,7 @@ export default router({
   /**
    * "Done" after a reply, or "No reply needed" without one: the signed-in
    * employee closes their mention in a comment. It stays in the author's
-   * Waiting for others until they accept it (decision 95).
+   * Waiting for others until they review it (decision 98).
    * @throws not_found — no open mention of them there.
    */
   closeMention: authedProcedure
@@ -85,16 +85,16 @@ export default router({
     .mutation(({ input, ctx }) => Comments.removeMention(ctx.employeeId, input.taskId, input.commentId, input.employeeId)),
 
   /**
-   * "Accepted": the author accepts every mention of their comment with a
-   * reaction — closed, or answered and still open (that closes it too).
-   * Mentioning the person again in the task accepts the earlier ones by
-   * itself.
+   * "No intervention needed" on one's own comment: its author has seen the
+   * reactions to its mentions up to `until` — the newest one shown; none
+   * — now. The comment leaves Waiting for others until a later reaction;
+   * open mentions stay open (decision 98).
    * @throws forbidden — not the comment's author.
    * @throws no_access
    */
-  acceptMentions: authedProcedure
+  reviewComment: authedProcedure
     .meta({ bot: 'comment' })
-    .input(z.object({ taskId: Id, commentId: Id }))
+    .input(z.object({ taskId: Id, commentId: Id, until: z.date().optional() }))
     .output(z.void())
-    .mutation(({ input, ctx }) => Comments.acceptMentions(ctx.employeeId, input.taskId, input.commentId)),
+    .mutation(({ input, ctx }) => Comments.reviewComment(ctx.employeeId, input.taskId, input.commentId, input.until)),
 });

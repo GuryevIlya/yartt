@@ -2,6 +2,7 @@ import { AlternateEmail, LockOutlined } from '@mui/icons-material';
 import { Box, Button, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { newestReaction } from '#shared/comment.ts';
 import type { WaitingItem } from '#shared/myDay.ts';
 import { useFormat } from '#client/hooks/format.ts';
 import { POLL_MS, useEmployees, useTaskRefresh } from '#client/hooks/task.ts';
@@ -15,10 +16,12 @@ import TaskLine from '../TaskPage/TaskLine.tsx';
 /**
  * What I wait for from others (decision 67), the counterpart of "Waiting for
  * me": my access requests not answered yet, with "Withdraw", and my
- * comments with mentions I have not accepted — the longest waiting first,
- * each person open, answered or closed with or without a reply, and one
- * "Accepted" for what has a reaction (decision 95). Shown only when there
- * is something: quiet by default.
+ * comments with mentions I have not reviewed — the longest waiting first,
+ * each person open, answered or closed with or without a reply (decision
+ * 95); reviewed once, only who reacted since, and how many have not
+ * answered. "No intervention needed" takes the comment away until the next
+ * reaction (decision 98). Shown only when there is something: quiet by
+ * default.
  */
 export default function () {
   const { t } = useTranslation();
@@ -49,7 +52,7 @@ function Item(p: { item: WaitingItem }) {
   const employees = useEmployees();
   const refresh = useTaskRefresh();
   const withdraw = useMutation(trpc.Observer.withdraw.mutationOptions({ onSuccess: refresh }));
-  const accept = useMutation(trpc.Comment.acceptMentions.mutationOptions({ onSuccess: refresh }));
+  const review = useMutation(trpc.Comment.reviewComment.mutationOptions({ onSuccess: refresh }));
   const name = (id: number | null) => (id === null ? '—' : employees.get(id)?.fullName ?? `#${id}`);
   const { item } = p;
 
@@ -78,15 +81,18 @@ function Item(p: { item: WaitingItem }) {
                     {person.replies.map((r) => <MentionReply key={r.id} who={name(person.employeeId)} reply={r} />)}
                   </Stack>
                 ))}
+                {item.quiet > 0 && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('myDay.waiting.quiet', { count: item.quiet })}</Typography>
+                )}
               </Stack>
             </>
           )}
         </Box>
-        {item.kind === 'mention' && !readOnly && item.people.some((person) => mentionState(person) !== 'open') && (
-          <Tooltip title={t('task.feed.acceptHint')} describeChild>
-            <Button size="small" variant="contained" sx={{ ml: 'auto' }} disabled={accept.isPending}
-              onClick={() => accept.mutate({ taskId: item.task.id, commentId: item.commentId })}>
-              {t('task.feed.accept')}
+        {item.kind === 'mention' && !readOnly && (
+          <Tooltip title={t('task.feed.reviewHint')} describeChild>
+            <Button size="small" variant="contained" sx={{ ml: 'auto' }} disabled={review.isPending}
+              onClick={() => review.mutate({ taskId: item.task.id, commentId: item.commentId, until: newestReaction(item.people, item.reviewedAt) })}>
+              {t('task.feed.review')}
             </Button>
           </Tooltip>
         )}

@@ -140,8 +140,9 @@ export const helpEn: Help = {
             'Your task\'s deadline has passed: what to do is under "Close a task".',
             'Waiting for others, below, is the other way round: your requests and mentions waiting for others. The longest waiting '
               + 'on top; a request can be withdrawn right there.',
-            'A mention stays in Waiting for others until you press "Accepted": you see whether the person replied or closed it '
-              + 'without a reply. If something more is needed, mention them again, and the earlier mention is accepted by itself.',
+            'A comment with mentions stays in Waiting for others: you see who replied and who closed the mention without a reply. '
+              + 'When nothing is needed from you, press "No intervention needed". The comment leaves and comes back only if someone '
+              + 'else replies or closes a mention. So a comment to a hundred people does not remind you after each of them.',
           ],
         },
         {
@@ -468,10 +469,11 @@ export const helpEn: Help = {
             + 'and notified of it. The owner removes whoever is not needed, so a task never spreads quietly.',
         },
         {
-          q: 'Why press "Accepted" if the person has closed the mention already?',
+          q: 'Why does a closed mention not leave Waiting for others by itself?',
           a: 'A mention is a request, and whoever asked should learn what came of it. The person mentioned may close it without a '
-            + 'reply: sometimes a message only needs reading. So a closed mention does not vanish; it waits in Waiting for others, '
-            + 'marked whether there was a reply. If there was none and one is needed, mention the person again.',
+            + 'reply: sometimes a message only needs reading. So the comment waits in Waiting for others, each person marked '
+            + 'whether they replied, until you press "No intervention needed". If there was no reply and one is needed, mention '
+            + 'the person again.',
         },
         {
           q: 'How does "Done" differ from "No intervention needed"?',

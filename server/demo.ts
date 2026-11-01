@@ -327,7 +327,7 @@ export async function seedDemo(lang: DemoLanguage): Promise<void> {
   const mockup = await P.Comment.create(comment(site, c.mockup(`/api/attachments/${image}`), { files: [{ id: file, name: c.csvName }] }));
   await I.Comment.create(comment(site, c.carouselAsk, { replyToId: mockup }));
   await P.Comment.create(comment(site, c.carouselDone, { mentionIds: [marina] }));
-  // I tell everyone in the task; Pavel closes it without a reply, and it waits in my Waiting for others for "Accepted".
+  // I tell everyone in the task; Pavel closes it without a reply, and it waits in my Waiting for others for "No intervention needed".
   const moved = await I.Comment.create(comment(site, c.demoMoved, { everyone: true }));
   await P.Comment.closeMention({ taskId: site, commentId: moved });
   await P.Comment.create(comment(auth, c.auth, { taskIds: [site] }));

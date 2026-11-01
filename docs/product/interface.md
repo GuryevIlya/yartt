@@ -80,13 +80,14 @@ tags, the hour budgets and the bots (decision 83):
   scoring is never required, it lives on the employee's page.
 - **Waiting for others** — a list of its own under TODO, shown only when
   there is something: my access requests the owner has not answered yet,
-  with "Withdraw", and my comments with mentions I have not accepted —
+  with "Withdraw", and my comments with mentions I have not reviewed —
   the beginning of the comment, and under it each person: "no reply",
   "replied", "replied, closed" or "closed without a reply", with their
-  answers. One "Accepted" takes every mention of the comment that has a
-  reaction (an answered open one is closed by it); mentioning the person
-  again in the task accepts the earlier one by itself. The longest
-  waiting on top (decisions 67, 95).
+  answers. "No intervention needed" takes the comment away until a later
+  reaction; then only those who reacted since are shown, and "Not
+  answered yet: N" for the rest who never did. Open mentions stay open
+  with those mentioned. The longest waiting on top (decisions 67, 95,
+  98).
 - **Available tasks** — every open task I see (no deadline, or a deadline
   ahead), in tabs: **My open** (I answer for them, or I have time planned
   on them — "my plan 4h" on the line, decision 85), for a manager **Team
@@ -232,7 +233,8 @@ Left, top to bottom:
   by a reply of the person mentioned, made after they were mentioned.
   Under a comment its mentions show their state; the author adds
   someone later with @ under it, takes a mention back (✕) until it has a
-  reaction, and presses "Accepted". The composer's mention picker offers
+  reaction, and presses "No intervention needed" while the comment
+  waits in their Waiting for others. The composer's mention picker offers
   "All participants": every person in the task, or everyone working in
   a public one, bots aside, with exceptions picked after it; when more
   than half of the people are mentioned, the comment shows "@everyone

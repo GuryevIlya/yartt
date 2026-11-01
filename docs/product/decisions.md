@@ -1770,7 +1770,7 @@ review from then on.
 `Task.close` with `reviewedUntil`; `Review` in
 `client/components/MyDayPage/Todo.tsx`, shown in `TaskPage/Sheet.tsx` too.
 
-### 95. A mention can be closed without a reply, and waits for its author's "Accepted"
+### 95. A mention can be closed without a reply, and waits for its author's "Accepted" — changed by 98
 
 Decision 9 let a mention be closed only after a reply, so whoever asked
 would see the answer. In practice two needs did not fit. Some comments
@@ -1881,3 +1881,36 @@ once invited.
 *Implemented:* `Task.experts` (`server/services/Task.ts`);
 `client/components/App/Experts.tsx` in the new task form and the task's
 people.
+
+### 98. A comment is reviewed as a whole, like a task
+
+Decision 95 had the author accept each mention: a closed one waited in
+Waiting for others until "Accepted". A comment to a hundred people,
+closed one by one over a month, came back after each of them, and the
+author pressed "Accepted" again and again.
+
+Now the comment carries comment.reviewed_at, like task.reviewed_at
+(decision 94): "No intervention needed" on the comment, in the task or
+in Waiting for others, takes it away up to the newest reaction shown. It
+comes back only with a reaction after that, a reply by the mentioned or
+a closing, and then shows only those who reacted since, with "Not
+answered yet: N" for the rest who never did. A comment never reviewed
+shows everyone mentioned. Reviewing does not close anything: an open
+mention stays in the TODO of the person mentioned, which is where the
+reminder belongs, and the comment shows in the task who has not
+answered.
+
+Nothing is mailed to the author when someone closes a mention; a reply
+is a comment and notifies the task's owner as any comment does. A
+comment is still never edited: reviewed_at, its author's, is the one
+column that changes.
+
+*Changes decision 95:* "Accepted" on mentions, mention.accepted_at and
+accepting earlier mentions by a new one are gone. Comments whose
+mentions were all closed before 0.6 are reviewed up to their last
+reaction.
+
+*Implemented:* `comment.reviewed_at`, `review_comment()`,
+`comment_forbid_change` over the other columns (`db.sql`, migration
+`0.5-0.6`); `Comment.reviewComment`; `awaitsReview()` in
+`shared/comment.ts`.

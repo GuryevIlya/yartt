@@ -39,13 +39,6 @@ Nothing approved is waiting.
 
 ## Proposals
 
-- **A comment is read as a whole.** "Accepted" on each mention becomes
-  "Read" on the comment (comment.reviewed_at, like task.reviewed_at,
-  decision 94): Waiting for others shows a comment only while it has
-  reactions its author has not seen, so a comment to a hundred people
-  does not bother its author with each of them. Waits for the answer
-  on whether a reviewed comment with mentions still unanswered leaves
-  the list.
 - **Shifts across midnight; scores and time entries by shift (L).** A
   shift may run past midnight and is shown in both days; the manager
   scores shifts, time entries belong to a shift, and the day is only

@@ -203,16 +203,17 @@ test('Waiting for others: my request not answered yet, withdrawn from there', as
   await expect(block.getByText(tag)).toHaveCount(0);
 });
 
-test('Waiting for others: a mention closed without a reply waits for "Accepted"', async ({ page }) => {
+test('Waiting for others: a comment waits for "No intervention needed", then only for new reactions', async ({ page }) => {
   await signIn(page);
   const block = page.getByRole('region', { name: 'Жду ответа' });
   const item = block.locator('.MuiStack-root').filter({ hasText: 'Показ заказчику' })
-    .filter({ has: page.getByRole('button', { name: 'Принято' }) }).last();
+    .filter({ has: page.getByRole('button', { name: 'Вмешательство не требуется' }) }).last();
   await expect(item.getByText(/Павел Орлов · закрыто без ответа/)).toBeVisible();
-  await item.getByRole('button', { name: 'Принято' }).click();
-  // Pavel is accepted; Marina has not reacted yet and stays.
+  await expect(item.getByText(/Марина Соколова · ответа нет/)).toBeVisible();
+  await item.getByRole('button', { name: 'Вмешательство не требуется' }).click();
+  // Gone, though Marina has not reacted yet: she still has it in her Waiting for me (decision 98).
   await expect(block.getByText(/Павел Орлов · /)).toHaveCount(0);
-  await expect(block.getByText(/Марина Соколова · ответа нет/)).toBeVisible();
+  await expect(block.getByText(/Марина Соколова · ответа нет/)).toHaveCount(0);
 });
 
 test('what was done, a dot on the ribbon, opens its task', async ({ page }) => {

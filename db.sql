@@ -453,10 +453,9 @@ the API is implemented.
     - Delete a mention from one''s own comment until its first reaction.
     - Close a mention (closed_at = NOW, explicitly, by the mentioned
       employee): after a reply, or with "No reply needed".
-    - Accept the mentions of one''s own comment that have a reaction
-      (accept_mentions): accepted_at = NOW, an open one is closed too.
-      Mentioning the same person again in the task accepts the earlier
-      ones the same way (trigger).
+    - "No intervention needed" on one''s own comment (review_comment):
+      comment.reviewed_at goes to the newest reaction shown; the comment
+      leaves Waiting for others until a new reaction (decision 98).
 
   Reminders:
     - Set a remind (an observer).
@@ -510,8 +509,8 @@ ACCESS RULES
     - Attach an employee or a task — anyone who sees the task; to a
       comment already left — its author only.
     - Delete a mention — the comment''s author, until the first reaction.
-    - Close a mention — the mentioned employee; accept — the comment''s
-      author.
+    - Close a mention — the mentioned employee; review the comment''s
+      reactions (reviewed_at) — the comment''s author.
     - A private task: only an active observer can be attached (mentioned).
       A public task: any active employee can be attached.
 
@@ -559,7 +558,7 @@ INVARIANTS (forbidden; all checked in the database)
 
   Mentions:
     - Deleting a mention after its first reaction (a reply or the closing).
-    - An accepted mention that is open.
+    - Changing a comment, except its author''s reviewed_at.
 
   Tags:
     - Deleting a tag that is in use.
@@ -2137,6 +2136,7 @@ CREATE TABLE comment (
     image_ids INT[] NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     reply_to_id INT,
+    reviewed_at TIMESTAMPTZ,
     PRIMARY KEY (task_id, id),
     FOREIGN KEY (task_id, reply_to_id) REFERENCES comment(task_id, id),
 
@@ -2156,7 +2156,8 @@ CREATE INDEX idx_comment_value_trgm ON comment USING GIN (value gin_trgm_ops);
 COMMENT ON TABLE comment IS
 'Comments. id is local (max+1 within task_id).
 reply_to_id is the local id of the parent in the same task.
-Comments are never edited, deleted or hidden (trigger).
+Comments are never edited, deleted or hidden (trigger); only reviewed_at,
+its author''s, changes.
 If a comment is outdated, reply to it (reply_to_id) and say so.
 The interface protects against accidental sending: for a few seconds
 after "Send" the comment can be pulled back into editing, and only then
@@ -2195,6 +2196,14 @@ COMMENT ON COLUMN comment.attachment_names IS
 COMMENT ON COLUMN comment.reply_to_id IS
 'Local id of the parent comment in the same task. NULL — a root comment.';
 
+COMMENT ON COLUMN comment.reviewed_at IS
+'Up to when the author has seen the reactions to the comment''s mentions:
+replies by the mentioned and closings ("No intervention needed",
+review_comment(), decision 98). A comment with mentions waits in its
+author''s Waiting for others while it was never reviewed or has a
+reaction after it; one reviewed with mentions still unanswered leaves
+the list until someone reacts. Never moves back. NULL — never reviewed.';
+
 
 -- ============================================================================
 -- 12. mention / task_mention — what is attached to a comment
@@ -2205,24 +2214,21 @@ CREATE TABLE mention (
     value INT NOT NULL REFERENCES employee(id),
     closed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    accepted_at TIMESTAMPTZ,
     PRIMARY KEY (task_id, comment_id, value),
-    FOREIGN KEY (task_id, comment_id) REFERENCES comment(task_id, id),
-    CONSTRAINT chk_mention_accepted_closed CHECK (accepted_at IS NULL OR closed_at IS NOT NULL)
+    FOREIGN KEY (task_id, comment_id) REFERENCES comment(task_id, id)
 );
 CREATE INDEX idx_mention_value ON mention(value) WHERE closed_at IS NULL;
 
 COMMENT ON TABLE mention IS
 'An employee attached to a comment (a mention).
 Attached explicitly, the text is not parsed.
-A mention goes through three steps (decision 95). Open (closed_at IS
-NULL): in the mentioned employee''s TODO in My day — the only way a task
-they merely observe gets there. Closed by the mentioned employee: after a
-reply ("Done"), or without one ("No reply needed") — a reply alone does
-not mean the request is handled. Accepted by the comment''s author
-(accepted_at): until then a closed mention waits in the author''s Waiting
-for others, marked replied or not, so whoever asked learns what came of
-it. If the author is a bot or dismissed, closing accepts too (trigger).
+Open (closed_at IS NULL): in the mentioned employee''s TODO in My day —
+the only way a task they merely observe gets there. Closed by the
+mentioned employee: after a reply ("Done"), or without one ("No reply
+needed") — a reply alone does not mean the request is handled (decision
+95). The comment waits in its author''s Waiting for others with each
+reaction (a reply, the closing) until the author reviews it
+(comment.reviewed_at, decision 98).
 The author adds a mention to their comment later and deletes one until
 its first reaction (trigger): a mistake is corrected, an answered request
 is not erased.
@@ -2249,9 +2255,6 @@ COMMENT ON COLUMN mention.created_at IS
 author added the mention afterwards. The reaction is counted from it, and
 only replies after it answer the mention.';
 
-COMMENT ON COLUMN mention.accepted_at IS
-'When the comment''s author accepted the outcome. NULL = not yet: a closed
-mention waits in the author''s Waiting for others.';
 
 
 CREATE TABLE task_mention (
@@ -2725,8 +2728,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION trg_forbid_delete() IS
-'Forbids DELETE (and UPDATE for comment). An employee is dismissed, a task
-is closed, a comment stays forever and is never edited.';
+'Forbids DELETE (and, for comment, an UPDATE of anything but its
+reviewed_at). An employee is dismissed, a task is closed, a comment
+stays forever and is never edited.';
 
 CREATE TRIGGER employee_forbid_delete
 BEFORE DELETE ON employee
@@ -2737,7 +2741,8 @@ BEFORE DELETE ON task
 FOR EACH ROW EXECUTE FUNCTION trg_forbid_delete();
 
 CREATE TRIGGER comment_forbid_change
-BEFORE UPDATE OR DELETE ON comment
+BEFORE DELETE OR UPDATE OF task_id, id, created_by, value, attachment_ids, attachment_names, image_ids, created_at, reply_to_id
+ON comment
 FOR EACH ROW EXECUTE FUNCTION trg_forbid_delete();
 
 
@@ -3210,30 +3215,6 @@ whichever came first. NULL — none yet. The team''s reaction time counts
 from mention.created_at to it.';
 
 
-CREATE OR REPLACE FUNCTION trg_mention_close()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Nobody is there to accept: a bot does not read, a dismissed author is gone.
-    IF NEW.accepted_at IS NULL AND EXISTS (
-        SELECT 1 FROM comment c JOIN employee e ON e.id = c.created_by
-         WHERE c.task_id = NEW.task_id AND c.id = NEW.comment_id
-           AND (e.kind = 'bot' OR e.dismissed_at IS NOT NULL)) THEN
-        NEW.accepted_at := NEW.closed_at;
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-COMMENT ON FUNCTION trg_mention_close() IS
-'A mention closed in a comment by a bot or a dismissed employee is
-accepted at once: nobody is there to accept it.';
-
-CREATE TRIGGER mention_close
-BEFORE UPDATE OF closed_at ON mention
-FOR EACH ROW WHEN (OLD.closed_at IS NULL AND NEW.closed_at IS NOT NULL)
-EXECUTE FUNCTION trg_mention_close();
-
-
 CREATE OR REPLACE FUNCTION trg_mention_delete_check()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -3254,56 +3235,27 @@ BEFORE DELETE ON mention
 FOR EACH ROW EXECUTE FUNCTION trg_mention_delete_check();
 
 
-CREATE OR REPLACE FUNCTION trg_mention_accept_earlier()
-RETURNS TRIGGER AS $$
-BEGIN
-    UPDATE mention m
-       SET closed_at = COALESCE(m.closed_at, NOW()), accepted_at = NOW()
-      FROM comment c, comment n
-     WHERE m.task_id = NEW.task_id AND m.value = NEW.value AND m.comment_id <> NEW.comment_id
-       AND m.accepted_at IS NULL
-       AND c.task_id = m.task_id AND c.id = m.comment_id
-       AND n.task_id = NEW.task_id AND n.id = NEW.comment_id
-       AND c.created_by = n.created_by
-       AND mention_reaction(m.task_id, m.comment_id, m.value) IS NOT NULL;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-COMMENT ON FUNCTION trg_mention_accept_earlier() IS
-'The author answers a reaction by mentioning the person again in the
-task: their earlier mentions of that person there that have a reaction
-are accepted (and closed, if still open). One with no reaction yet stays
-as it is.';
-
-CREATE TRIGGER mention_accept_earlier
-AFTER INSERT ON mention
-FOR EACH ROW EXECUTE FUNCTION trg_mention_accept_earlier();
-
-
-CREATE OR REPLACE FUNCTION accept_mentions(p_task_id INT, p_comment_id INT, p_actor_id INT)
-RETURNS INT AS $$
-DECLARE
-    v_count INT;
+CREATE OR REPLACE FUNCTION review_comment(p_task_id INT, p_comment_id INT, p_actor_id INT, p_until TIMESTAMPTZ DEFAULT NULL)
+RETURNS VOID AS $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM comment WHERE task_id = p_task_id AND id = p_comment_id AND created_by = p_actor_id) THEN
         RAISE EXCEPTION 'comment % of task % is not by employee %', p_comment_id, p_task_id, p_actor_id
             USING HINT = 'forbidden';
     END IF;
-    UPDATE mention
-       SET closed_at = COALESCE(closed_at, NOW()), accepted_at = NOW()
-     WHERE task_id = p_task_id AND comment_id = p_comment_id AND accepted_at IS NULL
-       AND mention_reaction(task_id, comment_id, value) IS NOT NULL;
-    GET DIAGNOSTICS v_count = ROW_COUNT;
-    RETURN v_count;
+    -- Up to what was shown, never past now, never back (GREATEST skips NULLs).
+    -- The moment shown comes in milliseconds: it covers its whole millisecond.
+    UPDATE comment
+       SET reviewed_at = GREATEST(reviewed_at, LEAST(COALESCE(p_until + INTERVAL '999 microseconds', NOW()), NOW()))
+     WHERE task_id = p_task_id AND id = p_comment_id;
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION accept_mentions(INT, INT, INT) IS
-'"Accepted": the author of a comment accepts every mention in it that has
-a reaction — closed, or answered and still open (the reply was enough;
-that closes it too). Mentions with no reaction stay open. Returns how many
-were accepted.';
+COMMENT ON FUNCTION review_comment(INT, INT, INT, TIMESTAMPTZ) IS
+'"No intervention needed" on a comment: its author has seen the reactions
+to its mentions up to p_until, the newest one shown (NULL — now), so
+whatever came later brings the comment back to Waiting for others
+(decision 98). Never later than now, never back. Mentions still open
+stay open: they wait in the TODO of those mentioned.';
 
 
 -- ----------------------------------------------------------------------------

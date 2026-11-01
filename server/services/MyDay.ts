@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Current, CurrentTab, DayHistory, History, TodoItem, WaitingItem, WaitingMention } from '#shared/myDay.ts';
+import { newestReaction, reactions } from '#shared/comment.ts';
 import { plainText } from '../html.ts';
 import { sql } from '../pg.ts';
 import { mentionReplies, replyKey } from './Comment.ts';
@@ -215,14 +216,16 @@ const MyMentionRow = z.object({
   createdAt: z.date(),
   closedAt: z.date().nullable(),
   value: z.string(),
+  reviewedAt: z.date().nullable(),
 });
 
 /**
  * What I wait for from others (decision 67): my access requests not
- * answered yet, then my comments with mentions I have not accepted
- * (decision 95) — open, or closed with or without a reply — the longest
- * waiting first, with their answers. A mention in a task I no longer see
- * is not shown.
+ * answered yet, then my comments with mentions that wait for my review
+ * (decision 98) — never reviewed, with everyone mentioned, or with
+ * reactions since, with those who reacted and how many have not answered
+ * at all — the longest waiting first, with their answers. A mention in a
+ * task I no longer see is not shown.
  */
 export async function waiting(me: number, viewerId: number = me): Promise<WaitingItem[]> {
   const requests = z.object({ taskId: z.number() }).array().parse(await sql`
@@ -231,10 +234,19 @@ export async function waiting(me: number, viewerId: number = me): Promise<Waitin
      ORDER BY id
   `);
   const mentions = MyMentionRow.array().parse(await sql`
-    SELECT m.task_id, m.comment_id, m.value AS employee_id, m.created_at, m.closed_at, c.value
-      FROM mention m
-      JOIN comment c ON c.task_id = m.task_id AND c.id = m.comment_id
-     WHERE c.created_by = ${me} AND m.accepted_at IS NULL AND can_see(m.task_id, ${me}) AND can_see(m.task_id, ${viewerId})
+    WITH c AS (
+      SELECT DISTINCT c.task_id, c.id, c.value, c.reviewed_at
+        FROM mention m
+        JOIN comment c ON c.task_id = m.task_id AND c.id = m.comment_id
+       WHERE c.created_by = ${me}
+         AND (c.reviewed_at IS NULL OR m.closed_at > c.reviewed_at
+              OR EXISTS (SELECT 1 FROM comment r
+                          WHERE r.task_id = c.task_id AND r.reply_to_id = c.id AND r.created_by = m.value
+                            AND r.created_at >= m.created_at AND r.created_at > c.reviewed_at))
+    )
+    SELECT m.task_id, m.comment_id, m.value AS employee_id, m.created_at, m.closed_at, c.value, c.reviewed_at
+      FROM c JOIN mention m ON m.task_id = c.task_id AND m.comment_id = c.id
+     WHERE can_see(m.task_id, ${me}) AND can_see(m.task_id, ${viewerId})
      ORDER BY m.created_at, m.task_id, m.comment_id, m.value
   `);
   const answers = await mentionReplies(mentions.map((m) => ({ taskId: m.taskId, commentId: m.commentId, employeeId: m.employeeId })));
@@ -246,12 +258,15 @@ export async function waiting(me: number, viewerId: number = me): Promise<Waitin
     const key = `${m.taskId}/${m.commentId}`;
     const item = comments.get(key) ?? {
       kind: 'mention' as const, task, commentId: m.commentId, at: m.createdAt,
-      excerpt: plainText(m.value).slice(0, EXCERPT), people: [],
+      excerpt: plainText(m.value).slice(0, EXCERPT), reviewedAt: m.reviewedAt, people: [], quiet: 0,
     };
-    item.people.push({
+    const person = {
       employeeId: m.employeeId, at: m.createdAt, closedAt: m.closedAt,
       replies: answers.get(replyKey(m.taskId, m.commentId, m.employeeId)) ?? [],
-    });
+    };
+    // Reviewed: only who reacted since is news; the rest are counted if they never answered.
+    if (m.reviewedAt === null || newestReaction([person], m.reviewedAt)) item.people.push(person);
+    else if (reactions(person).length === 0) item.quiet++;
     comments.set(key, item);
   }
   return [

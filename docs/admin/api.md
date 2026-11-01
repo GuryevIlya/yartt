@@ -20,7 +20,7 @@ instead of a browser session. People have no API keys.
    - **Comments** (`comment`) — comment, mention (everyone too:
      `everyone`, `exceptIds`), close its mentions with or without a reply,
      add a mention to its comment later, take one back until it has a
-     reaction, accept them (`Comment.acceptMentions`), upload files for
+     reaction, review its reactions (`Comment.reviewComment`), upload files for
      comments;
    - **Participants** (`observers`) — add and remove participants of its tasks,
      ask for access to others'.

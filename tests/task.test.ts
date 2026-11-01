@@ -228,48 +228,70 @@ describe('mentions', () => {
   });
 });
 
-describe('mentions closed and accepted (decision 95)', () => {
+describe('mentions closed, and their comment reviewed (decisions 95, 98)', () => {
   const waitingFor = async (api: Awaited<ReturnType<typeof client>>) =>
     (await api.MyDay.waiting()).flatMap((i) => (i.kind === 'mention' ? [i] : []));
 
-  test('closed without a reply, it waits for the author\'s "Accepted"', async () => {
+  test('closed without a reply or answered, the comment waits for the author\'s "No intervention needed"', async () => {
     const owner = await createEmployee();
     const a = await createEmployee();
     const b = await createEmployee();
+    const c = await createEmployee();
     const id = await createTask(owner.id);
     const api = await client(owner.id);
-    for (const e of [a, b]) await api.Observer.add({ taskId: id, employeeId: e.id });
-    const asked = await api.Comment.create(comment(id, '<p>Plan changed</p>', [a.id, b.id]));
+    for (const e of [a, b, c]) await api.Observer.add({ taskId: id, employeeId: e.id });
+    const asked = await api.Comment.create(comment(id, '<p>Plan changed</p>', [a.id, b.id, c.id]));
 
     await (await client(a.id)).Comment.closeMention({ taskId: id, commentId: asked });
     await (await client(b.id)).Comment.create({ ...comment(id, '<p>Seen</p>'), replyToId: asked });
     expect(await waitingFor(api)).toMatchObject([{
       commentId: asked,
-      people: [{ employeeId: a.id, closedAt: expect.any(Date), replies: [] }, { employeeId: b.id, closedAt: null, replies: [{ excerpt: 'Seen' }] }],
+      reviewedAt: null,
+      quiet: 0,
+      people: [
+        { employeeId: a.id, closedAt: expect.any(Date), replies: [] },
+        { employeeId: b.id, closedAt: null, replies: [{ excerpt: 'Seen' }] },
+        { employeeId: c.id, closedAt: null, replies: [] },
+      ],
     }]);
-    await expect((await client(a.id)).Comment.acceptMentions({ taskId: id, commentId: asked })).rejects.toMatchObject({ message: 'forbidden' });
+    await expect((await client(a.id)).Comment.reviewComment({ taskId: id, commentId: asked })).rejects.toMatchObject({ message: 'forbidden' });
 
-    // One "Accepted" takes both: the closed one and the answered one, which it closes.
-    await api.Comment.acceptMentions({ taskId: id, commentId: asked });
+    // Reviewed: gone, though C never answered; open mentions stay open with those mentioned.
+    await api.Comment.reviewComment({ taskId: id, commentId: asked });
     expect(await waitingFor(api)).toEqual([]);
-    expect(await (await client(b.id)).MyDay.todo()).toEqual([]);
+    expect(await (await client(b.id)).MyDay.todo()).toMatchObject([{ kind: 'mention', commentId: asked }]);
+    expect(await (await client(c.id)).MyDay.todo()).toMatchObject([{ kind: 'mention', commentId: asked }]);
+
+    // A later reaction brings it back with only who reacted, and how many never answered.
+    await (await client(b.id)).Comment.closeMention({ taskId: id, commentId: asked });
+    expect(await waitingFor(api)).toMatchObject([{ commentId: asked, quiet: 1, people: [{ employeeId: b.id }] }]);
     const [item] = (await api.Comment.list({ taskId: id, filter: 'all', page: 1 })).items.filter((i) => i.kind === 'comment' && i.id === asked);
-    expect(item?.kind === 'comment' && item.mentions.every((m) => m.acceptedAt && m.closedAt)).toBe(true);
+    expect(item).toMatchObject({ reviewedAt: expect.any(Date) });
   });
 
-  test('a new mention of the person accepts the earlier one with a reaction', async () => {
+  test('the review goes up to the newest reaction shown: a later one stays', async () => {
     const owner = await createEmployee();
     const dev = await createEmployee();
     const id = await createTask(owner.id);
     const api = await client(owner.id);
     await api.Observer.add({ taskId: id, employeeId: dev.id });
-    const first = await api.Comment.create(comment(id, '<p>Can you?</p>', [dev.id]));
-    const unanswered = await api.Comment.create(comment(id, '<p>And this?</p>', [dev.id]));
-    await (await client(dev.id)).Comment.create({ ...comment(id, '<p>Tomorrow</p>'), replyToId: first });
+    const asked = await api.Comment.create(comment(id, '<p>Can you?</p>', [dev.id]));
+    await (await client(dev.id)).Comment.create({ ...comment(id, '<p>Tomorrow</p>'), replyToId: asked });
+    const [shown] = await waitingFor(api);
+    const until = shown!.people[0]!.replies[0]!.at;
+    await new Promise((r) => setTimeout(r, 5));
+    await (await client(dev.id)).Comment.closeMention({ taskId: id, commentId: asked });
 
-    const again = await api.Comment.create(comment(id, '<p>Tomorrow is late, today please</p>', [dev.id]));
-    // The answered one is accepted; the one with no reaction yet stays open.
-    expect((await waitingFor(api)).map((i) => i.commentId)).toEqual([unanswered, again]);
+    await api.Comment.reviewComment({ taskId: id, commentId: asked, until });
+    expect(await waitingFor(api)).toMatchObject([{ commentId: asked, people: [{ employeeId: dev.id, closedAt: expect.any(Date) }] }]);
+  });
+
+  test('a comment stays a comment: only its reviewed_at changes', async () => {
+    const owner = await createEmployee();
+    const id = await createTask(owner.id);
+    const said = await (await client(owner.id)).Comment.create(comment(id, '<p>Fixed</p>'));
+    await expect(sql`UPDATE comment SET value = '<p>Changed</p>' WHERE task_id = ${id} AND id = ${said}`).rejects.toMatchObject({ hint: 'immutable_row' });
+    await sql`UPDATE comment SET reviewed_at = NOW() WHERE task_id = ${id} AND id = ${said}`;
   });
 
   test('the author adds a mention later and takes it back until a reaction', async () => {

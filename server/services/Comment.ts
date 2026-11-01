@@ -35,6 +35,7 @@ const CommentRow = z.object({
   replyAuthor: z.number().nullable(),
   replyValue: z.string().nullable(),
   isNew: z.boolean(),
+  reviewedAt: z.date().nullable(),
 });
 const FileRow = z.object({ id: z.number(), size: z.number(), mime: z.string(), purgedAt: z.date().nullable(), uploadedBy: z.number().array(), kept: z.boolean() });
 const MentionRow = z.object({
@@ -42,7 +43,6 @@ const MentionRow = z.object({
   value: z.number(),
   createdAt: z.date(),
   closedAt: z.date().nullable(),
-  acceptedAt: z.date().nullable(),
 });
 const ReplyRow = z.object({ taskId: z.number(), commentId: z.number(), employeeId: z.number(), id: z.number(), createdAt: z.date(), value: z.string() });
 const TaskMentionRow = z.object({ commentId: z.number(), value: z.number() });
@@ -244,7 +244,7 @@ async function threads(viewerId: number, taskId: number, ids: number[]) {
 async function load(viewerId: number, taskId: number, ids: number[]): Promise<Map<number, CommentBase>> {
   if (ids.length === 0) return new Map();
   const rows = CommentRow.array().parse(await sql`
-    SELECT c.id, c.created_by, c.created_at, c.value, c.attachment_ids, c.attachment_names, c.reply_to_id,
+    SELECT c.id, c.created_by, c.created_at, c.value, c.attachment_ids, c.attachment_names, c.reply_to_id, c.reviewed_at,
            r.created_by AS reply_author, r.value AS reply_value,
            (k.owner_id = ${viewerId} AND c.created_by <> k.owner_id
             AND c.created_at > COALESCE(k.reviewed_at, k.handed_at, '-infinity')) IS TRUE AS is_new
@@ -258,7 +258,7 @@ async function load(viewerId: number, taskId: number, ids: number[]): Promise<Ma
     FileRow.array().parse(await sql`SELECT id, size, mime, purged_at, uploaded_by, held_by @> ARRAY[${viewerId}::int] AS kept FROM attachment WHERE id = ANY(${fileIds})`).map((f) => [f.id, f]),
   );
   const mentions = MentionRow.array().parse(await sql`
-    SELECT m.comment_id, m.value, m.created_at, m.closed_at, m.accepted_at
+    SELECT m.comment_id, m.value, m.created_at, m.closed_at
       FROM mention m
      WHERE m.task_id = ${taskId} AND m.comment_id = ANY(${ids}) ORDER BY m.value
   `);
@@ -285,11 +285,11 @@ async function load(viewerId: number, taskId: number, ids: number[]): Promise<Ma
       employeeId: m.value,
       createdAt: m.createdAt,
       closedAt: m.closedAt,
-      acceptedAt: m.acceptedAt,
       replies: answers.get(replyKey(taskId, m.commentId, m.value)) ?? [],
     })),
     tasks: taskMentions.filter((m) => m.commentId === r.id).flatMap((m) => tasks.get(m.value) ?? []),
     isNew: r.isNew,
+    reviewedAt: r.reviewedAt,
   } satisfies CommentBase]));
 }
 
@@ -343,7 +343,7 @@ export async function create(authorId: number, input: CreateCommentInput): Promi
   });
 }
 
-/** The comment, if it is the author's: only they add, delete and accept its mentions. */
+/** The comment, if it is the author's: only they add and delete its mentions. */
 async function assertAuthor(authorId: number, taskId: number, commentId: number, db: Sql = sql): Promise<void> {
   await assertCanSee(taskId, authorId, db);
   const rows = z.object({ createdBy: z.number() }).array().parse(await db`
@@ -375,10 +375,14 @@ export async function removeMention(authorId: number, taskId: number, commentId:
   });
 }
 
-/** "Accepted": the author accepts every mention of the comment with a reaction (db.sql, accept_mentions). */
-export async function acceptMentions(authorId: number, taskId: number, commentId: number): Promise<void> {
+/**
+ * "No intervention needed" on my comment: I have seen the reactions to its
+ * mentions up to `until`, the newest shown (none — now); it leaves Waiting
+ * for others until the next one (decision 98).
+ */
+export async function reviewComment(authorId: number, taskId: number, commentId: number, until?: Date): Promise<void> {
   await assertCanSee(taskId, authorId);
-  await sql`SELECT accept_mentions(${taskId}, ${commentId}, ${authorId})`;
+  await sql`SELECT review_comment(${taskId}, ${commentId}, ${authorId}, ${until ?? null})`;
 }
 
 /** "Done" or "No reply needed": the mentioned employee closes their own mention, a reply or not (decision 95). */

@@ -11,7 +11,7 @@ const comment = (taskId: number, html: string, mentionIds: number[] = []) =>
   ({ taskId, html, replyToId: null, files: [], mentionIds, taskIds: [] });
 
 describe('waiting', () => {
-  test('my requests not answered and my mentions of others not accepted, the longest waiting first, with their answers', async () => {
+  test('my requests not answered and my comments with mentions not reviewed, the longest waiting first, with their answers', async () => {
     const me = await createEmployee();
     const owner = await createEmployee();
     const helper = await createEmployee();
@@ -27,13 +27,13 @@ describe('waiting', () => {
       { kind: 'mention', task: { id: mine }, commentId: asked, excerpt: 'Can you check?', people: [{ employeeId: helper.id, closedAt: null, replies: [] }] },
     ]);
 
-    // Answered and closed: it stays until I accept it (decision 95); the request is gone once withdrawn.
+    // Answered and closed: it stays until I review it (decision 98); the request is gone once withdrawn.
     const helperApi = await client(helper.id);
     const answer = await helperApi.Comment.create({ ...comment(mine, '<p>Checked</p>'), replyToId: asked });
     await api.Observer.withdraw({ taskId: theirs });
     await helperApi.Comment.closeMention({ taskId: mine, commentId: asked });
     expect(await api.MyDay.waiting()).toMatchObject([{ kind: 'mention', people: [{ closedAt: expect.any(Date), replies: [{ id: answer, excerpt: 'Checked' }] }] }]);
-    await api.Comment.acceptMentions({ taskId: mine, commentId: asked });
+    await api.Comment.reviewComment({ taskId: mine, commentId: asked });
     expect(await api.MyDay.waiting()).toEqual([]);
   });
 });

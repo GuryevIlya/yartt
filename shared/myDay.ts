@@ -121,18 +121,23 @@ export const WaitingPerson = z.object({
 export type WaitingPerson = z.infer<typeof WaitingPerson>;
 
 /**
- * My comment with mentions I have not accepted (decision 95): one
- * "Accepted" takes every one with a reaction — closed, or answered.
+ * My comment with mentions I have not reviewed (decision 98): never
+ * reviewed — everyone mentioned; reviewed — those who reacted since.
+ * "No intervention needed" takes it away until the next reaction.
  */
 export const WaitingMention = z.object({
   kind: z.literal('mention'),
   task: TaskHeader,
   commentId: Id,
-  /** The earliest of them: the longest waiting first. */
+  /** The earliest mention: the longest waiting first. */
   at: z.date(),
   /** The beginning of my comment as plain text. */
   excerpt: z.string(),
-  people: WaitingPerson.array().min(1),
+  /** Up to when I have seen the reactions; NULL — never. */
+  reviewedAt: z.date().nullable(),
+  people: WaitingPerson.array(),
+  /** Mentioned and not shown, with no reaction at all: they have not answered yet. */
+  quiet: z.number().int(),
 });
 export type WaitingMention = z.infer<typeof WaitingMention>;
 

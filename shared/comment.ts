@@ -28,8 +28,8 @@ export const MentionReply = z.object({
 export type MentionReply = z.infer<typeof MentionReply>;
 
 /**
- * A mention goes open → closed by the mentioned (after a reply, or "No
- * reply needed") → accepted by the comment's author (decision 95).
+ * A mention is open until the mentioned closes it, after a reply or with
+ * "No reply needed" (decision 95).
  */
 export const Mention = z.object({
   employeeId: Id,
@@ -37,12 +37,29 @@ export const Mention = z.object({
   createdAt: z.date(),
   /** NULL — open. */
   closedAt: z.date().nullable(),
-  /** NULL — the author has not accepted it yet. */
-  acceptedAt: z.date().nullable(),
   /** Oldest first; empty — not answered. A closed one without replies was closed without a reply. */
   replies: MentionReply.array(),
 });
 export type Mention = z.infer<typeof Mention>;
+
+/** The reactions to a mention, newest first: its replies and its closing. */
+export function reactions(m: Pick<Mention, 'closedAt' | 'replies'>): Date[] {
+  return [...m.replies.map((r) => r.at), ...(m.closedAt ? [m.closedAt] : [])].sort((a, b) => b.getTime() - a.getTime());
+}
+
+/** The newest reaction of these mentions after `since` (none — any); undefined — nothing new. */
+export function newestReaction(mentions: Pick<Mention, 'closedAt' | 'replies'>[], since: Date | null): Date | undefined {
+  const all = mentions.flatMap(reactions).filter((at) => since === null || at > since);
+  return all.sort((a, b) => b.getTime() - a.getTime())[0];
+}
+
+/**
+ * The comment waits for its author's "No intervention needed" (decision
+ * 98): it has mentions and was never reviewed, or a reaction came after.
+ */
+export function awaitsReview(c: { mentions: Pick<Mention, 'closedAt' | 'replies'>[]; reviewedAt: Date | null }): boolean {
+  return c.mentions.length > 0 && (c.reviewedAt === null || newestReaction(c.mentions, c.reviewedAt) !== undefined);
+}
 
 /** One comment: a thread's first one, or a reply in it. */
 export const CommentBase = z.object({
@@ -58,6 +75,8 @@ export const CommentBase = z.object({
   tasks: TaskHeader.array(),
   /** Written by someone else after the owner's last "No intervention needed"; only for the owner. */
   isNew: z.boolean(),
+  /** Up to when its author has seen the reactions to its mentions (decision 98); NULL — never. */
+  reviewedAt: z.date().nullable(),
 });
 export type CommentBase = z.infer<typeof CommentBase>;
 
