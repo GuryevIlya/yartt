@@ -45,6 +45,22 @@ describe('error format over HTTP', () => {
     expect(await response.json()).toEqual({ ok: true });
   });
 
+  test('an upload without a session is refused before its body is read', async () => {
+    const files = url.replace(/\/trpc$/, '/attachments');
+    let pulled = 0;
+    const body = new ReadableStream({
+      pull(controller) {
+        pulled++;
+        if (pulled > 1000) controller.close();
+        else controller.enqueue(new Uint8Array(64 * 1024));
+      },
+    });
+    const response = await fetch(files, { method: 'POST', body, duplex: 'half' } as RequestInit);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ appCode: 'unauthorized' });
+    expect(pulled).toBeLessThan(1000);
+  });
+
   test('validation issues come without server-side messages', async () => {
     const { status, error } = await call('Auth.requestLogin', { email: 'not-an-email' });
     expect(status).toBe(400);

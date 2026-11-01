@@ -44,12 +44,17 @@ function fail(res: Response, error: unknown) {
 }
 
 export default Router()
-  .post('/', (req, res, next) => express.raw({ type: () => true, limit: Attachments.maxBytes() })(req, res, (error?: unknown) => {
-    if (error) fail(res, error);
-    else next();
-  }), async (req, res) => {
+  // Who asks is known before a byte of the body is read: a stranger's upload never takes memory.
+  .post('/', async (req, res) => {
     const id = await employeeId(req, res, true);
     if (id === null) return;
+    const error = await new Promise<unknown>((resolve) => {
+      express.raw({ type: () => true, limit: Attachments.maxBytes() })(req, res, resolve);
+    });
+    if (error) {
+      fail(res, error);
+      return;
+    }
     if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
       res.status(400).json({ appCode: 'invalid_input' });
       return;
