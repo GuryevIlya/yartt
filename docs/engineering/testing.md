@@ -89,8 +89,12 @@ container, and attaches the end-to-end report when it fails
 
 1. Rules in the database → a vitest test in `tests/` for every rule and
    every error code the feature adds.
-2. A new screen or action → a scenario in `e2e/`, using the demo data
+2. A new query that shows anything inside a task (context, comments,
+   people, time, files) → a line in `tests/access.test.ts`: the matrix
+   checks it answers exactly as `can_see()` for everyone around a private
+   task, and again once it is public.
+3. A new screen or action → a scenario in `e2e/`, using the demo data
    (extend `server/demo.ts`, in both languages of `server/demoTexts.ts`, so the feature shows up there too).
-3. Prefer roles and visible texts in selectors (`getByRole`, `getByLabel`):
+4. Prefer roles and visible texts in selectors (`getByRole`, `getByLabel`):
    a test that cannot find a control by its name is usually an
    accessibility bug in the interface, not in the test.
