@@ -55,7 +55,7 @@ the specification; read it before any work.
 - Localization from day one: UI texts go through keys, the server returns
   error codes, never texts. The employee's language is `employee.locale`.
 - Major versions are pinned deliberately: TypeScript 5, Vite 7, MUI 7,
-  React Router 7, Vitest 3, nodemailer 7. Moving to the next majors is a
+  React Router 7, Vitest 3, nodemailer 10. Moving to the next majors is a
   separate task.
 - The server is not built: Node 24 runs TypeScript directly. Hence only
   erasable syntax (`erasableSyntaxOnly`: no enum, namespace, parameter
