@@ -31,8 +31,11 @@ test('a latest deadline on the task waited for says who may change it, and is no
   const api = await taskId('сайт', 'api', 'перевести форму заявки на новый api');
   await page.goto(`/tasks/${await taskId('сайт', 'новая главная к осенней кампании')}`);
   await expect(page.getByRole('button', { name: /^ждёт эту до / })).toHaveCount(0);
-  await page.getByText(/^ждёт эту до /).first().hover();
-  await expect(page.getByRole('tooltip').filter({ hasText: `может только владелец #${api}` })).toBeVisible();
+  // What loads above it moves the line away from under the mouse: hovered again until it holds.
+  await expect(async () => {
+    await page.getByText(/^ждёт эту до /).first().hover();
+    await expect(page.getByRole('tooltip').filter({ hasText: `может только владелец #${api}` })).toBeVisible({ timeout: 1_000 });
+  }).toPass();
 });
 
 test('a participant makes a task of their own, which the task waits for, told when they need one', async ({ page }) => {
