@@ -2111,3 +2111,30 @@ days have no score, plainly, for the manager who does score and wants to
 find them; the days themselves are on the person's page, as before.
 
 *Implemented:* `send_weekly_digests()`, `Team.summary`, `TeamDetails`.
+
+### 106. An installation can live under a path
+
+A public demo belongs next to the product's website, at `example.com/demo`,
+and a company may have one domain for its internal tools. Until now yartt
+worked only at the root of a domain.
+
+The path comes from `PUBLIC_URL`, the setting that already says where people
+open it, with no second variable that could disagree. It is applied at
+startup rather than at build time: one image serves any path, because the
+server writes it into `<base>` in the page and the client reads it from there.
+
+A text keeps its images as `/api/attachments/12` wherever the installation
+is: nothing stored depends on the path, so old data needs no migration and
+an installation can move. The editor adds the path going in and removes it
+coming out.
+
+The browser keeps storage and caches per domain, not per path. So another
+installation on the domain gets names of its own for the outbox, the saved
+cache, drafts and the service worker's cache: a change queued in a demo must
+never reach a working installation. At the root the names stay as they were.
+
+The server answers both with the path and without it: proxies either keep it
+or strip it, and the image's health check asks the container directly.
+
+*Implemented:* `BASE_PATH` in `server/env.ts`, `server/index.ts`,
+`client/hooks/base.ts`, the `Image` extension in `richText.ts`, `sw.js`.

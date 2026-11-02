@@ -21,7 +21,7 @@ describe('sign-in through the identity provider', () => {
   let base: string;
   beforeAll(async () => {
     provider = await startProvider(CLIENT_ID);
-    server = express().use('/api', api).listen(0);
+    server = express().use('/api', api).use('/demo/api', api).listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
     base = `http://localhost:${(server.address() as AddressInfo).port}`;
   });
@@ -81,6 +81,18 @@ describe('sign-in through the identity provider', () => {
   const person = (fields: Partial<Person> = {}): Person =>
     ({ sub: randomUUID(), email: `${randomUUID()}@yartt.test`, email_verified: true, name: 'Ann Lee', locale: 'en-GB', ...fields });
   const pendingOf = async (pending: string) => (await call('Auth.ssoPending', undefined, `yartt_sso_pending=${pending}`, 'GET')).data;
+
+  test('under a path of PUBLIC_URL: the provider comes back to it, and so does the person', async () => {
+    const { PUBLIC_URL, BASE_PATH } = env;
+    Object.assign(env, { PUBLIC_URL: `${base}/demo`, BASE_PATH: '/demo' });
+    try {
+      const { location, session } = await signIn(person(), '/tasks/12');
+      expect(location).toBe('/demo/tasks/12');
+      expect(session).not.toBeNull();
+    } finally {
+      Object.assign(env, { PUBLIC_URL, BASE_PATH });
+    }
+  });
 
   test('an address the provider vouches for: someone new comes in at once, known by the provider id; a session for a day', async () => {
     const ann = person({ zoneinfo: 'Asia/Almaty' });

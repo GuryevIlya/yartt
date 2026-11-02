@@ -2,6 +2,7 @@ import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/ma
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { url } from '#client/hooks/base.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { fieldErrors } from '#client/i18n/errors.ts';
 
@@ -37,7 +38,7 @@ export default function () {
         {!pending.data ? (
           <Stack spacing={2}>
             <Typography>{t('login.ssoEmail.expired')}</Typography>
-            <Button variant="contained" href="/api/sso/start">{t('login.ssoEmail.restart')}</Button>
+            <Button variant="contained" href={url('/api/sso/start')}>{t('login.ssoEmail.restart')}</Button>
           </Stack>
         ) : sentTo ? (
           <Stack spacing={2}>

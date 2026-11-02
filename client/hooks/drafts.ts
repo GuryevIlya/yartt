@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { storageKey } from './base.ts';
 import { useMe } from './me.ts';
 
 // What is typed but not saved yet — a comment, a new task, a context being
@@ -11,7 +12,7 @@ import { useMe } from './me.ts';
 type Drafts = { drafts: Record<string, unknown> };
 
 const useDrafts = create<Drafts>()(persist(() => ({ drafts: {} }), {
-  name: 'yartt-drafts',
+  name: storageKey('yartt-drafts'),
   // Without sessionStorage (blocked site data) drafts live in memory only.
   storage: createJSONStorage(() => sessionStorage),
 }));

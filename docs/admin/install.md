@@ -27,7 +27,7 @@ work, [demo.env.example](../../demo.env.example) for a trial. Copy one to
 | Variable | Required | Meaning |
 |---|---|---|
 | `DATABASE_URL` | yes | `postgres://user:password@host:5432/yartt` |
-| `PUBLIC_URL` | yes | the address employees open, e.g. `https://tasks.example.com`; used in links in emails |
+| `PUBLIC_URL` | yes | the address employees open, e.g. `https://tasks.example.com`, or with a path, `https://example.com/tasks` ([below](#under-a-path)); used in links in emails |
 | `PORT` | no | default `3000` |
 | `ROLE` | no | `all` (default) — the API and the background worker in one process; `api` / `worker` to run them in separate containers |
 | `SMTP_URL` | yes, but in the demo | `smtp://user:password@host:587` or `smtps://user:password@host:465` |
@@ -114,6 +114,60 @@ the company is made up, everything written there is visible to any
 visitor and starts afresh every night; files are limited to 2 MB, so
 nobody fills the database; and its pages ask search engines not to index
 them (`X-Robots-Tag: noindex`).
+
+## Under a path
+
+yartt does not need a domain of its own: with a path in `PUBLIC_URL` the
+same image serves everything under that path, nothing is rebuilt. It is the
+way to keep a public demo next to a website at `example.com/demo`:
+
+```sh
+# demo.env
+DATABASE_URL=postgres://yartt:<password>@<host>:5432/yartt_demo
+PUBLIC_URL=https://example.com/demo
+DEMO_DATA=en
+```
+
+```sh
+docker run -d --name yartt-demo -p 127.0.0.1:3000:3000 --env-file demo.env yartt/public:<version>
+```
+
+Then send that path from the proxy that serves the domain to the
+container. In nginx, inside the `server` of the domain:
+
+```nginx
+location /demo/ {
+    proxy_pass http://127.0.0.1:3000;   # no path here: nginx passes /demo/... as it came
+    proxy_set_header Host $host;
+    client_max_body_size 50m;           # at least FILE_MAX_MB
+}
+```
+
+In Caddy:
+
+```
+example.com {
+    handle /demo* {
+        reverse_proxy 127.0.0.1:3000
+    }
+    # the website
+}
+```
+
+A proxy that strips the path (`handle_path` in Caddy, `proxy_pass` with a
+trailing `/` in nginx) works too. To check it, open
+`https://example.com/demo`: the address stays under `/demo`, and so do
+links, sign-in links in emails and the installed app.
+
+The path can be changed later: restart with a new `PUBLIC_URL` and fix the
+proxy. Only links already sent or kept lead to the old address, and people
+sign in again, since the session belongs to its path. With sign-in through a
+provider, its redirect URI changes too: `<PUBLIC_URL>/api/sso/callback`.
+Bots use `<PUBLIC_URL>/api/trpc/...`.
+
+Several installations can share a domain under different paths: each has
+its own session, offline cache, outbox and drafts in the browser. A demo
+still needs a database of its own.
 
 ## Sign-in through the company's identity provider
 

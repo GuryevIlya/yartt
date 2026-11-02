@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 import type { CurrentTab } from '#shared/myDay.ts';
 import type { Tag } from '#shared/task.ts';
+import { BASE } from '#client/hooks/base.ts';
 import { useFormat } from '#client/hooks/format.ts';
 import { useStore } from '#client/hooks/store.ts';
 import { POLL_MS } from '#client/hooks/task.ts';
@@ -100,7 +101,7 @@ export default function (p: { team: boolean }) {
   // the last render may still think My day is on screen.
   const focusSearch = () => {
     wantsFocus.current = true;
-    if (window.location.pathname === '/') inputRef.current?.focus();
+    if (window.location.pathname.replace(/\/$/, '') === BASE) inputRef.current?.focus();
     else void navigate('/');
   };
   useEffect(() => {

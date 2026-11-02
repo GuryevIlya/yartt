@@ -2,8 +2,9 @@ import { ExpandLess, ExpandMore } from '@mui/icons-material';
 import { ButtonBase, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { storageKey } from '#client/hooks/base.ts';
 
-const KEY = 'yartt.fold.';
+const KEY = `${storageKey('yartt.fold')}.`;
 
 function read(id: string): boolean {
   try {

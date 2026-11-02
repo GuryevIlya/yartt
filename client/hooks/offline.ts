@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { AppRouter } from '#shared/types.ts';
 import i18n from '#client/i18n/index.ts';
+import { storageKey } from './base.ts';
 import { showError, showInfo } from './store.ts';
 
 // Working without a connection (decision 43). A change made offline is
@@ -23,7 +24,7 @@ import { showError, showInfo } from './store.ts';
 type Item = { id: string; path: string; input: string; at: number; employeeId?: number | null };
 
 const useOutboxStore = create<{ items: Item[] }>()(persist(() => ({ items: [] as Item[] }), {
-  name: 'yartt-outbox',
+  name: storageKey('yartt-outbox'),
   storage: createJSONStorage(() => localStorage),
 }));
 
@@ -140,7 +141,7 @@ async function send(client: TRPCUntypedClient<AppRouter>, queryClient: QueryClie
   }
 }
 
-const CACHE_KEY = 'yartt-cache';
+const CACHE_KEY = storageKey('yartt-cache');
 /** Beyond this the saved cache is skipped: localStorage is small and shared with drafts. */
 const CACHE_LIMIT = 2_000_000;
 

@@ -16,7 +16,8 @@ Run both suites before calling a change done.
 `TEST_DATABASE_URL` is an admin connection: each suite creates its own
 database (vitest — a temporary one; end-to-end — `yartt_e2e`, filled by
 `scripts/seed.ts` and then run as a real installation with sign-in, and
-`yartt_e2e_demo`, the demo itself with `DEMO_DATA=en` for `demo.spec.ts`)
+`yartt_e2e_demo`, the demo itself with `DEMO_DATA=en` under the path
+`/demo` for `demo.spec.ts`)
 and never touches the one in `.env`.
 
 The end-to-end run builds the client (`npm run build`), starts

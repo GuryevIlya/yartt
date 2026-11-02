@@ -6,7 +6,10 @@ import { DEMO_LANGUAGES } from './demoTexts.ts';
 // in Docker variables come from the environment.
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  PUBLIC_URL: z.url(),
+  // Where people open it; a path is fine (https://example.com/demo), then
+  // everything is served under that path.
+  PUBLIC_URL: z.url().transform((value) => value.replace(/\/+$/, ''))
+    .refine((value) => { const u = new URL(value); return !u.search && !u.hash; }, 'an address without a query'),
   PORT: z.coerce.number().int().positive().default(3000),
   ROLE: z.enum(['all', 'api', 'worker']).default('all'),
   // Email: smtp://user:password@host:587 or smtps://user:password@host:465.
@@ -92,4 +95,5 @@ if (result.data.WEBHOOK_URL && !result.data.WEBHOOK_SECRET) {
   process.exit(1);
 }
 
-export default result.data;
+// The path of PUBLIC_URL: '' at the root of a domain, '/demo' under it.
+export default { ...result.data, BASE_PATH: new URL(result.data.PUBLIC_URL).pathname.replace(/\/$/, '') };

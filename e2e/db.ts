@@ -11,7 +11,8 @@ export const E2E_URL = `http://localhost:${E2E_PORT}`;
 /** The demo itself (DEMO_DATA), for demo.spec.ts. */
 export const E2E_DEMO_DATABASE = 'yartt_e2e_demo';
 export const E2E_DEMO_PORT = 3101;
-export const E2E_DEMO_URL = `http://localhost:${E2E_DEMO_PORT}`;
+// Under a path, as a demo next to a website is: every scenario of the demo checks it.
+export const E2E_DEMO_URL = `http://localhost:${E2E_DEMO_PORT}/demo`;
 
 /** The admin URL pointed at an end-to-end database. */
 export function databaseUrl(database = E2E_DATABASE): string {

@@ -1,5 +1,6 @@
 import { isErrorCode, type ErrorParams } from '#shared/errors.ts';
 import i18n from '#client/i18n/index.ts';
+import { url } from './base.ts';
 import { useStore } from './store.ts';
 
 /**
@@ -7,7 +8,7 @@ import { useStore } from './store.ts';
  * tRPC (raw bytes); a failure shows the translated error and rethrows.
  */
 export async function uploadFile(file: File): Promise<number> {
-  const res = await fetch('/api/attachments', {
+  const res = await fetch(url('/api/attachments'), {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'application/octet-stream' },
     body: file,
@@ -25,5 +26,5 @@ export async function uploadFile(file: File): Promise<number> {
 
 /** Where an attachment is served; `name` sets the file name of a download. */
 export function attachmentUrl(id: number, name?: string): string {
-  return name ? `/api/attachments/${id}?name=${encodeURIComponent(name)}` : `/api/attachments/${id}`;
+  return url(name ? `/api/attachments/${id}?name=${encodeURIComponent(name)}` : `/api/attachments/${id}`);
 }

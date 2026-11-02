@@ -52,7 +52,7 @@ export function oidc(): Promise<client.Configuration> {
 
 type Flow = { state: string; nonce: string; verifier: string; next: string };
 
-const cookieOptions = { httpOnly: true, sameSite: 'lax' as const, secure: env.COOKIE_SECURE, path: '/api/sso' };
+const cookieOptions = { httpOnly: true, sameSite: 'lax' as const, secure: env.COOKIE_SECURE, path: `${env.BASE_PATH}/api/sso` };
 
 /** Only a path of this application: never a way to send someone elsewhere. */
 function safeNext(next: unknown): string {
@@ -61,7 +61,7 @@ function safeNext(next: unknown): string {
 
 function fail(res: Response, code: ErrorCode) {
   res.clearCookie(FLOW_COOKIE, cookieOptions);
-  res.redirect(`/login?error=${code}`);
+  res.redirect(`${env.BASE_PATH}/login?error=${code}`);
 }
 
 /** The provider's locale ("ru", "en-US") if the interface speaks it. */
@@ -83,7 +83,7 @@ function timeZoneOf(value: unknown): string {
 export default Router()
   .get('/start', async (req, res) => {
     if (!ssoEnabled()) {
-      res.redirect('/login');
+      res.redirect(`${env.BASE_PATH}/login`);
       return;
     }
     try {
@@ -96,7 +96,7 @@ export default Router()
       };
       const scopes = ['openid', 'email', 'profile'];
       const params: Record<string, string> = {
-        redirect_uri: new URL(CALLBACK_PATH, env.PUBLIC_URL).toString(),
+        redirect_uri: env.PUBLIC_URL + CALLBACK_PATH,
         code_challenge: await client.calculatePKCECodeChallenge(flow.verifier),
         code_challenge_method: 'S256',
         state: flow.state,
@@ -118,7 +118,7 @@ export default Router()
   })
   .get('/callback', async (req, res) => {
     if (!ssoEnabled()) {
-      res.redirect('/login');
+      res.redirect(`${env.BASE_PATH}/login`);
       return;
     }
     let flow: Flow;
@@ -132,7 +132,7 @@ export default Router()
     try {
       const config = await oidc();
       const query = req.originalUrl.slice(req.originalUrl.indexOf('?'));
-      const tokens = await client.authorizationCodeGrant(config, new URL(CALLBACK_PATH + query, env.PUBLIC_URL), {
+      const tokens = await client.authorizationCodeGrant(config, new URL(env.PUBLIC_URL + CALLBACK_PATH + query), {
         pkceCodeVerifier: flow.verifier,
         expectedState: flow.state,
         expectedNonce: flow.nonce,
@@ -157,14 +157,14 @@ export default Router()
       const session = await Auth.signInExternal({ ...person, email: vouched ? email : null });
       if (session) {
         context.setSessionCookie(session);
-        res.redirect(flow.next);
+        res.redirect(env.BASE_PATH + flow.next);
         return;
       }
       // No address the provider vouches for: they confirm one, as without the
       // provider (decision 86), so whoever was created by it is found. The
       // provider's is offered.
       context.setSsoPendingCookie(await Auth.beginExternal({ ...person, email: email && emailAllowed(email) ? email : null }));
-      res.redirect('/sso');
+      res.redirect(`${env.BASE_PATH}/sso`);
     } catch (error) {
       const appError = error instanceof AppError ? error : fromPostgres(error);
       if (appError && isErrorCode(appError.code)) {

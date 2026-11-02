@@ -9,6 +9,7 @@ import type { AppRouter } from '#shared/types.ts';
 import App from './components/App.tsx';
 import { offlineLink, restoreCache, startOffline, unreachable } from './hooks/offline.ts';
 import { showError } from './hooks/store.ts';
+import { BASE, url } from './hooks/base.ts';
 import { TRPCProvider } from './hooks/trpc.ts';
 import './i18n/index.ts';
 import theme from './theme.ts';
@@ -18,11 +19,11 @@ import theme from './theme.ts';
 const http = () => splitLink<AppRouter>({
   condition: (op) => op.type === 'mutation',
   true: httpLink({
-    url: '/api/trpc',
+    url: url('/api/trpc'),
     transformer: superjson,
     headers: ({ op }) => (typeof op.context.changeId === 'string' ? { 'x-yartt-change': op.context.changeId } : {}),
   }),
-  false: httpBatchLink({ url: '/api/trpc', transformer: superjson }),
+  false: httpBatchLink({ url: url('/api/trpc'), transformer: superjson }),
 });
 // Offline, a change goes to the outbox and is sent later by the plain client (decision 43).
 const trpcClient = createTRPCClient<AppRouter>({ links: [offlineLink(), http()] });
@@ -46,14 +47,16 @@ const queryClient = new QueryClient({
 
 restoreCache(queryClient);
 startOffline(outboxClient, queryClient);
-if ('serviceWorker' in navigator && import.meta.env.PROD) void navigator.serviceWorker.register('/sw.js');
+if ('serviceWorker' in navigator && import.meta.env.PROD) void navigator.serviceWorker.register(url('/sw.js'));
+// Opened past its path (the container's own port, not the address people use).
+if (!window.location.pathname.startsWith(BASE)) window.location.replace(url('/'));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider theme={theme}>
       <QueryClientProvider client={queryClient}>
         <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-          <BrowserRouter>
+          <BrowserRouter basename={BASE || '/'}>
             <CssBaseline />
             <App />
           </BrowserRouter>

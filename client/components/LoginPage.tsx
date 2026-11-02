@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { isErrorCode } from '#shared/errors.ts';
+import { url } from '#client/hooks/base.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { fieldErrors } from '#client/i18n/errors.ts';
 import DemoPeople, { useDemo } from './App/DemoPeople.tsx';
@@ -50,7 +51,7 @@ export default function () {
         {failure && <Alert severity="error" sx={{ mb: 2 }}>{failure}</Alert>}
         {/* With the company's identity provider it is the only way in (decision 53). */}
         {sso ? (
-          <Button variant="contained" fullWidth href="/api/sso/start">{t('login.sso', { name: sso.name })}</Button>
+          <Button variant="contained" fullWidth href={url('/api/sso/start')}>{t('login.sso', { name: sso.name })}</Button>
         ) : config.isPending ? null : requestLogin.isSuccess ? (
           <Stack spacing={2}>
             <Alert severity="success" variant="standard">

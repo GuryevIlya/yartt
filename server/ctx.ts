@@ -51,7 +51,7 @@ export default async function ctx(req: Request, res: Response): Promise<Context>
     httpOnly: true,
     sameSite: 'lax' as const,
     secure: env.COOKIE_SECURE,
-    path: '/',
+    path: env.BASE_PATH || '/',
   };
 
   return {

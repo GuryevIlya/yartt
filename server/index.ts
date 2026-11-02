@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import api from './api.ts';
@@ -49,14 +49,24 @@ function securityHeaders(_req: Request, res: Response, next: NextFunction): void
 }
 
 if (env.ROLE === 'all' || env.ROLE === 'api') {
-  const app = express().disable('x-powered-by').use(securityHeaders).use('/api', api);
+  const site = express.Router().use('/api', api);
 
-  // Built client: static files + SPA fallback.
+  // Built client: static files + SPA fallback. The page learns its path from <base>.
   const clientDist = env.CLIENT_DIST ?? join(import.meta.dirname, '..', 'client', 'dist');
   if (existsSync(clientDist)) {
-    app.use(express.static(clientDist, { index: false }));
-    app.get('/{*path}', (_req, res) => res.sendFile(join(clientDist, 'index.html')));
+    const page = readFileSync(join(clientDist, 'index.html'), 'utf8')
+      .replace('<base href="/"', () => `<base href="${env.BASE_PATH}/"`);
+    const sendPage = (_req: Request, res: Response) => res.type('html').send(page);
+    site.get('/index.html', sendPage);
+    site.use(express.static(clientDist, { index: false }));
+    site.get('/{*path}', sendPage);
   }
+
+  // Under its path, and without it too: a proxy may strip the path or keep
+  // it, and the image's health check asks the container for /api/health.
+  const app = express().disable('x-powered-by').use(securityHeaders);
+  if (env.BASE_PATH) app.use(env.BASE_PATH, site);
+  app.use(site);
 
   const server = app.listen(env.PORT, () => console.log(`API listening on :${env.PORT}`));
   stops.push(() => server.close());

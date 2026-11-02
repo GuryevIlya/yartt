@@ -1,3 +1,4 @@
+import { url } from './base.ts';
 import { clearDrafts } from './drafts.ts';
 import { clearOfflineData } from './offline.ts';
 
@@ -12,7 +13,7 @@ export function useSignedOut(): () => void {
   return () => {
     clearDrafts();
     clearOfflineData(true);
-    window.location.replace('/login');
+    window.location.replace(url('/login'));
   };
 }
 
@@ -24,6 +25,6 @@ export function useSwitchedPerson(): () => void {
   return () => {
     clearDrafts();
     clearOfflineData(true);
-    window.location.replace('/');
+    window.location.replace(url('/'));
   };
 }

@@ -1,5 +1,6 @@
 import { isErrorCode } from '#shared/errors.ts';
 import i18n from '#client/i18n/index.ts';
+import { url } from './base.ts';
 import { useStore } from './store.ts';
 
 /** Avatars are stored this size: crisp at 56 px on a 4x screen, a few kilobytes. */
@@ -19,7 +20,7 @@ async function square(file: File): Promise<Blob> {
 }
 
 async function send(method: 'PUT' | 'DELETE', body?: Blob): Promise<void> {
-  const res = await fetch('/api/avatars', { method, ...(body && { body, headers: { 'Content-Type': body.type } }) });
+  const res = await fetch(url('/api/avatars'), { method, ...(body && { body, headers: { 'Content-Type': body.type } }) });
   if (res.ok) return;
   const data: unknown = await res.json().catch(() => null);
   const code = typeof data === 'object' && data !== null && 'appCode' in data ? data.appCode : null;
@@ -39,5 +40,5 @@ export async function deleteAvatar(): Promise<void> {
 
 /** Where an avatar is served; the time makes a new picture a new URL. */
 export function avatarUrl(employeeId: number, at: Date): string {
-  return `/api/avatars/${employeeId}?v=${at.getTime()}`;
+  return url(`/api/avatars/${employeeId}?v=${at.getTime()}`);
 }

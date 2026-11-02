@@ -4,6 +4,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { Placeholder } from '@tiptap/extensions';
 import StarterKit from '@tiptap/starter-kit';
 import { ResizableImage } from 'mui-tiptap';
+import { url } from '#client/hooks/base.ts';
 
 // One set of extensions for editing and for showing comments and contexts,
 // matching what the server keeps (server/html.ts): no tables, no colors.
@@ -11,6 +12,33 @@ import { ResizableImage } from 'mui-tiptap';
 
 /** Only our own attachments may be images (the server enforces it too). */
 const OWN_IMAGE = /^\/api\/attachments\/\d+$/;
+
+/**
+ * The text keeps an image as /api/attachments/12 wherever the application is
+ * served (server/html.ts, and it may move); the editor holds the address the
+ * browser can load, under the path. Going in it gains the path, coming out
+ * it loses it.
+ */
+const stored = (src: string) => (src.startsWith(url('/api/')) ? src.slice(url('').length) : src);
+
+const Image = ResizableImage.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      src: {
+        default: null,
+        parseHTML: (element) => {
+          const src = element.getAttribute('src');
+          return src && OWN_IMAGE.test(src) ? url(src) : src;
+        },
+        renderHTML: (attributes) => {
+          const src = attributes.src as string | null;
+          return { src: src && stored(src) };
+        },
+      },
+    };
+  },
+});
 
 /** An image without a chosen width is not wider than this, and opens in full on click. */
 export const IMAGE_MAX_WIDTH = 480;
@@ -24,7 +52,7 @@ export function richTextExtensions(placeholder?: string) {
       heading: { levels: [1, 2, 3] },
       link: { openOnClick: false, autolink: true, protocols: ['http', 'https', 'mailto'] },
     }),
-    ResizableImage.configure({ inline: false, isAllowedImgSrc: (src) => OWN_IMAGE.test(src ?? '') }),
+    Image.configure({ inline: false, isAllowedImgSrc: (src) => OWN_IMAGE.test(stored(src ?? '')) }),
     ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
   ];
 }
@@ -50,7 +78,7 @@ export const TaskRefs = Extension.create({
             for (const m of node.text!.matchAll(TASK_REF)) {
               found.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
                 nodeName: 'a',
-                href: `/tasks/${m[1]}`,
+                href: url(`/tasks/${m[1]}`),
                 'data-task-ref': m[1]!,
               }));
             }

@@ -24,6 +24,9 @@ the specification; read it before any work.
 - The company deploys the system itself: one Docker image, PostgreSQL is
   external (`DATABASE_URL`). No docker-compose.
 - Express serves both the API and the built client (static files) — no nginx.
+  A path in `PUBLIC_URL` (`example.com/demo`) moves all of it under that path
+  at startup, one build for any path: on the client an address goes through
+  `url()` and a storage name through `storageKey()` (`client/hooks/base.ts`).
 - On startup: the schema (under an advisory lock), then the first employee
   from `.env` (`FIRST_EMPLOYEE_*`) if `employee` is empty — or, with
   `DEMO_DATA`, the demo company installed and seeded afresh, never migrated
