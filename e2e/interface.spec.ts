@@ -147,7 +147,8 @@ test.describe('a task', () => {
     await page.getByRole('combobox', { name: 'Теги' }).fill(second);
     await page.getByRole('button', { name: `Новый тег «${second}»` }).click();
     await page.getByRole('button', { name: 'Сохранить' }).click();
-    await expect(page.getByText(second, { exact: true }).first()).toBeVisible();
+    // The title, one line of all the tags: the chip in the editor is there before anything is saved.
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(second);
 
     await page.getByLabel('Дедлайн').fill(`${new Date().getFullYear() + 1}-01-10T12:00`);
     await page.getByRole('button', { name: 'Убрать дедлайн' }).click();
