@@ -9,10 +9,11 @@ import { useTranslation } from 'react-i18next';
 import type { TagGroup, TagSort, TagStatsRow } from '#shared/tags.ts';
 import type { Tag } from '#shared/task.ts';
 import { fromDay, today, useFormat } from '#client/hooks/format.ts';
-import { STATS_POLL_MS, useEmployees } from '#client/hooks/task.ts';
+import { statsPoll, useEmployees } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { useViewAs } from '#client/hooks/viewAs.ts';
 import { csv, download, type Cell } from '#client/hooks/xlsx.ts';
+import Counting from '../App/Counting.tsx';
 import HelpTip from '../App/HelpTip.tsx';
 import SincePicker, { lastDays } from '../App/SincePicker.tsx';
 import TagChip from '../App/TagChip.tsx';
@@ -48,7 +49,7 @@ export default function (p: { fold?: ReactNode }) {
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const statsInput = { since, tagIds: tags.map((tag) => tag.id), page, sort, as };
   const stats = useQuery(trpc.Tags.stats.queryOptions(statsInput, {
-    refetchInterval: STATS_POLL_MS, placeholderData: keepPreviousData,
+    refetchInterval: statsPoll(since, today()), placeholderData: keepPreviousData,
   }));
   const rows = stats.data?.rows ?? [];
   const picked = tags.length > 0;
@@ -144,6 +145,7 @@ export default function (p: { fold?: ReactNode }) {
         startAdornment={<InputAdornment position="start"><Search fontSize="small" /></InputAdornment>}
       />
       <SincePicker since={since} onChange={(next) => { setSince(next); setPage(1); }} />
+      <Counting active={stats.isFetching && (stats.isPending || stats.isPlaceholderData)} />
       {stats.isSuccess && rows.length === 0 && (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('tagStats.empty')}</Typography>
       )}

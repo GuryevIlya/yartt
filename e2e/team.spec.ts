@@ -7,6 +7,39 @@ test.describe('Team and the employee page', () => {
     await signIn(page);
   });
 
+  test('a report that takes long says so; one over a quarter is not asked again by itself', async ({ page }) => {
+    await page.clock.install();
+    await page.reload();
+    await unfold(page, 'Моя команда');
+    const team = page.locator('.MuiPaper-root').filter({ has: page.getByRole('heading', { name: 'Моя команда' }) });
+    await expect(team.getByRole('row').nth(1)).toBeVisible();
+
+    let asked = 0;
+    await page.route('**/api/trpc/Team.summary**', async (route) => {
+      asked++;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.continue();
+    });
+    const status = team.getByRole('status');
+    await team.getByRole('button', { name: '7 дн.' }).click();
+    await expect(status).toContainText('Отчёт считается');
+    await expect(status).toHaveCount(0);
+
+    // A short range is polled, quietly: the status is for a range just picked.
+    asked = 0;
+    await page.clock.runFor('05:10');
+    await expect.poll(() => asked).toBeGreaterThan(0);
+    await expect(status).toHaveCount(0);
+
+    await team.getByLabel('С', { exact: true }).fill('2025-01-01');
+    await expect(status).toContainText('Отчёт считается');
+    await expect(status).toHaveCount(0);
+    asked = 0;
+    await page.clock.runFor('05:10');
+    await page.waitForTimeout(500);
+    expect(asked).toBe(0);
+  });
+
   test('My team: my whole team on top, then me and my reports; a report\'s team unfolds into them and theirs; a row opens its details', async ({ page }) => {
     await unfold(page, 'Моя команда'); // folded in My day until opened
     const team = page.locator('.MuiPaper-root').filter({ has: page.getByRole('heading', { name: 'Моя команда' }) });

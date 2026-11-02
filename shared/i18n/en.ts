@@ -33,6 +33,7 @@ export const en: Translation = {
     close: 'Close',
     saved: 'Saved',
     loading: 'Loading…',
+    counting: 'The report is being calculated. A long range takes a few seconds.',
     quote: '“{{text}}”',
     explain: 'Explanation',
   },

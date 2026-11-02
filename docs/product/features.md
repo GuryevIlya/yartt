@@ -100,7 +100,7 @@ keeping the timesheet (decision 100).
 | Employee page: their days and scores, seen by the employee and managers above | Marina: honest feedback with facts | now (done) |
 | Score closed shifts of a direct report on their page, 0–100, with an optional reason — a day's at once or one by one; correct it later, every version is emailed | Marina: honest feedback with facts | now (done) |
 | Workload and weighted score for any period, with a chart by day or week | Marina, Oleg: workload and quality side by side | now (done) |
-| Team summary in My day: the subtree for a range — hours, score, days to score, tasks closed in time and after the deadline | Marina, Oleg: the whole team in one table | now (done) |
+| Team summary in My day: the subtree for a range — hours, score, tasks closed in time and after the deadline | Marina, Oleg: the whole team in one table | now (done) |
 | Avatars | everyone: recognize people faster | now (done) |
 
 ## Never

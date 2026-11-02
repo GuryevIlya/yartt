@@ -12,9 +12,10 @@ import type { Member } from '#shared/team.ts';
 import { fromDay, today, useFormat } from '#client/hooks/format.ts';
 import { useMe } from '#client/hooks/me.ts';
 import { useViewAs } from '#client/hooks/viewAs.ts';
-import { STATS_POLL_MS, useEmployees, usePronoun } from '#client/hooks/task.ts';
+import { statsPoll, useEmployees, usePronoun } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { csv, download, xlsx, type Cell } from '#client/hooks/xlsx.ts';
+import Counting from '../App/Counting.tsx';
 import EmployeeAvatar from '../App/EmployeeAvatar.tsx';
 import RangePicker, { useRange } from '../App/RangePicker.tsx';
 import RestoreDialog from './RestoreDialog.tsx';
@@ -48,7 +49,7 @@ export default function (p: { fold?: ReactNode }) {
   const me = useMe();
   const [range, setRange, valid] = useRange();
   const summary = useQuery(trpc.Team.summary.queryOptions({ ...range, as }, {
-    refetchInterval: STATS_POLL_MS, placeholderData: keepPreviousData, enabled: valid,
+    refetchInterval: statsPoll(range.from, range.to), placeholderData: keepPreviousData, enabled: valid,
   }));
   const [restoring, setRestoring] = useState<Employee | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -254,6 +255,7 @@ export default function (p: { fold?: ReactNode }) {
           <MenuItem onClick={exportCsv}>{t('myDay.team.export.csv')}</MenuItem>
         </Menu>
       </Stack>
+      <Counting active={summary.isFetching && (summary.isPending || summary.isPlaceholderData)} />
       {summary.isSuccess && members.length <= 1 && (
         <Typography sx={{ color: 'text.secondary' }}>{t('team.noReports')}</Typography>
       )}

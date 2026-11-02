@@ -30,6 +30,13 @@ export const POLL_MS = 30_000;
 export const STATS_POLL_MS = 300_000;
 
 /**
+ * How often a report over these days is asked again by itself: never over
+ * a quarter, which takes seconds at the top of a big company.
+ */
+export const statsPoll = (from: string, to: string) =>
+  (Date.parse(to) - Date.parse(from) > 92 * 86_400_000 ? false : STATS_POLL_MS);
+
+/**
  * The i18next context for verb forms about an employee ("упомянул" /
  * "упомянула"): their pronoun, or none — then the neutral form with both
  * endings ("упомянул(а)") is used.

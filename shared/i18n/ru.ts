@@ -98,6 +98,7 @@ export const ru = {
     close: 'Закрыть',
     saved: 'Сохранено',
     loading: 'Загрузка…',
+    counting: 'Отчёт считается. За длинный период это занимает несколько секунд.',
     /** Someone's words quoted: a comment, an answer, what a plan is for. */
     quote: '«{{text}}»',
     explain: 'Пояснение',

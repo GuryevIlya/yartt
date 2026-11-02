@@ -112,7 +112,8 @@ for everyone. Opened on demand, the tag summary takes 0.3–0.8 s (it took
 up to three and a half minutes for a director's year), the team summary
 of a month 15–400 ms. A year for the CEO, who sees all 40 000 tasks and
 300 people, is the slowest: 1.5 s for the tags, 2.5 s for the team
-(11.5 s before).
+(11.5 s before). So a report that takes over a second says it is being
+calculated, and one over a quarter is not asked again by itself.
 
 ## What is checked by hand
 
