@@ -67,7 +67,20 @@ In this order after stage 6 (S — a day, M — a few days, L — a week or more
   year seen from the top of a 300-person company: 1.5 s for the tags,
   2.5 s for the team, mostly each person's backlog day by day and the
   reaction time of every mention. Daily figures kept by the worker
-  overnight would make any range a sum of days.
+  overnight would make any range a sum of days, with today counted live.
+  Past days change too: a shift corrected or added, time logged into a
+  past shift, a score set or withdrawn, a task's tags, a mention answered
+  late. So whatever changes a day's source marks that day stale, and a
+  report counts the stale days live until the worker redoes them: figures
+  are never older than the data. Who sees what is still checked at every
+  request, never stored in the figures.
+- [ ] **Reports kept as of a moment: to weigh at the next load check** (?).
+  Not needed now: nothing takes over 3 s (2026-11-02). If the next load
+  check after 1.0 finds daily figures are not enough, a heavy report could
+  be kept with the time it was counted and a button to count it again.
+  Against it: a report is its viewer's own (person, range, filter, page),
+  so it is rarely reused, and one kept after someone lost access to a task
+  would still show its figures.
 
 ### Separate projects, after 1.0
 
