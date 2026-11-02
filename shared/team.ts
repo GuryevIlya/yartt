@@ -48,8 +48,6 @@ export const MemberDay = DayStats.extend({
   recordDelayMinutes: z.number().nullable(),
   /** Mentions of the day: working minutes to the first reaction. */
   replyMinutes: z.number().nullable(),
-  /** As a manager: the reports' scores of this day, from its end to the score. */
-  scoreWaitMinutes: z.number().nullable(),
 });
 export type MemberDay = z.infer<typeof MemberDay>;
 
@@ -82,8 +80,6 @@ export const Member = z.object({
    * (decision 95); NULL — none reacted to, or no timesheet.
    */
   replyMinutes: z.number().nullable(),
-  /** As a manager: the median of minutes from the end of a report's day to their score of it; NULL — scored none. */
-  scoreWaitMinutes: z.number().nullable(),
   /** Planned work now: the sum of their estimates of time left on open tasks. */
   backlogMinutes: z.number().int(),
   /** How the backlog changed over the range (now minus its start): planned work growing or melting. */

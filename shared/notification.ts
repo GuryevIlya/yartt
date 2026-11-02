@@ -52,8 +52,6 @@ export const NotificationPayload = z.discriminatedUnion('kind', [
   // Monday morning for a manager: what waits for them in their team.
   z.object({
     kind: z.literal('weekly_digest'),
-    /** Days of direct reports waiting for a score. */
-    unscored: z.number().int(),
     /** Tasks of the subtree overdue now: the deadline passed, the owner did not close them (decision 93); absent before 0.5. */
     overdue: z.number().int().default(0),
     /** Tasks of the subtree at risk now. */

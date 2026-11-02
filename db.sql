@@ -5002,7 +5002,6 @@ CREATE OR REPLACE FUNCTION send_weekly_digests(p_now TIMESTAMPTZ DEFAULT NOW())
 RETURNS INT AS $$
 DECLARE
     v_manager RECORD;
-    v_unscored INT;
     v_overdue INT;
     v_at_risk INT;
     v_blocked INT;
@@ -5018,13 +5017,6 @@ BEGIN
            AND (h.weekly_digest_on IS NULL OR h.weekly_digest_on < (p_now AT TIME ZONE e.time_zone)::date)
          FOR UPDATE OF h SKIP LOCKED
     LOOP
-        -- Days of direct reports (the last 30, today aside) with a closed shift and no standing score on it.
-        SELECT count(DISTINCT (d.employee_id, d.day)) INTO v_unscored
-          FROM shift_day d JOIN employee r ON r.id = d.employee_id
-         WHERE r.manager_id = v_manager.id AND r.dismissed_at IS NULL AND d.closed
-           AND d.day < (p_now AT TIME ZONE v_manager.time_zone)::date
-           AND d.day >= (p_now AT TIME ZONE v_manager.time_zone)::date - 30
-           AND NOT EXISTS (SELECT 1 FROM score s WHERE s.shift_id = d.shift_id AND s.value IS NOT NULL);
         -- Tasks of the team overdue now: the deadline passed and nobody closed them.
         SELECT count(*) INTO v_overdue
           FROM task k JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
@@ -5041,10 +5033,10 @@ BEGIN
 
         UPDATE human SET weekly_digest_on = (p_now AT TIME ZONE v_manager.time_zone)::date WHERE employee_id = v_manager.id;
         -- Nothing to say, nothing sent: a quiet week needs no email.
-        IF v_unscored + v_overdue + v_at_risk + v_blocked > 0 THEN
+        IF v_overdue + v_at_risk + v_blocked > 0 THEN
             INSERT INTO notification (employee_id, task_id, payload)
             VALUES (v_manager.id, NULL, jsonb_build_object(
-                'kind', 'weekly_digest', 'unscored', v_unscored, 'overdue', v_overdue, 'atRisk', v_at_risk,
+                'kind', 'weekly_digest', 'overdue', v_overdue, 'atRisk', v_at_risk,
                 'blocked', v_blocked));
             v_sent := v_sent + 1;
         END IF;
@@ -5055,8 +5047,7 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION send_weekly_digests(TIMESTAMPTZ) IS
 'Cron, every hour: on Monday from 09:00 in each manager''s time zone,
-once a week, a summary of what waits for them — days of direct reports
-with a shift waiting for a score (the last 30), tasks of the subtree overdue now,
+once a week, a summary of what waits for them — tasks of the subtree overdue now,
 tasks of the subtree at risk now, direct reports
 the identity provider no longer lets in (to dismiss). Sent only if
 something is there; not copied to anyone (it is about their own team).

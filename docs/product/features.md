@@ -52,7 +52,7 @@ persona goal it serves. Status: **now** — stage one, **next** — stage two,
 | A shift suggested for activity outside the written shifts of a past day | Pavel: an evening of work is not lost from the timesheet | now (done) |
 | Export for payroll: timesheet, logged time and scores of the picked people for a range, as Excel or CSV | Marina: hand the month to accounting without retyping | now (done) |
 | Bots: an employee kind of its own, created by anyone, run by its manager; one key, permissions that only narrow what it sees, its own signed JSON webhook; no timesheet, scores or reports. Bots under My team from any day to today: tasks, comments, calls by day, share refused, share delivered, the quiet first; a yearly word about an old key | Pavel: a failed build lands in the task as a mention, and the bot cannot do more than it should | now (done) |
-| A weekly email for managers: Monday morning, days waiting for a score, overdue tasks, tasks at risk | Marina: the week starts with what needs her | now (done) |
+| A weekly email for managers: Monday morning, overdue tasks, tasks at risk | Marina: the week starts with what needs her | now (done) |
 | A dark theme: as the system, or chosen in the profile | Pavel: My day open all evening without glare | now (done) |
 | Installable (PWA) and working offline: changes made without a connection are kept and sent at the first chance | everyone: a train or a basement does not stop work | now (done) |
 | The top line: how many TODO items wait for me, starting a shift now, the open shift and closing it, from any page | Pavel: notice a mention and close the day without going back to My day | now (done) |

@@ -55,7 +55,7 @@ export default function (p: { group: Group; onChanged: () => void }) {
   const person = group.kind === 'person' ? group.person : null;
   const employee = person ? employees.get(person.employeeId) : undefined;
   const palette = (theme.vars ?? theme).palette;
-  const colors = { record: palette.primary.main, reply: palette.success.main, scoreWait: palette.warning.main };
+  const colors = { record: palette.primary.main, reply: palette.success.main };
   const percent = (v: number) => `${Math.round(v)}%`;
 
   // Dismissal cannot be undone by the person dismissed and hurts them: confirm it.
@@ -95,7 +95,7 @@ export default function (p: { group: Group; onChanged: () => void }) {
             {m.scoredDays !== null && ` · ${t('employee.stats.scoredDays', { count: m.scoredDays })}`}
           </Line>
           {m.unscored !== null && m.unscored > 0 && (
-            <Line warn>{t(group.kind === 'team' ? 'myDay.team.details.unscoredByManager' : 'myDay.team.details.unscored', { count: m.unscored })}</Line>
+            <Line>{t(group.kind === 'team' ? 'myDay.team.details.unscoredByManager' : 'myDay.team.details.unscored', { count: m.unscored })}</Line>
           )}
           {scorer ? (
             <TeamChart
@@ -145,7 +145,7 @@ export default function (p: { group: Group; onChanged: () => void }) {
             series={DELAYS.map((kind) => ({
               id: kind, label: t(`myDay.team.delayOf.${kind}`), color: colors[kind],
               values: daily(people, (d) => {
-                const v = kind === 'record' ? d.recordDelayMinutes : kind === 'reply' ? d.replyMinutes : d.scoreWaitMinutes;
+                const v = kind === 'record' ? d.recordDelayMinutes : d.replyMinutes;
                 return v === null ? null : v / 60;
               }),
             }))}

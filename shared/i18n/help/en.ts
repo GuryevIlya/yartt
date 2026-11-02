@@ -348,7 +348,7 @@ export const helpEn: Help = {
             'A score of the day is 0 to 100 with a reason. The person gets an email. A score can be changed (another email goes out) '
               + 'or withdrawn so they can fix their timesheet.',
             '"Export" saves the timesheet, entries and scores of the picked people for a period as Excel or CSV, for payroll.',
-            'Every Monday an email comes: days waiting for a score, overdue tasks and tasks at risk.',
+            'Every Monday an email comes: overdue tasks and tasks at risk.',
             'Only the direct manager dismisses someone: the dismissed person\'s tasks and reports go to that manager. '
               + 'The dismissed come back from "My dismissed" under the team table.',
           ],

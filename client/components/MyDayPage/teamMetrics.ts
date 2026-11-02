@@ -5,15 +5,14 @@ import type { Member } from '#shared/team.ts';
 // (decision 68): counts add up, shares and delays are averaged over people, and a
 // team's score is its manager's.
 
-export const DELAYS = ['record', 'reply', 'scoreWait'] as const;
+export const DELAYS = ['record', 'reply'] as const;
 export type DelayKind = (typeof DELAYS)[number];
 
 /**
  * Where a delay starts to matter, minutes: a timesheet written a day later
- * is a reconstruction; a mention left for a working day; a day waiting
- * three for its score.
+ * is a reconstruction; a mention left for a working day.
  */
-export const DELAY_LIMIT: Record<DelayKind, number> = { record: 1440, reply: 480, scoreWait: 3 * 1440 };
+export const DELAY_LIMIT: Record<DelayKind, number> = { record: 1440, reply: 480 };
 
 export type Group =
   | { kind: 'person'; person: Member }
@@ -27,7 +26,7 @@ export type Metrics = {
   /** A person's score weighted by their own hours; a team — its manager's; picked — the average of people. */
   score: number | null;
   scoredDays: number | null;
-  /** Past days waiting for a score: a person — for my score; a team — for its manager's. */
+  /** Past days not scored: a person — by me; a team — by its manager. */
   unscored: number | null;
   finished: number;
   late: number;
@@ -51,7 +50,7 @@ const sum = (people: Member[], value: (m: Member) => number) => people.reduce((n
 export const share = (m: Member) => (m.stats.workMinutes > 0 ? (m.stats.spentMinutes / m.stats.workMinutes) * 100 : null);
 
 const delaysOf = (m: Member): Record<DelayKind, number | null> =>
-  ({ record: m.recordDelayMinutes, reply: m.replyMinutes, scoreWait: m.scoreWaitMinutes });
+  ({ record: m.recordDelayMinutes, reply: m.replyMinutes });
 
 /** The people whose numbers a row combines. */
 export const peopleOf = (g: Group) => (g.kind === 'person' ? [g.person] : g.people);

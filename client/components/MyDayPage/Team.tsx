@@ -338,15 +338,10 @@ function MetricCells(p: { group: Group; m: Metrics }) {
     <Typography variant="caption" sx={{ color: warn ? 'warning.dark' : 'text.secondary', display: 'block', lineHeight: 1.3 }}>{text}</Typography>
   );
   const late = m.worst !== null && m.worst.minutes >= DELAY_LIMIT[m.worst.kind];
-  const mine = p.group.kind === 'person' || (p.group.kind === 'team' && p.group.manager.self);
   return (
     <>
       <TableCell align="right" sx={{ color: (m.share ?? 0) > 100 ? 'warning.dark' : undefined }}>{percent(m.share)}</TableCell>
-      <TableCell align="right">
-        {percent(m.score)}
-        {/* Days waiting for my score only: a team's wait for its manager is in its details. */}
-        {mine && m.unscored !== null && m.unscored > 0 && note(t('myDay.team.toScore', { count: m.unscored }), true)}
-      </TableCell>
+      <TableCell align="right">{percent(m.score)}</TableCell>
       <TableCell align="right">
         <Stack direction="row" sx={{ justifyContent: 'flex-end', alignItems: 'center', gap: 0.5 }}>
           {m.atRisk > 0 && (

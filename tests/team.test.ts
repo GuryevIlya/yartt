@@ -402,23 +402,18 @@ describe('team', () => {
     await sql`UPDATE finished_at SET confirmed_at = NOW() WHERE task_id = ${a} AND expired_at IS NULL`;
     member = (await summary()).find((m) => m.employeeId === dev.id)!;
     expect(member.backlogMinutes).toBe(90);
-
-    // The shift ended at 17:00 two days ago and was scored now: a day and seven
-    // hours of waiting plus the time of day, on the manager's row.
-    const leadRow = (await summary()).find((m) => m.employeeId === lead.id)!;
-    expect(leadRow.scoreWaitMinutes).toBeGreaterThanOrEqual(1440 + 7 * 60 - 1);
-    expect(leadRow.scoreWaitMinutes).toBeLessThan(2 * 1440 + 7 * 60);
   });
 
   test('the weekly email: Monday from 09:00 in the manager\'s time zone, once, only when there is something', async () => {
     const lead = await createEmployee();
     const dev = await createEmployee({ managerId: lead.id });
-    await shift(dev.id, 2, 8); // a past day waiting for the lead's score
+    const late = await createTask(dev.id);
+    await sql`INSERT INTO finished_at (task_id, value) VALUES (${late}, NOW() - INTERVAL '1 day')`;
     const monday = async (time: string) => (await sql<{ at: Date }[]>`
       SELECT (date_trunc('week', NOW() AT TIME ZONE time_zone)::date + 7 + ${time}::time) AT TIME ZONE time_zone AS at
         FROM employee WHERE id = ${lead.id}
     `)[0]!.at;
-    const digests = async () => (await sql<{ payload: { kind: string; unscored: number } }[]>`
+    const digests = async () => (await sql<{ payload: { kind: string; overdue: number } }[]>`
       SELECT payload FROM notification WHERE employee_id = ${lead.id} AND payload->>'kind' = 'weekly_digest'
     `).map((n) => n.payload);
 
@@ -426,11 +421,11 @@ describe('team', () => {
     expect(await digests()).toEqual([]);
     await sql`SELECT send_weekly_digests(${await monday('09:05')})`;
     await sql`SELECT send_weekly_digests(${await monday('10:05')})`; // once a week
-    expect(await digests()).toEqual([expect.objectContaining({ unscored: 1, overdue: 0, atRisk: 0 })]);
+    expect(await digests()).toEqual([expect.objectContaining({ overdue: 1, atRisk: 0 })]);
 
-    // A manager with nothing waiting gets no email.
+    // A manager with nothing waiting gets no email: a day not scored is not asked for (decision 105).
     const calm = await createEmployee();
-    await createEmployee({ managerId: calm.id });
+    await shift((await createEmployee({ managerId: calm.id })).id, 2, 8);
     await sql`SELECT send_weekly_digests(${await monday('09:30')})`;
     expect(await sql`SELECT 1 FROM notification WHERE employee_id = ${calm.id} AND payload->>'kind' = 'weekly_digest'`).toHaveLength(0);
   });

@@ -26,7 +26,6 @@ const ExtraRow = z.object({
   recordDelayMinutes: z.number().nullable(),
   replyMinutes: z.number().nullable(),
   unanswered: z.number(),
-  scoreWaitMinutes: z.number().nullable(),
   backlogMinutes: z.number(),
   backlogGrowthMinutes: z.number(),
   lastSeenAt: z.date().nullable(),
@@ -40,7 +39,7 @@ const MemberDayRow = z.object({
   backlogMinutes: z.number(),
 });
 const DelayRow = z.object({
-  kind: z.enum(['record', 'reply', 'scoreWait']),
+  kind: z.enum(['record', 'reply']),
   employeeId: z.number(),
   day: z.string(),
   minutes: z.number(),
@@ -189,21 +188,10 @@ async function delaysByDay(ids: number[], from: string, to: string): Promise<z.i
               AND m.created_at >= (${from}::date - 2)::timestamptz AND m.created_at < (${to}::date + 2)::timestamptz
               AND EXISTS (SELECT 1 FROM work w WHERE w.employee_id = m.value)
             GROUP BY 1, 2
-         ),
-         sw AS (
-           SELECT s."by" AS employee_id, (w.started_at AT TIME ZONE r.time_zone)::date AS day,
-                  percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM
-                    s.added_at - (w.started_at + w.spent_minutes * INTERVAL '1 minute')) / 60) AS minutes
-             FROM score s JOIN work w ON w.id = s.shift_id JOIN employee r ON r.id = w.employee_id
-            WHERE s."by" = ANY(${ids}) AND ${shiftsWithin(sql`w`, from, to)}
-              AND (w.started_at AT TIME ZONE r.time_zone)::date BETWEEN ${from}::date AND ${to}::date
-            GROUP BY 1, 2
          )
     SELECT 'record' AS kind, employee_id, day::text, minutes::float8 FROM rec WHERE day BETWEEN ${from}::date AND ${to}::date
     UNION ALL
     SELECT 'reply', employee_id, day::text, minutes::float8 FROM rep WHERE day BETWEEN ${from}::date AND ${to}::date
-    UNION ALL
-    SELECT 'scoreWait', employee_id, day::text, minutes::float8 FROM sw
   `);
 }
 
@@ -211,7 +199,7 @@ async function delaysByDay(ids: number[], from: string, to: string): Promise<z.i
  * The team summary: me first (my own report), then the whole subtree of my
  * reports, direct ones first — without those invited after the range or
  * dismissed before it — for a range of their days — workload and
- * score, days waiting for a score, tasks closed in time and after the deadline
+ * score, days not scored, tasks closed in time and after the deadline
  * (decision 32). People are compared by shares, not hours (decision 68).
  */
 export async function summary(viewerId: number, from: string, to: string): Promise<Member[]> {
@@ -281,14 +269,6 @@ export async function summary(viewerId: number, from: string, to: string): Promi
              LEFT JOIN finished_at f ON f.task_id = k.id AND f.expired_at IS NULL
             WHERE f.confirmed_at IS NULL
             GROUP BY 1
-         ),
-         scores AS (
-           SELECT s."by", percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM
-                    s.added_at - (w.started_at + w.spent_minutes * INTERVAL '1 minute')) / 60) AS minutes
-             FROM score s JOIN work w ON w.id = s.shift_id JOIN employee r ON r.id = w.employee_id
-            WHERE s."by" = ANY(${ids}) AND ${shiftsWithin(sql`w`, from, to)}
-              AND (w.started_at AT TIME ZONE r.time_zone)::date BETWEEN ${from}::date AND ${to}::date
-            GROUP BY 1
          )
     SELECT e.id AS employee_id,
            COALESCE(u.n, 0) AS unscored_days,
@@ -304,7 +284,6 @@ export async function summary(viewerId: number, from: string, to: string): Promi
            )::float8 AS record_delay_minutes,
            r.minutes::float8 AS reply_minutes,
            COALESCE(r.unanswered, 0) AS unanswered,
-           sc.minutes::float8 AS score_wait_minutes,
            backlog_minutes(e.id, NOW()) AS backlog_minutes,
            backlog_minutes(e.id, LEAST(NOW(), (${to}::date + 1)::timestamp AT TIME ZONE e.time_zone))
              - backlog_minutes(e.id, ${from}::date::timestamp AT TIME ZONE e.time_zone) AS backlog_growth_minutes,
@@ -315,14 +294,13 @@ export async function summary(viewerId: number, from: string, to: string): Promi
       LEFT JOIN closed c ON c.owner_id = e.id
       LEFT JOIN open o ON o.owner_id = e.id
       LEFT JOIN replies r ON r.employee_id = e.id
-      LEFT JOIN scores sc ON sc."by" = e.id
   `.then((rows) => new Map(ExtraRow.array().parse(rows).map(({ employeeId, ...rest }) => [employeeId, rest])));
   const [byId, extra, days, delays] = await Promise.all([statsOf, extraOf, memberDays(ids, from, to), delaysByDay(ids, from, to)]);
   const delayOf = new Map(delays.map((d) => [`${d.employeeId}/${d.day}/${d.kind}`, d.minutes]));
   const daysOf = new Map<number, MemberDay[]>();
   for (const { employeeId, ...day } of days) {
     const delay = (kind: z.infer<typeof DelayRow>['kind']) => delayOf.get(`${employeeId}/${day.day}/${kind}`) ?? null;
-    const item = { ...day, recordDelayMinutes: delay('record'), replyMinutes: delay('reply'), scoreWaitMinutes: delay('scoreWait') };
+    const item = { ...day, recordDelayMinutes: delay('record'), replyMinutes: delay('reply') };
     daysOf.set(employeeId, [...(daysOf.get(employeeId) ?? []), item]);
   }
   return rows.map((r) => ({

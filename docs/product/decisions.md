@@ -459,8 +459,6 @@ from data already kept and that cannot be gamed by working worse:
   answer for: a mention a minute after the shift, answered as the next
   shift began, took 0. Without a timesheet there is nothing to measure
   against, so no value.
-- **How long days wait for a score** — on a manager's row: the median
-  from the end of a report's day to the manager's score.
 - **Backlog** — the person's planned work in hours (their "time left"
   estimates on open tasks, `backlog_minutes()`), its growth over the
   range and its sparkline: is planned work piling up faster than it is
@@ -511,7 +509,7 @@ with `Authorization: Bearer` — documented for administrators in
 `revoke_api_token()` in `db.sql`; `server/ctx.ts`; `ApiToken` router;
 `ApiTokens` in the profile and on the employee page.
 
-### 42. Monday's email says what waits, or nothing
+### 42. Monday's email says what waits, or nothing — changed by 105
 
 A manager starts the week with an email — Monday from 09:00 in their own
 time zone — that says what waits for them in their team: days of direct
@@ -2098,3 +2096,18 @@ on the way.
 *Implemented:* `attachment.in_storage` (`db.sql`, migration `0.5-0.6`);
 `server/storage.ts`; `upload`, `read`, `moveToStorage`, `cleanup` in
 `server/services/Attachment.ts`; the `attachment_storage` job.
+
+### 105. A day's score is never asked for
+
+Scoring is optional (decisions 6, 8a), yet three things kept asking for it:
+Monday's email counted the days waiting for a score, a person's row in My
+team showed "to score: N" in the warning color, and how long a manager
+took to score was one of the delays that could color their row. A manager
+who does not score looked behind on something nobody requires, and a
+company that moved in with years of unscored days started in debt.
+
+Now none of them is there. The details of a person still say how many
+days have no score, plainly, for the manager who does score and wants to
+find them; the days themselves are on the person's page, as before.
+
+*Implemented:* `send_weekly_digests()`, `Team.summary`, `TeamDetails`.
