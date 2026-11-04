@@ -71,6 +71,8 @@ test.describe('new task', () => {
     await page.getByRole('combobox', { name: 'Участники' }).click();
     await page.keyboard.type('фронтенд'); // found by what he wrote about himself
     await page.getByRole('option', { name: /Павел Орлов/ }).click();
+    await expect(page.getByText('Что нужно от них')).toBeVisible();
+    await page.locator('.ProseMirror[contenteditable="true"]').last().fill('Сделай выгрузку');
     await page.getByRole('button', { name: 'Создать задачу' }).click();
     await expect(page).toHaveURL(/\/tasks\/\d+$/);
     const id = Number(page.url().split('/').pop());

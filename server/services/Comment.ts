@@ -303,11 +303,14 @@ async function load(viewerId: number, taskId: number, ids: number[]): Promise<Ma
  * here too.
  */
 export async function create(authorId: number, input: CreateCommentInput): Promise<number> {
+  return sql.begin((tx) => createIn(tx as unknown as Sql, authorId, input));
+}
+
+/** `create` inside the caller's transaction (the first comment of a task created with it). */
+export async function createIn(db: Sql, authorId: number, input: CreateCommentInput): Promise<number> {
   const clean = cleanHtml(input.html);
   if (clean.html === null) throw new AppError('invalid_data');
-
-  return sql.begin(async (tx) => {
-    const db = tx as unknown as Sql;
+  {
     await assertCanSee(input.taskId, authorId, db);
     await assertReadable([...input.files.map((f) => f.id), ...clean.imageIds], authorId, db);
 
@@ -346,7 +349,7 @@ export async function create(authorId: number, input: CreateCommentInput): Promi
         FROM task WHERE id = ${input.taskId} AND owner_id IS NOT NULL AND owner_id <> ${authorId}
     `;
     return commentId;
-  });
+  }
 }
 
 /** The comment, if it is the author's: only they add and delete its mentions. */

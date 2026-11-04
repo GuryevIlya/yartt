@@ -170,6 +170,8 @@ export const CreateInput = z.object({
   waitedOnBy: Id.optional(),
   /** Brought in at once, as a participant brings people in (add_observer); each is told. */
   participants: Id.array().max(100).optional(),
+  /** What is needed from `participants`: the first comment, mentioning them all. Ignored without participants. */
+  request: Html.optional(),
 });
 export type CreateInput = z.infer<typeof CreateInput>;
 

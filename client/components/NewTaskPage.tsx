@@ -19,7 +19,7 @@ import TaskLine from './TaskPage/TaskLine.tsx';
 import TakenLink from './App/TakenLink.tsx';
 import Experts from './App/Experts.tsx';
 
-type Draft = { tags: TagPart[]; input: string; priority: Priority; deadline: string; context: string; participants: number[] };
+type Draft = { tags: TagPart[]; input: string; priority: Priority; deadline: string; context: string; participants: number[]; request?: string };
 const EMPTY: Draft = { tags: [], input: '', priority: 'NORMAL', deadline: '', context: '', participants: [] };
 
 const label = { fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'text.secondary' } as const;
@@ -55,6 +55,7 @@ export default function () {
   const candidates = [...employees.values()].filter((e) => e.dismissedAt === null && e.id !== me.id);
   const change = (part: Partial<Draft>) => setDraft((prev) => ({ ...prev, ...part }));
   const editor = useRef<RichEditorHandle>(null);
+  const requestEditor = useRef<RichEditorHandle>(null);
 
   // The title typed where the form was opened from replaces the draft's, once per opening;
   // opened from another task with nothing typed, the title starts as that task's tags,
@@ -100,6 +101,7 @@ export default function () {
     waitsFor,
     waitedOnBy,
     participants,
+    ...(participants.length > 0 && requestEditor.current && !requestEditor.current.isEmpty() && { request: requestEditor.current.getHtml() }),
   });
   // Back where the form was opened from; a link opened in a new tab goes home.
   const cancel = () => {
@@ -173,6 +175,19 @@ export default function () {
           <TextField {...params} label={t('newTask.participants')} helperText={t('newTask.participantsHint')} />
         )}
       />
+
+      {participants.length > 0 && (
+        <Stack spacing={0.75}>
+          <Typography sx={label}>{t('newTask.request')}</Typography>
+          <RichEditor
+            handle={requestEditor}
+            initial={draft.request ?? ''}
+            placeholder={t('newTask.requestPlaceholder')}
+            onSubmit={submit}
+            onChange={(html) => change({ request: html })}
+          />
+        </Stack>
+      )}
       <Experts
         tags={picked}
         exclude={participants}

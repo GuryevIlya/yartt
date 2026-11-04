@@ -2170,3 +2170,18 @@ half a year later, while a mention stands next to the reason for it.
 *Implemented:* `context_mention`, `waiter_closed`, `close_task()`, migration
 `0.6-0.7`; `taskRefs()` in `server/html.ts`; `Task.get`'s `related`,
 `MyDay.todo`'s `waiterClosed`; `client/components/TaskPage/RelatedTasks.tsx`.
+
+### 108. A request is made together with the task
+
+Whoever is used to assigning makes a task and wants the doer on it at once.
+Bringing someone in from the form took one step, but a participant gets
+access, not a request: asking meant opening the task and writing a comment,
+and that second step is the one to be forgotten.
+
+With participants chosen, the form asks what is needed from them. It becomes
+the first comment, in the same transaction, mentioning them all, so it stands
+in their Waiting for me and in the owner's Waiting for others. The owner
+stays the owner (decision 76). One text for everyone: a different request for
+each is a comment of its own.
+
+*Implemented:* `request` in `Task.create`, `Comment.createIn`, `NewTaskPage`.

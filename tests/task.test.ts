@@ -607,6 +607,19 @@ describe('deadline changes settle', () => {
   });
 });
 
+describe('a request with a new task (decision 108)', () => {
+  test('it is the first comment, in the participants\' Waiting for me; without participants nothing is left', async () => {
+    const owner = await createEmployee();
+    const doer = await createEmployee();
+    const api = await client(owner.id);
+    const id = await api.Task.create({ tags: [`n-${randomUUID().slice(0, 8)}`], participants: [doer.id], request: '<p>Сделай выгрузку</p>' });
+    expect(await api.Task.get({ id })).toMatchObject({ ownerId: owner.id });
+    expect(await (await client(doer.id)).MyDay.todo()).toContainEqual(expect.objectContaining({ kind: 'mention', task: expect.objectContaining({ id }) }));
+    const alone = await api.Task.create({ tags: [`n-${randomUUID().slice(0, 8)}`], request: '<p>Никому</p>' });
+    expect((await api.Comment.list({ taskId: alone, filter: 'all', page: 1 })).items).toEqual([]);
+  });
+});
+
 describe('related tasks (decision 107)', () => {
   const pair = async () => {
     const owner = await createEmployee();

@@ -10,8 +10,6 @@ it is decided. Proposals wait for a decision in their own section.
 Decided after the first team's meeting about moving in (2026-11-03), all
 in one version, before stage 6 goes on.
 
-- [ ] **A request right in the new task form.** "What is needed from them"
-  makes the first comment, with mentions, together with the task.
 - [ ] **The editor.** Headings, links, code blocks, tables and alignment;
   no colours or sizes. A task is picked by `#` in the context too. A
   Markdown mode, since that is what language models write.

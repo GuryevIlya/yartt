@@ -293,6 +293,8 @@ export const en: Translation = {
     noDependency: 'Without this link',
     similar: 'Similar tasks',
     participants: 'Participants',
+    request: 'What is needed from them',
+    requestPlaceholder: 'This goes as the first comment, into Waiting for me of each participant',
     participantsHint: 'Whom to bring in at once. A participant sees the task and plans their hours in it, while you stay '
       + 'the owner. They get no notice of comments: for an answer, mention them in a comment with @.',
     create: 'Create task',

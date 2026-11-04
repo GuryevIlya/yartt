@@ -6,6 +6,7 @@ import {
 import { AppError } from '../errors.ts';
 import { cleanHtml, taskRefs } from '../html.ts';
 import { sql, type Sql } from '../pg.ts';
+import { createIn as createComment } from './Comment.ts';
 import * as Dependencies from './Dependency.ts';
 
 export const PAGE_SIZE = 20;
@@ -294,6 +295,13 @@ export async function create(ownerId: number, input: CreateInput): Promise<numbe
     if (input.waitedOnBy) await Dependencies.setIn(db, ownerId, { taskId: input.waitedOnBy, value: id, latestAt: null });
     for (const employeeId of new Set(input.participants ?? [])) {
       if (employeeId !== ownerId) await db`SELECT add_observer(${id}, ${employeeId}, ${ownerId})`;
+    }
+    // What is needed from them: the first comment, in their Waiting for me (decision 108).
+    const asked = [...new Set(input.participants ?? [])].filter((employeeId) => employeeId !== ownerId);
+    if (input.request && asked.length > 0) {
+      await createComment(db, ownerId, {
+        taskId: id, html: input.request, replyToId: null, files: [], mentionIds: asked, everyone: false, exceptIds: [], taskIds: [],
+      });
     }
     return id;
   });

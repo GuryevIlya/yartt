@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Id } from '#shared/employee.ts';
 import { CreateInput, Expert, SearchInput, SearchResult, TaskHeader, TaskPage, TaskPreview, TitleInput, TitleTaken, TransferInput, UpdateInput } from '#shared/task.ts';
+import { AppError } from '../errors.ts';
 import * as Tasks from '../services/Task.ts';
 import { authedProcedure, router } from '../trpc.ts';
 
@@ -72,7 +73,9 @@ export default router({
    * created. Priority, deadline, context and a dependency without a latest deadline — the new
    * task waits for `waitsFor`, or `waitedOnBy` waits for it (a task the
    * creator sees, decision 94) — may come at
-   * once, and the `participants` brought in, each told. Returns its id.
+   * once, and the `participants` brought in, each told; `request` becomes
+   * the first comment, mentioning them. Returns its id.
+   * @throws bot_not_permitted — a bot with `request` and no `comment` permission.
    * @throws tag_set_taken — a task with this set of tags exists.
    * @throws no_access — the creator does not see `waitsFor` or `waitedOnBy`.
    * @throws not_found — an unknown task to depend on.
@@ -82,7 +85,10 @@ export default router({
     .meta({ bot: 'task' })
     .input(CreateInput)
     .output(Id)
-    .mutation(({ input, ctx }) => Tasks.create(ctx.employeeId, input)),
+    .mutation(({ input, ctx }) => {
+      if (input.request && ctx.bot && !ctx.bot.includes('comment')) throw new AppError('bot_not_permitted', { permission: 'comment' });
+      return Tasks.create(ctx.employeeId, input);
+    }),
 
   /**
    * The owner changes tags, priority or context (rich text, sanitized);
