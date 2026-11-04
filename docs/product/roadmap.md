@@ -10,8 +10,6 @@ it is decided. Proposals wait for a decision in their own section.
 Decided after the first team's meeting about moving in (2026-11-03), all
 in one version, before stage 6 goes on.
 
-- [ ] **The profile dialog keeps its size.** Switching its tabs does not
-  make the interface jump.
 - [ ] **A "Related" block of a task.** Waiting stops when a task waited
   for is closed, so it moves from "Waits for" to "Related" and comes back
   when reopened. A closed task is shown by nobody as waiting. Tasks

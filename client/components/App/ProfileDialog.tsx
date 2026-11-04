@@ -79,7 +79,7 @@ export default function (p: { onClose: () => void }) {
   };
 
   return (
-    <Dialog open onClose={p.onClose} fullWidth maxWidth={section === 'tags' ? 'md' : 'sm'}>
+    <Dialog open onClose={p.onClose} fullWidth maxWidth="md" slotProps={{ paper: { sx: { height: 'min(720px, calc(100% - 64px))' } } }}>
       <DialogTitle sx={{ pb: 0 }}>{t('profile.title')}</DialogTitle>
       <Tabs value={section} onChange={(_, v: 'profile' | 'tags' | 'bots') => setSection(v)} sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}>
         <Tab value="profile" label={t('profile.sectionProfile')} />

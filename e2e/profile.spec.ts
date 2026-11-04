@@ -70,4 +70,17 @@ test.describe('profile', () => {
     await page.getByRole('option', { name: 'Она' }).click();
     await expect(pronoun).toHaveText('Она');
   });
+
+  test('the dialog keeps its size between its tabs', async ({ page }) => {
+    const box = async () => {
+      const b = await page.getByRole('dialog').boundingBox();
+      return b && { width: b.width, height: b.height };
+    };
+    const first = await box();
+    for (const name of ['Теги', 'Боты', 'Профиль']) {
+      await page.getByRole('dialog').getByRole('tab', { name }).click();
+      await expect(page.getByRole('dialog').getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
+      expect(await box()).toEqual(first);
+    }
+  });
 });
