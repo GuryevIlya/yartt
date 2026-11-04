@@ -37,7 +37,7 @@ CREATE TABLE schema_version (
 CREATE UNIQUE INDEX uq_schema_version_active
     ON schema_version((TRUE)) WHERE expired_at IS NULL;
 
-INSERT INTO schema_version (version) VALUES ('0.6');
+INSERT INTO schema_version (version) VALUES ('0.7');
 
 COMMENT ON TABLE schema_version IS
 'History of database schema versions (major.minor). Current = expired_at IS NULL.
@@ -1705,7 +1705,9 @@ whoever added it. Checked by the application.
 Cycles are forbidden (trigger). Self-dependency is forbidden (CHECK).
 Deletion is physical. No audit.
 When finished_at of value is set, moved or cleared, owners of all
-dependent tasks are notified.';
+dependent tasks are notified.
+The row outlives closing: waiting is shown while both tasks are open, after
+that under "Related" (decision 107), and reopening brings it back.';
 
 COMMENT ON COLUMN dependency.task_id IS
 'The dependent task.';
@@ -2417,10 +2419,11 @@ CREATE TABLE task_mention (
 CREATE INDEX idx_task_mention_value ON task_mention(value);
 
 COMMENT ON TABLE task_mention IS
-'A task attached to a comment of another task.
+'A task attached to a comment of another task, by the button or by its
+number written in the text (the number only if the author sees that task).
 idx_task_mention_value serves backlinks ("where this task is mentioned").
 The owner of the attached task is notified (unless they wrote the
-comment).';
+comment). With context_mention it feeds "Related" (decision 107).';
 
 COMMENT ON COLUMN task_mention.task_id IS
 'The comment''s task.';
@@ -2430,6 +2433,28 @@ COMMENT ON COLUMN task_mention.comment_id IS
 
 COMMENT ON COLUMN task_mention.value IS
 'Which task is attached.';
+
+
+CREATE TABLE context_mention (
+    task_id INT NOT NULL REFERENCES task(id),
+    value INT NOT NULL REFERENCES task(id),
+    PRIMARY KEY (task_id, value),
+
+    CONSTRAINT chk_context_mention_not_self CHECK (value <> task_id)
+);
+CREATE INDEX idx_context_mention_value ON context_mention(value);
+
+COMMENT ON TABLE context_mention IS
+'A task the context of another task mentions by number, if the owner sees
+it. Replaced whenever the context is saved, so what the text no longer
+mentions is gone. Nobody is notified: a context is edited many times. With
+task_mention it feeds "Related" (decision 107).';
+
+COMMENT ON COLUMN context_mention.task_id IS
+'The task whose context it is.';
+
+COMMENT ON COLUMN context_mention.value IS
+'The task mentioned.';
 
 
 -- ============================================================================
@@ -2516,7 +2541,8 @@ RULES:
   - finished_at set / moved / cleared -> owners of dependent tasks, once
     it settles (deadline_settles(): the worker holds it that long).
   - a task closed by its owner (close_task) -> the owners of the tasks
-    waiting for it (dependency_done).
+    waiting for it (dependency_done), and the owners of the open tasks it
+    was waiting for (waiter_closed): nobody may need their work any more.
   - a new dependency -> the owner of the task waited for (with the latest
     deadline the waiting task can live with, if set; dependency_added),
     and the owner of the waiting task (waits_added) — but not whoever
@@ -2558,7 +2584,7 @@ COMMENT ON COLUMN notification.payload IS
 'JSONB context. Contains kind:
   comment | mention | task_mention | remind | access_request |
   access_opened | access_closed | finished_at_change | dependency_added |
-  dependency_done | waits_added |
+  dependency_done | waiter_closed | waits_added |
   owner_change | owner_handed |
   score | invite | welcome | new_report | weekly_digest | bot_key_old.
 Payload keys are camelCase (employeeId, dependencyId, ...).
@@ -4980,6 +5006,14 @@ BEGIN
                 'kind', 'dependency_done', 'dependencyId', p_task_id));
         END IF;
     END LOOP;
+
+    -- Closed first: what it waited for may not be needed any more.
+    PERFORM notify(v.owner_id, v.id, jsonb_build_object('kind', 'waiter_closed', 'dependentId', p_task_id))
+       FROM dependency d
+       JOIN task v ON v.id = d.value
+       LEFT JOIN finished_at f ON f.task_id = v.id AND f.expired_at IS NULL
+      WHERE d.task_id = p_task_id AND v.owner_id IS NOT NULL AND v.owner_id <> p_actor_id
+        AND f.confirmed_at IS NULL;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -4990,7 +5024,8 @@ closing late stays visible (confirmed_at later than value); any other
 one gets the deadline now, closed at once. Refused while someone still
 has time planned on it (plans_left — whoever planned it clears it). The
 tasks waiting for it are done for from then on (dependency.done_at),
-their owners notified (dependency_done). A closed task is left as it is.';
+their owners notified (dependency_done). A closed task is left as it is.
+The owners of the open tasks it was waiting for are told too (waiter_closed).';
 
 
 -- ----------------------------------------------------------------------------

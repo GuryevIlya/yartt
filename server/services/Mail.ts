@@ -80,7 +80,7 @@ export async function renderMail(message: Message): Promise<{ subject: string; t
   // The other task the message names is a link too.
   const other = p.kind === 'finished_at_change' || p.kind === 'dependency_done' || p.kind === 'waits_added'
     ? { id: p.dependencyId, title: params.dependency }
-    : p.kind === 'dependency_added' ? { id: p.dependentId, title: params.dependent } : null;
+    : p.kind === 'dependency_added' || p.kind === 'waiter_closed' ? { id: p.dependentId, title: params.dependent } : null;
   if (other) lines.push(interpolate(t.openOther, { task: other.title ?? '', url: `${env.PUBLIC_URL}/tasks/${other.id}` }));
   if (p.kind === 'bot_key_old') lines.push(interpolate(t.weekly_digest.open, { url: `${env.PUBLIC_URL}/` }));
 

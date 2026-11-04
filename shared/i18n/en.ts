@@ -119,6 +119,7 @@ export const en: Translation = {
       planLeftHint: 'Done or no longer needed — clear your plan, and the owner can finish the task. If the work is still needed, say so in the task.',
       clearPlan: 'Clear my plan',
       done: 'A task this one waits for is done',
+      waiterClosed: 'A task that waited for this one closed: check whether the work is still needed',
     },
     waiting: {
       title: 'Waiting for others',
@@ -452,6 +453,7 @@ export const en: Translation = {
       comments: 'comments ({{count}})',
       links: 'new links ({{count}})',
       done: 'tasks it waits for, done ({{count}})',
+      waiterClosed: 'tasks that waited for it and closed first ({{count}})',
       closing: 'the deadline a day ahead',
       table: 'New comments',
       who: 'Who',
@@ -462,6 +464,14 @@ export const en: Translation = {
     },
     waitsFor: 'Waits for',
     waitedOnBy: 'Waited on by',
+    related: 'Related',
+    relatedShow: 'Related: {{count}}',
+    relatedWaits: 'this task waited for it',
+    relatedWaitedBy: 'waited for this task',
+    relatedOutComment: 'mentioned in a comment',
+    relatedOutContext: 'mentioned in the context',
+    relatedInComment: 'mentions this task in a comment',
+    relatedInContext: 'mentions this task in its context',
     latestMine: 'needed by {{date}}',
     latestTheirs: 'needs this by {{date}}',
     latestHint: 'The latest deadline of #{{dependency}} for #{{dependent}} is {{date}}: any later and #{{dependent}} will not make it. The deadline of #{{dependency}} is now {{deadline}}, in time.',
@@ -983,6 +993,10 @@ export const en: Translation = {
     dependency_done: {
       subject: 'A task yours waits for is done: {{dependency}}',
       body: '“{{dependency}}”, which your task “{{task}}” waits for, is closed by its owner.',
+    },
+    waiter_closed: {
+      subject: 'Your task is no longer waited for: {{task}}',
+      body: 'The task "{{dependent}}", which waited for your task "{{task}}", closed before it. Check whether this work is still needed.',
     },
     waits_added: {
       subject: 'Your task now waits for another: {{task}}',

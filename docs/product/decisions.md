@@ -2138,3 +2138,35 @@ or strip it, and the image's health check asks the container directly.
 
 *Implemented:* `BASE_PATH` in `server/env.ts`, `server/index.ts`,
 `client/hooks/base.ts`, the `Image` extension in `richText.ts`, `sw.js`.
+
+### 107. Related tasks gather by themselves
+
+A closed task stayed under "Waits for" and "Waited on by", though nobody
+waits for it any more, while the owner of a big task still wants to see
+what it depended on and who closed it. And a task mentioned in a comment was
+written down only in the other task's feed; one mentioned in the context not
+at all.
+
+Waiting now lasts while both tasks are open. What a task waited for moves to
+"Related", folded, once either is closed, and a reopened task brings the
+line back with its latest deadline: the row stays. The task waited for, once
+closed, keeps an open task that needs it under "Related" too. A waiting task
+that closes is shown by nobody else: it needs nothing any more.
+
+It can close first, since a link forbids nothing (decision 66): the owner may
+not need that work any more. So the owner of the open task it waited for is
+told (`waiter_closed`) and sees it in Waiting for me, where they decide what
+to do with the work.
+
+Tasks mentioned by number are there too, on both sides and with a link to
+the place: the button in a comment, a number written in a comment and a
+number in the context. A number written counts only if its author sees the
+task, a mention from a task the viewer cannot see is not shown, and nobody is
+told of a mention in a context, since a context is edited many times.
+
+Nothing is added to the block by hand. A link without words explains nothing
+half a year later, while a mention stands next to the reason for it.
+
+*Implemented:* `context_mention`, `waiter_closed`, `close_task()`, migration
+`0.6-0.7`; `taskRefs()` in `server/html.ts`; `Task.get`'s `related`,
+`MyDay.todo`'s `waiterClosed`; `client/components/TaskPage/RelatedTasks.tsx`.

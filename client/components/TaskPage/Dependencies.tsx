@@ -12,6 +12,7 @@ import { useMe } from '#client/hooks/me.ts';
 import { useTaskRefresh } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import TaskLine from './TaskLine.tsx';
+import RelatedTasks from './RelatedTasks.tsx';
 import TaskPicker from './TaskPicker.tsx';
 
 const label = { fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'text.secondary' } as const;
@@ -217,6 +218,7 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
           {draft && draft.waits === g.waits && draft.picked && draft.editing === null && editor(draft)}
         </Stack>
       ))}
+      <RelatedTasks items={task.details.related} />
     </>
   );
 }

@@ -55,6 +55,8 @@ export const TodoReview = z.object({
   links: ReviewLink.array(),
   /** Tasks mine waits for that their owners closed. */
   done: z.object({ task: TaskHeader, at: z.date() }).array(),
+  /** Tasks that waited for mine and closed first. */
+  waiterClosed: z.object({ task: TaskHeader, at: z.date() }).array(),
   /**
    * The deadline within a day — a notice — or passed: overdue, it stays
    * until I close the task or move the deadline (decision 93); closed only

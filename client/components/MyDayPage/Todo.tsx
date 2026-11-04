@@ -152,6 +152,7 @@ function Review(p: { item: TodoReview; readOnly?: boolean }) {
     item.comments && t('task.review.comments', { count: item.comments.count }),
     item.links.length > 0 && t('task.review.links', { count: item.links.length }),
     item.done.length > 0 && t('task.review.done', { count: item.done.length }),
+    item.waiterClosed.length > 0 && t('task.review.waiterClosed', { count: item.waiterClosed.length }),
     deadline && !overdue && t('task.review.closing'),
   ].filter(Boolean).join(', ');
   const moveDeadline = (
@@ -210,6 +211,12 @@ function Review(p: { item: TodoReview; readOnly?: boolean }) {
       {item.done.map((d) => (
         <Line key={d.task.id} icon={<TaskAlt fontSize="small" color="success" />} readOnly={p.readOnly}>
           <Typography variant="body2">{t('myDay.todo.done')} · {format.relative(d.at)}</Typography>
+          <TaskLine task={d.task} dense />
+        </Line>
+      ))}
+      {item.waiterClosed.map((d) => (
+        <Line key={d.task.id} icon={<TaskAlt fontSize="small" />} readOnly={p.readOnly}>
+          <Typography variant="body2">{t('myDay.todo.waiterClosed')} · {format.relative(d.at)}</Typography>
           <TaskLine task={d.task} dense />
         </Line>
       ))}

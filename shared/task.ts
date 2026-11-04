@@ -64,6 +64,19 @@ export const Dependency = TaskHeader.extend({
 });
 export type Dependency = z.infer<typeof Dependency>;
 
+/**
+ * A task related to this one, gathered by itself: nothing is added by hand
+ * (decision 107). `waited` — waiting that has ended: 'waits' this task waited
+ * for it, 'waited_by' it waits for this one, closed. `mentions` — where one
+ * of them mentions the other by number: `out` this task mentions it, in the
+ * comment `commentId` of `taskId` or, NULL, in its context.
+ */
+export const Related = TaskHeader.extend({
+  waited: z.enum(['waits', 'waited_by']).nullable(),
+  mentions: z.object({ out: z.boolean(), taskId: Id, commentId: Id.nullable() }).array(),
+});
+export type Related = z.infer<typeof Related>;
+
 /** What the viewer is to the task. */
 export const Access = z.enum(['owner', 'observer', 'public', 'requested', 'none']);
 export type Access = z.infer<typeof Access>;
@@ -74,6 +87,7 @@ export const TaskDetails = z.object({
   context: z.string().nullable(),
   waitsFor: Dependency.array(),
   waitedOnBy: Dependency.array(),
+  related: Related.array(),
 });
 export type TaskDetails = z.infer<typeof TaskDetails>;
 

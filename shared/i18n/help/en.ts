@@ -288,6 +288,9 @@ export const helpEn: Help = {
             'Nothing is forbidden. When the task waited for is late or has no deadline, the link\'s line is highlighted '
               + 'and both tasks are "At risk".',
             'The owners of both tasks are told of a new link; the owner of the waiting one, also of every move of the other\'s deadline.',
+            'Once either of two tasks is closed, the waiting is over: the line leaves "Waits for" and "Waited on by" for the folded "Related". Reopened, the task brings it back with its latest deadline.',
+            '"Related" also gathers tasks mentioned by number in contexts and comments, on both sides, with a link to the mention. Nothing is added there by hand.',
+            'A task that waits for another may close first. The owner of that other task then sees it in "Waiting for me" and decides whether the work is still needed.',
           ],
         },
       ],
@@ -410,7 +413,7 @@ export const helpEn: Help = {
           q: 'How are tasks linked, and why is there no plain "related to"?',
           a: 'In three ways. Shared tags group tasks by meaning: a click on a tag finds every task with it. A task attached to a '
             + 'comment with # is linked with the reason why: its feed says "Mentioned in" and the task. "Waits for" links by a commitment: '
-            + 'one task cannot end before another, and the deadlines are checked. A wordless "related to" constrains nothing and '
+            + 'a task needs the result of another, and the deadlines are checked. A wordless "related to" constrains nothing and '
             + 'explains nothing: in half a year nobody remembers why it was set.',
         },
         {

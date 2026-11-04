@@ -65,6 +65,28 @@ test('a latest deadline passed with the task still open is said on the line, as 
   }).toPass();
 });
 
+test('a closed task leaves "Waits for" for the folded "Related"', async ({ page }) => {
+  await signIn(page, 'olga@example.com');
+  await createTask(page, [unique('сверка')]);
+  const needed = Number(page.url().split('/').pop());
+  await createTask(page, [unique('акт')]);
+  const waiting = Number(page.url().split('/').pop());
+  await page.getByRole('button', { name: 'Добавить' }).first().click();
+  await page.getByLabel('Найти задачу: теги или номер').fill(`#${needed}`);
+  await page.getByRole('button', { name: `Выбрать задачу #${needed}` }).click();
+  await page.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(page.getByText('без крайнего дедлайна')).toBeVisible();
+
+  await page.goto(`/tasks/${needed}`);
+  await page.getByRole('button', { name: 'Завершить' }).first().click();
+  await expect(page.getByRole('button', { name: 'Связанные: 1' })).toBeVisible();
+
+  await page.goto(`/tasks/${waiting}`);
+  await expect(page.getByText('без крайнего дедлайна')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Связанные: 1' }).click();
+  await expect(page.getByText('эта задача её ждала')).toBeVisible();
+});
+
 test('a participant makes a task of their own, which the task waits for, told when they need one', async ({ page }) => {
   await signIn(page, 'pavel@example.com');
   const site = await taskId('сайт', 'новая главная к осенней кампании');

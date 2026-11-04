@@ -185,6 +185,7 @@ export const ru = {
       planLeftHint: 'Сделано или уже не нужно — обнулите план, и владелец сможет завершить задачу. Если работа ещё нужна — скажите об этом в задаче.',
       clearPlan: 'Обнулить план',
       done: 'Готова задача, которую ждёт эта',
+      waiterClosed: 'Закрыта задача, которая ждала эту: посмотрите, нужна ли ещё работа',
     },
     waiting: {
       title: 'Жду ответа',
@@ -518,6 +519,7 @@ export const ru = {
       comments: 'комментарии ({{count}})',
       links: 'новые связи ({{count}})',
       done: 'готовые задачи, которые она ждёт ({{count}})',
+      waiterClosed: 'задачи, которые ждали её и закрыты раньше ({{count}})',
       closing: 'дедлайн через день',
       table: 'Новые комментарии',
       who: 'Кто',
@@ -528,6 +530,14 @@ export const ru = {
     },
     waitsFor: 'Ждёт',
     waitedOnBy: 'Ждут её',
+    related: 'Связанные',
+    relatedShow: 'Связанные: {{count}}',
+    relatedWaits: 'эта задача её ждала',
+    relatedWaitedBy: 'ждала эту задачу',
+    relatedOutComment: 'упомянута в комментарии',
+    relatedOutContext: 'упомянута в контексте',
+    relatedInComment: 'упоминает эту задачу в комментарии',
+    relatedInContext: 'упоминает эту задачу в контексте',
     latestMine: 'нужна до {{date}}',
     latestTheirs: 'ждёт эту до {{date}}',
     latestHint: 'Крайний дедлайн #{{dependency}} для #{{dependent}} — {{date}}: позже #{{dependent}} не успеет. Сейчас дедлайн #{{dependency}} — {{deadline}}, укладывается.',
@@ -992,6 +1002,10 @@ export const ru = {
     dependency_done: {
       subject: 'Готова задача, которую ждёт ваша: {{dependency}}',
       body: 'Задача «{{dependency}}», которую ждёт ваша задача «{{task}}», закрыта её владельцем.',
+    },
+    waiter_closed: {
+      subject: 'Вашу задачу больше не ждут: {{task}}',
+      body: 'Задача «{{dependent}}», которая ждала вашу задачу «{{task}}», закрыта раньше неё. Посмотрите, нужна ли ещё эта работа.',
     },
     waits_added: {
       subject: 'Ваша задача теперь ждёт другую: {{task}}',

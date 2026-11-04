@@ -99,6 +99,18 @@ export async function todo(me: number, viewerId: number = me, taskId?: number): 
        AND d.done_at > ${since()} ${only(sql`k.id`)}
      ORDER BY d.done_at
   `);
+  // What waited for my open task closed first, not by me: is my work still needed?
+  const waiterClosed = DoneRow.array().parse(await sql`
+    SELECT k.id AS task_id, d.task_id AS value, wf.confirmed_at AS at
+      FROM dependency d
+      JOIN task k ON k.id = d.value
+      JOIN task w ON w.id = d.task_id
+      JOIN finished_at wf ON wf.task_id = w.id AND wf.expired_at IS NULL AND wf.confirmed_at IS NOT NULL
+      LEFT JOIN finished_at kf ON kf.task_id = k.id AND kf.expired_at IS NULL
+     WHERE k.owner_id = ${me} AND w.owner_id IS DISTINCT FROM ${me} AND kf.confirmed_at IS NULL
+       AND wf.confirmed_at > ${since()} ${only(sql`k.id`)}
+     ORDER BY wf.confirmed_at
+  `);
   // A deadline reminds, it never closes (decision 93): a day ahead, until a
   // review after that, then overdue until the owner closes the task or moves it.
   const deadlines = DeadlineRow.array().parse(await sql`
@@ -115,7 +127,7 @@ export async function todo(me: number, viewerId: number = me, taskId?: number): 
      WHERE overdue OR notice_at > since
   `);
   // Every task of mine with a notice, and whether it came to me and I have not accepted it.
-  const reviewed = [...new Set([...comments, ...links, ...done, ...deadlines].map((r) => r.taskId))];
+  const reviewed = [...new Set([...comments, ...links, ...done, ...waiterClosed, ...deadlines].map((r) => r.taskId))];
   const handed = HandedRow.array().parse(await sql`
     SELECT k.id AS task_id, k.handed_at AS at, k.reviewed_at IS NULL AS unreviewed
       FROM task k
@@ -139,6 +151,7 @@ export async function todo(me: number, viewerId: number = me, taskId?: number): 
     ...[...requests, ...mentions, ...handed, ...reminds, ...plansLeft].map((r) => r.taskId),
     ...links.map((l) => l.other),
     ...done.map((d) => d.value),
+    ...waiterClosed.map((d) => d.value),
   ])];
   const tasks = new Map((await headers(me, ids)).map((h) => [h.id, h]));
 
@@ -153,7 +166,7 @@ export async function todo(me: number, viewerId: number = me, taskId?: number): 
       // Handed to me and not accepted yet: the handover alone, accepted by one press.
       if (h.unreviewed && h.at) {
         return [{
-          kind: 'review', task, at: h.at, comments: null, handedAt: h.at, links: [], done: [], deadline: null,
+          kind: 'review', task, at: h.at, comments: null, handedAt: h.at, links: [], done: [], waiterClosed: [], deadline: null,
         }];
       }
       const c = comments.find((r) => r.taskId === h.taskId);
@@ -169,11 +182,15 @@ export async function todo(me: number, viewerId: number = me, taskId?: number): 
           const other = tasks.get(d.value);
           return other ? [{ task: other, at: d.at }] : [];
         }),
+        waiterClosed: waiterClosed.filter((d) => d.taskId === h.taskId).flatMap((d) => {
+          const other = tasks.get(d.value);
+          return other ? [{ task: other, at: d.at }] : [];
+        }),
         deadline: deadline ? { at: deadline.at, overdue: deadline.overdue, plans: deadline.plans } : null,
       };
       const moments = [
         review.comments?.at, deadline?.noticeAt,
-        ...review.links.map((l) => l.at), ...review.done.map((d) => d.at),
+        ...review.links.map((l) => l.at), ...review.done.map((d) => d.at), ...review.waiterClosed.map((d) => d.at),
       ].filter((d) => d instanceof Date);
       if (moments.length === 0) return [];
       const at = new Date(Math.max(...moments.map((d) => d.getTime())));

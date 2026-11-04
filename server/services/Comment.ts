@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Comment, CommentBase, CreateCommentInput, Feed, FeedFilter, FeedItem, MentionReply } from '#shared/comment.ts';
 import { AppError } from '../errors.ts';
-import { cleanHtml, plainText } from '../html.ts';
+import { cleanHtml, plainText, taskRefs } from '../html.ts';
 import { sql, type Sql } from '../pg.ts';
 import { mentionable } from './Observer.ts';
 import { assertCanSee, assertReadable, headers } from './Task.ts';
@@ -329,7 +329,11 @@ export async function create(authorId: number, input: CreateCommentInput): Promi
       await db`SELECT notify(${employeeId}, ${input.taskId}, ${db.json({ kind: 'mention', by: authorId, commentId })}, ${mentionIds}::int[])`;
     }
 
-    for (const taskId of new Set(input.taskIds)) {
+    // A number written in the text mentions a task too, if its author sees one.
+    const written = Id.array().parse(await db`
+      SELECT id FROM task WHERE id = ANY(${taskRefs(clean.html ?? '')}) AND id <> ${input.taskId} AND can_see(id, ${authorId})
+    `).map((r) => r.id);
+    for (const taskId of new Set([...input.taskIds, ...written])) {
       await db`INSERT INTO task_mention (task_id, comment_id, value) VALUES (${input.taskId}, ${commentId}, ${taskId})`;
       await db`
         SELECT notify(owner_id, id, ${db.json({ kind: 'task_mention', by: authorId, commentId })})

@@ -607,6 +607,69 @@ describe('deadline changes settle', () => {
   });
 });
 
+describe('related tasks (decision 107)', () => {
+  const pair = async () => {
+    const owner = await createEmployee();
+    const other = await createEmployee();
+    const waiting = await createTask(owner.id);
+    const needed = await createTask(other.id);
+    await (await client(other.id)).Observer.add({ taskId: needed, employeeId: owner.id });
+    const api = await client(owner.id);
+    await api.Dependency.set({ taskId: waiting, value: needed, latestAt: null });
+    await api.Observer.add({ taskId: waiting, employeeId: other.id });
+    return { owner, other, waiting, needed, api, otherApi: await client(other.id) };
+  };
+
+  test('closed, what was waited for moves to Related, and comes back reopened', async () => {
+    const { waiting, needed, api, otherApi } = await pair();
+    expect((await api.Task.get({ id: waiting })).details).toMatchObject({ waitsFor: [{ id: needed }], related: [] });
+    expect((await otherApi.Task.get({ id: needed })).details).toMatchObject({ waitedOnBy: [{ id: waiting }], related: [] });
+
+    await otherApi.Task.close({ id: needed });
+    expect((await api.Task.get({ id: waiting })).details).toMatchObject({ waitsFor: [], related: [{ id: needed, waited: 'waits' }] });
+    expect((await otherApi.Task.get({ id: needed })).details).toMatchObject({ waitedOnBy: [], related: [{ id: waiting, waited: 'waited_by' }] });
+
+    await otherApi.Task.setDeadline({ id: needed, deadline: new Date(Date.now() + 86_400_000) });
+    expect((await api.Task.get({ id: waiting })).details).toMatchObject({ waitsFor: [{ id: needed }], related: [] });
+  });
+
+  test('a waiting task closed first is shown by nobody else, and its owner of what it waited for hears', async () => {
+    const { other, waiting, needed, api, otherApi } = await pair();
+    await api.Task.close({ id: waiting });
+    expect((await otherApi.Task.get({ id: needed })).details).toMatchObject({ waitedOnBy: [], related: [] });
+    expect((await api.Task.get({ id: waiting })).details).toMatchObject({ waitsFor: [], related: [{ id: needed, waited: 'waits' }] });
+    expect(await notifications(other.id)).toContainEqual(expect.objectContaining({ kind: 'waiter_closed', dependentId: waiting }));
+    expect((await otherApi.MyDay.todo()).find((i) => i.task.id === needed)).toMatchObject({ waiterClosed: [{ task: { id: waiting } }] });
+  });
+
+  test('a number in a comment or the context is a mention, with its place, on both sides; a task not seen stays out', async () => {
+    const { owner, other, waiting, needed, otherApi } = await pair();
+    const hidden = await createTask(other.id);
+    const commentId = await otherApi.Comment.create(comment(needed, `<p>см. #${waiting}, #${hidden}</p><pre><code>#${hidden}</code></pre>`));
+    expect((await otherApi.Task.get({ id: needed })).details?.related).toMatchObject([
+      { id: waiting, mentions: [{ out: true, taskId: needed, commentId }] },
+      { id: hidden, mentions: [{ out: true, taskId: needed, commentId }] },
+    ]);
+    expect(await notifications(owner.id)).toContainEqual(expect.objectContaining({ kind: 'task_mention', commentId }));
+
+    const free = await createTask(other.id);
+    await otherApi.Task.update({ id: needed, context: `<p>про #${free} и #${needed}</p>` });
+    const mine = await otherApi.Task.get({ id: needed });
+    expect(mine.details?.related.find((r) => r.id === free)).toMatchObject({ mentions: [{ out: true, commentId: null }] });
+    expect((await otherApi.Task.get({ id: free })).details?.related).toMatchObject([
+      { id: needed, mentions: [{ out: false, taskId: needed, commentId: null }] },
+    ]);
+    // Gone from the text, gone from here.
+    await otherApi.Task.update({ id: needed, context: '<p>без ссылок</p>' });
+    expect((await otherApi.Task.get({ id: needed })).details?.related.find((r) => r.id === free)).toBeUndefined();
+
+    // Someone who cannot see the mentioning task does not learn of it.
+    const stranger = await createEmployee();
+    await (await client(other.id)).Task.makePublic({ id: free });
+    expect((await (await client(stranger.id)).Task.get({ id: free })).details?.related ?? []).toEqual([]);
+  });
+});
+
 describe('dependencies', () => {
   test('they are set with or without a latest deadline; cycles are refused; a broken latest deadline is a risk, not an error', async () => {
     const owner = await createEmployee();

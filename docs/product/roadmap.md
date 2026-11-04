@@ -10,12 +10,6 @@ it is decided. Proposals wait for a decision in their own section.
 Decided after the first team's meeting about moving in (2026-11-03), all
 in one version, before stage 6 goes on.
 
-- [ ] **A "Related" block of a task.** Waiting stops when a task waited
-  for is closed, so it moves from "Waits for" to "Related" and comes back
-  when reopened. A closed task is shown by nobody as waiting. Tasks
-  mentioned by `#` in comments and the context are there too, with a link
-  to the mention; nothing is added by hand. The owner of a task hears when
-  what waited for it closes first.
 - [ ] **A request right in the new task form.** "What is needed from them"
   makes the first comment, with mentions, together with the task.
 - [ ] **The editor.** Headings, links, code blocks, tables and alignment;

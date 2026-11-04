@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import {
-  type CreateInput, type Dependency, Expert, type SearchInput, type SearchResult, Tag, type TaskDetails,
+  type CreateInput, type Dependency, Expert, type Related, type SearchInput, type SearchResult, Tag, type TaskDetails,
   type TaskHeader, type TaskPage, TaskPreview, type TitleTaken, type UpdateInput, Access, Priority,
 } from '#shared/task.ts';
 import { AppError } from '../errors.ts';
-import { cleanHtml } from '../html.ts';
+import { cleanHtml, taskRefs } from '../html.ts';
 import { sql, type Sql } from '../pg.ts';
 import * as Dependencies from './Dependency.ts';
 
@@ -288,6 +288,7 @@ export async function create(ownerId: number, input: CreateInput): Promise<numbe
       RETURNING id
     `);
     const id = row!.id;
+    await saveContextMentions(db, id, clean.html, ownerId);
     if (input.deadline) await db`SELECT set_finished_at(${id}, ${input.deadline})`;
     if (input.waitsFor) await Dependencies.setIn(db, ownerId, { taskId: id, value: input.waitsFor, latestAt: null });
     if (input.waitedOnBy) await Dependencies.setIn(db, ownerId, { taskId: input.waitedOnBy, value: id, latestAt: null });
@@ -317,8 +318,19 @@ export async function update(actorId: number, input: UpdateInput): Promise<void>
         UPDATE task SET context = ${clean.html}, context_image_ids = ${clean.imageIds}
          WHERE id = ${input.id}
       `;
+      await saveContextMentions(db, input.id, clean.html, actorId);
     }
   });
+}
+
+/** The tasks the context mentions now: those its owner sees. Nobody is told: a context is edited many times. */
+async function saveContextMentions(db: Sql, taskId: number, html: string | null, ownerId: number): Promise<void> {
+  await db`DELETE FROM context_mention WHERE task_id = ${taskId}`;
+  await db`
+    INSERT INTO context_mention (task_id, value)
+    SELECT ${taskId}, id FROM task
+     WHERE id = ANY(${html === null ? [] : taskRefs(html)}) AND id <> ${taskId} AND can_see(id, ${ownerId})
+  `;
 }
 
 /**
@@ -445,6 +457,16 @@ async function dependencies(viewerId: number, rows: z.infer<typeof DependencyRow
   }));
 }
 
+const LinkRow = z.object({
+  taskId: z.number(),
+  value: z.number(),
+  latestAt: z.date().nullable(),
+  addedBy: z.number().nullable(),
+  waitingClosed: z.boolean(),
+  valueClosed: z.boolean(),
+});
+const MentionRow = z.object({ other: z.number(), commentId: z.number().nullable(), out: z.boolean() });
+
 const AccessRow = z.object({
   ownerId: z.number().nullable(),
   observes: z.boolean(),
@@ -477,17 +499,49 @@ export async function get(viewerId: number, taskId: number): Promise<TaskPage> {
   const [task] = z.object({ context: z.string().nullable() }).array().parse(await sql`
     SELECT context FROM task WHERE id = ${taskId}
   `);
-  const waitsFor = DependencyRow.array().parse(await sql`
-    SELECT value AS id, latest_at, added_by FROM dependency WHERE task_id = ${taskId}
+  const links = LinkRow.array().parse(await sql`
+    SELECT d.task_id, d.value, d.latest_at, d.added_by,
+           wf.confirmed_at IS NOT NULL AS waiting_closed, vf.confirmed_at IS NOT NULL AS value_closed
+      FROM dependency d
+      LEFT JOIN finished_at wf ON wf.task_id = d.task_id AND wf.expired_at IS NULL
+      LEFT JOIN finished_at vf ON vf.task_id = d.value AND vf.expired_at IS NULL
+     WHERE d.task_id = ${taskId} OR d.value = ${taskId}
   `);
-  const waitedOnBy = DependencyRow.array().parse(await sql`
-    SELECT task_id AS id, latest_at, added_by FROM dependency WHERE value = ${taskId}
+  const row = (l: z.infer<typeof LinkRow>, id: number) => ({ id, latestAt: l.latestAt, addedBy: l.addedBy });
+  const waiting = links.filter((l) => l.taskId === taskId);
+  const waitedOn = links.filter((l) => l.value === taskId);
+  // Waiting goes on while both are open; a closed waiting task is shown by nobody but itself (decision 107).
+  const waitsFor = waiting.filter((l) => !l.waitingClosed && !l.valueClosed).map((l) => row(l, l.value));
+  const waitedOnBy = waitedOn.filter((l) => !l.waitingClosed && !l.valueClosed).map((l) => row(l, l.taskId));
+
+  const related = new Map<number, Pick<Related, 'waited' | 'mentions'>>();
+  const entry = (id: number) => {
+    const found = related.get(id);
+    if (found) return found;
+    const made: Pick<Related, 'waited' | 'mentions'> = { waited: null, mentions: [] };
+    related.set(id, made);
+    return made;
+  };
+  for (const l of waiting) if (l.waitingClosed || l.valueClosed) entry(l.value).waited = 'waits';
+  for (const l of waitedOn) if (l.valueClosed && !l.waitingClosed) entry(l.taskId).waited = 'waited_by';
+  const mentions = MentionRow.array().parse(await sql`
+    SELECT value AS other, comment_id, TRUE AS out FROM task_mention WHERE task_id = ${taskId}
+    UNION ALL
+    SELECT value, NULL, TRUE FROM context_mention WHERE task_id = ${taskId}
+    UNION ALL
+    SELECT task_id, comment_id, FALSE FROM task_mention WHERE value = ${taskId} AND can_see(task_id, ${viewerId})
+    UNION ALL
+    SELECT task_id, NULL, FALSE FROM context_mention WHERE value = ${taskId} AND can_see(task_id, ${viewerId})
   `);
+  for (const m of mentions) {
+    entry(m.other).mentions.push({ out: m.out, taskId: m.out ? taskId : m.other, commentId: m.commentId });
+  }
 
   const details: TaskDetails = {
     context: task!.context,
     waitsFor: await dependencies(viewerId, waitsFor),
     waitedOnBy: await dependencies(viewerId, waitedOnBy),
+    related: (await headers(viewerId, [...related.keys()])).map((h) => ({ ...h, ...related.get(h.id)! })),
   };
   return { ...header, access, details };
 }

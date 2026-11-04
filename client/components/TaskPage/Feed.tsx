@@ -1,7 +1,8 @@
 import { Check, Event, ExpandLess, ExpandMore, HourglassBottom, Link as LinkIcon, Reply as ReplyIcon, SwapHoriz, TaskAlt } from '@mui/icons-material';
 import { Box, Button, ButtonBase, Chip, Pagination, Paper, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import type { CommentBase, FeedFilter, FeedItem } from '#shared/comment.ts';
 import { useFormat } from '#client/hooks/format.ts';
@@ -31,7 +32,15 @@ export default function (p: { taskId: number }) {
   // Until the reader picks, an empty "open mentions" falls back to everything.
   const counts = useQuery(trpc.Comment.list.queryOptions({ taskId: p.taskId, filter: 'mentions', page: 1 }, { refetchInterval: POLL_MS }));
   const filter: FeedFilter = chosen ?? (counts.data && counts.data.openMentions === 0 ? 'all' : 'mentions');
+  const { hash } = useLocation();
   const feed = useQuery(trpc.Comment.list.queryOptions({ taskId: p.taskId, filter, page }, { refetchInterval: POLL_MS }));
+  // A link to a place in the task ("Related"): scrolled to once it is there, once.
+  const scrolled = useRef('');
+  useEffect(() => {
+    if (!hash || scrolled.current === hash || !feed.data) return;
+    const place = document.getElementById(hash.slice(1));
+    if (place) { place.scrollIntoView({ block: 'center' }); scrolled.current = hash; }
+  }, [hash, feed.data]);
 
   const pick = (value: FeedFilter) => {
     setChosen(value);

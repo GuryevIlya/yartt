@@ -5,6 +5,7 @@ import { Placeholder } from '@tiptap/extensions';
 import StarterKit from '@tiptap/starter-kit';
 import { ResizableImage } from 'mui-tiptap';
 import { url } from '#client/hooks/base.ts';
+import { TASK_REF } from '#shared/taskRefs.ts';
 
 // One set of extensions for editing and for showing comments and contexts,
 // matching what the server keeps (server/html.ts): no tables, no colors.
@@ -56,9 +57,6 @@ export function richTextExtensions(placeholder?: string) {
     ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
   ];
 }
-
-/** "#12" in text — not a part of a word, an address or a number. */
-const TASK_REF = /(?<![\p{L}\p{N}_/#&])#(\d{1,9})(?![\p{L}\p{N}_])/gu;
 
 /**
  * A task number in a comment or a context ("see #12") is a link to the

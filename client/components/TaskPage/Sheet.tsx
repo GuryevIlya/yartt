@@ -192,7 +192,7 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
         </Alert>
       )}
 
-      <Stack spacing={0.75}>
+      <Stack id="context" spacing={0.75}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Typography sx={label}>{t('task.context')}</Typography>
           {isOwner && !editingContext && (

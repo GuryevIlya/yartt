@@ -1,4 +1,5 @@
 import sanitizeHtml from 'sanitize-html';
+import { TASK_REF } from '#shared/taskRefs.ts';
 
 // Comments and the task context are rich text from the editor. Only an
 // allow-list survives; images may point only at our own attachments, so a
@@ -55,4 +56,13 @@ export function plainText(html: string): string {
     allowedTags: [],
     allowedAttributes: {},
   }).replace(/\s+/g, ' ').trim();
+}
+
+/** The tasks a text mentions by number: what is already a link or code is left alone, as when it is shown. */
+export function taskRefs(html: string): number[] {
+  const text = sanitizeHtml(html.replace(/<(pre|code|a)\b.*?<\/\1>/gis, ' ').replace(/<[^>]+>/g, ' '), {
+    allowedTags: [],
+    allowedAttributes: {},
+  });
+  return [...new Set([...text.matchAll(TASK_REF)].map((m) => Number(m[1])))];
 }
