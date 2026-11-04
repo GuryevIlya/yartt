@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn, taskId } from './helpers.ts';
+import { createTask, signIn, taskId, unique } from './helpers.ts';
 
 // Words that are not self-evident explain themselves on hover.
 test('"My open" and a deadline explain what they mean', async ({ page }) => {
@@ -35,6 +35,33 @@ test('a latest deadline on the task waited for says who may change it, and is no
   await expect(async () => {
     await page.getByText(/^ждёт эту до /).first().hover();
     await expect(page.getByRole('tooltip').filter({ hasText: `может только владелец #${api}` })).toBeVisible({ timeout: 1_000 });
+  }).toPass();
+});
+
+test('a latest deadline passed with the task still open is said on the line, as "At risk" says it', async ({ page }) => {
+  await signIn(page, 'olga@example.com');
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const ago = (days: number) => {
+    const d = new Date(Date.now() - days * 86_400_000);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T12:00`;
+  };
+  await createTask(page, [unique('ждущая')]);
+  const mine = page.url();
+  await createTask(page, [unique('нужная')]);
+  const needed = Number(page.url().split('/').pop());
+  await page.getByLabel('Дедлайн').fill(ago(2));
+  await expect(page.getByText(/Просрочена|просрочена/).first()).toBeVisible();
+
+  await page.goto(mine);
+  await page.getByRole('button', { name: 'Добавить' }).first().click();
+  await page.getByLabel('Найти задачу: теги или номер').fill(`#${needed}`);
+  await page.getByRole('button', { name: `Выбрать задачу #${needed}` }).click();
+  await page.getByRole('checkbox', { name: 'Указать крайний дедлайн' }).check();
+  await page.getByLabel(`Крайний дедлайн #${needed}`).fill(ago(1));
+  await page.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(async () => {
+    await page.getByText(/^нужна до /).hover();
+    await expect(page.getByRole('tooltip').filter({ hasText: 'Он уже прошёл' })).toBeVisible({ timeout: 1_000 });
   }).toPass();
 });
 

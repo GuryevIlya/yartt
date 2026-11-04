@@ -10,10 +10,6 @@ it is decided. Proposals wait for a decision in their own section.
 Decided after the first team's meeting about moving in (2026-11-03), all
 in one version, before stage 6 goes on.
 
-- [ ] **What a line of a dependency says agrees with the risk.** The line
-  counted a broken latest deadline by itself and missed what the server
-  counts: an overdue waiting task, a latest deadline passed with the task
-  still open.
 - [ ] **The profile dialog keeps its size.** Switching its tabs does not
   make the interface jump.
 - [ ] **A "Related" block of a task.** Waiting stops when a task waited

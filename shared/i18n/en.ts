@@ -466,6 +466,7 @@ export const en: Translation = {
     latestTheirs: 'needs this by {{date}}',
     latestHint: 'The latest deadline of #{{dependency}} for #{{dependent}} is {{date}}: any later and #{{dependent}} will not make it. The deadline of #{{dependency}} is now {{deadline}}, in time.',
     latestHintLate: 'The latest deadline of #{{dependency}} for #{{dependent}} is {{date}}, and its deadline is {{deadline}}: both tasks are at risk.',
+    latestHintPassed: 'The latest deadline of #{{dependency}} for #{{dependent}} was {{date}}. It has passed and #{{dependency}} is still open: both tasks are at risk.',
     latestHintNone: 'The latest deadline of #{{dependency}} for #{{dependent}} is {{date}}, and #{{dependency}} has no deadline: both tasks are at risk.',
     latestWho: 'Only the owner of #{{dependent}} can change it — in their task, under "Waits for".',
     latestNone: 'no latest deadline',

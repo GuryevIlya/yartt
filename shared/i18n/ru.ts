@@ -533,6 +533,7 @@ export const ru = {
     latestHint: 'Крайний дедлайн #{{dependency}} для #{{dependent}} — {{date}}: позже #{{dependent}} не успеет. Сейчас дедлайн #{{dependency}} — {{deadline}}, укладывается.',
     latestHintLate: 'Крайний дедлайн #{{dependency}} для #{{dependent}} — {{date}}, а её дедлайн — {{deadline}}: обе задачи под угрозой.',
     latestHintNone: 'Крайний дедлайн #{{dependency}} для #{{dependent}} — {{date}}, а дедлайна у #{{dependency}} нет: обе задачи под угрозой.',
+    latestHintPassed: 'Крайний дедлайн #{{dependency}} для #{{dependent}} — {{date}}. Он уже прошёл, а #{{dependency}} ещё открыта: обе задачи под угрозой.',
     latestWho: 'Менять его может только владелец #{{dependent}} — в своей задаче, в разделе «Ждёт».',
     latestNone: 'без крайнего дедлайна',
     latestNoneHint: 'Крайний дедлайн не задан: #{{dependent}} просто ждёт #{{dependency}}, к какому сроку — не сказано.',

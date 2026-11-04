@@ -68,12 +68,8 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
   const sides = (dep: Dependency, waits: boolean) => (waits
     ? { dependent: task, dependency: dep as TaskHeader }
     : { dependent: dep as TaskHeader, dependency: task as TaskHeader });
-  const isOpen = (x: TaskHeader) => x.deadline === null || x.deadline > new Date();
-  // Broken: the waiting task is open, and the one waited for is due later than it can live with, or has no deadline.
-  const broken = (dep: Dependency, waits: boolean) => {
-    const { dependent, dependency } = sides(dep, waits);
-    return dep.latestAt !== null && isOpen(dependent) && (dependency.deadline === null || dependency.deadline > dep.latestAt);
-  };
+  // Broken as the server counts it (dependency_risk()), so the line never disagrees with "At risk".
+  const broken = (dep: Dependency, waits: boolean) => (waits ? task.late : task.delays).includes(dep.id);
   // Not set is a value too: shown as such, so it is seen that it can be set, and by whom.
   const note = (dep: Dependency, waits: boolean) =>
     dep.latestAt === null ? t('task.latestNone') : t(waits ? 'task.latestMine' : 'task.latestTheirs', { date: format.dateTime(dep.latestAt) });
@@ -82,7 +78,9 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
     const params = { dependent: dependent.id, dependency: dependency.id, date: dep.latestAt ? format.dateTime(dep.latestAt) : '' };
     const state = dep.latestAt === null ? t('task.latestNoneHint', params)
       : dependency.deadline === null ? t('task.latestHintNone', params)
-      : t(broken(dep, waits) ? 'task.latestHintLate' : 'task.latestHint', { ...params, deadline: format.dateTime(dependency.deadline) });
+      : !broken(dep, waits) ? t('task.latestHint', { ...params, deadline: format.dateTime(dependency.deadline) })
+      : dependency.deadline > dep.latestAt ? t('task.latestHintLate', { ...params, deadline: format.dateTime(dependency.deadline) })
+      : t('task.latestHintPassed', params);
     return `${state} ${waits && isOwner ? t('task.latestClick') : t('task.latestWho', params)}`;
   };
   const edit = (dep: Dependency) => setDraft({
