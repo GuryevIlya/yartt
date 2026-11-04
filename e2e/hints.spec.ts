@@ -87,6 +87,20 @@ test('a closed task leaves "Waits for" for the folded "Related"', async ({ page 
   await expect(page.getByText('эта задача её ждала')).toBeVisible();
 });
 
+test('a link is removed from "Waited on by" too', async ({ page }) => {
+  await signIn(page, 'olga@example.com');
+  await createTask(page, [unique('смета')]);
+  const waiting = Number(page.url().split('/').pop());
+  await createTask(page, [unique('подпись')]);
+  await page.getByRole('button', { name: 'Добавить' }).last().click();
+  await page.getByLabel('Найти задачу: теги или номер').fill(`#${waiting}`);
+  await page.getByRole('button', { name: `Выбрать задачу #${waiting}` }).click();
+  await page.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(page.getByRole('link', { name: new RegExp(`^#${waiting}`) })).toBeVisible();
+  await page.getByRole('button', { name: 'Убрать зависимость' }).click();
+  await expect(page.getByRole('link', { name: new RegExp(`^#${waiting}`) })).toHaveCount(0);
+});
+
 test('a participant makes a task of their own, which the task waits for, told when they need one', async ({ page }) => {
   await signIn(page, 'pavel@example.com');
   const site = await taskId('сайт', 'новая главная к осенней кампании');

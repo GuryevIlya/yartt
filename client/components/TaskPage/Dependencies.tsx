@@ -194,7 +194,7 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
               </Box>
               {canRemove(dep, g.waits) && (
                 <Tooltip title={t('task.dependency.remove')}>
-                  <IconButton size="small" disabled={remove.isPending} onClick={() => remove.mutate({ taskId: task.id, value: dep.id })}>
+                  <IconButton size="small" disabled={remove.isPending} onClick={() => remove.mutate(g.waits ? { taskId: task.id, value: dep.id } : { taskId: dep.id, value: task.id })}>
                     <Close fontSize="small" />
                   </IconButton>
                 </Tooltip>
