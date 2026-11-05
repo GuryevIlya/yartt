@@ -197,6 +197,7 @@ export default function (p: {
             minRows={10}
             maxRows={24}
             label={t('editor.markdownLabel')}
+            helperText={t('editor.markdownHint')}
             value={markdown}
             onChange={(e) => setMarkdown(e.target.value)}
             sx={{ mt: 1, '& textarea': { fontFamily: 'monospace' } }}

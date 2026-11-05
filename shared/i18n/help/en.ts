@@ -1,9 +1,13 @@
+import { apiEn } from './api.en.ts';
 import type { Help } from './ru.ts';
 
 // The in-app guide in English.
 
 export const helpEn: Help = {
   title: 'How to work in yartt',
+  contents: 'Contents',
+  principlesTitle: 'Four principles',
+  api: apiEn,
   intro: 'yartt is built on four principles. Under each: what it gives up and what it offers instead.',
   principles: [
     {
@@ -432,6 +436,7 @@ export const helpEn: Help = {
         },
         {
           title: 'Set up a virtual employee',
+          more: { to: 'api-bots', label: 'More in "API and webhooks"' },
           steps: [
             'A bot is an employee that is a program: it comments, answers mentions and runs tasks of its own. It sees only what it was invited to, never its manager\'s data.',
             'Profile, "Bots": create a bot, tick what it may change and save its key. The key is shown once.',
@@ -441,16 +446,18 @@ export const helpEn: Help = {
         },
         {
           title: 'Automate your own work',
+          more: { to: 'api-calling', label: 'More in "API and webhooks"' },
           steps: [
             'An API key lets a program act in your name: export reports, make tasks, write comments. No bot is needed.',
             'Profile, "API keys": say what the key is for, how long it lives and what it may do. Nothing is allowed unless ticked. The key is shown once.',
             'A key sees what you see, so tick only what is needed. If it leaks, revoke it at once.',
-            'A link to the API description is there too. Comments and contexts may be sent in Markdown.',
+            'Comments and contexts may be sent in Markdown.',
             'Shifts, time entries and scores cannot be written through the API: the figures should show what was done, not what a script did.',
           ],
         },
         {
           title: 'Get notifications in another program',
+          more: { to: 'api-webhooks', label: 'More in "API and webhooks"' },
           steps: [
             'A webhook passes your notifications to another program, a Telegram bot for example. It needs neither a yartt bot nor a key.',
             'Write to the receiver\'s bot and it gives you an address. Paste it under Profile, "Webhooks", and press "Test".',

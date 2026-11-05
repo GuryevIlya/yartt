@@ -1,5 +1,9 @@
 # The public API
 
+For people the API is described in the guide inside the product (`/help#api`):
+every request, the errors, what a webhook gets. Here is what an administrator
+may want to know.
+
 Programs work with yartt through `/api/v1`, with a key. There are three
 independent things, and most jobs need one of them:
 

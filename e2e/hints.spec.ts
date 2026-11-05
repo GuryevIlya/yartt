@@ -136,6 +136,28 @@ test('a tag is described in the profile and shown in tasks with it', async ({ pa
   await expect(page.getByText('Сверяем с бухгалтерией')).toBeVisible();
 });
 
+test('the guide has contents leading to the API, and the screens that speak of it link there', async ({ page }) => {
+  await signIn(page, 'olga@example.com');
+  await page.goto('/help');
+  const contents = page.getByRole('navigation', { name: 'Содержание' });
+  await contents.getByRole('link', { name: 'Что приходит в вебхук' }).click();
+  await expect(page).toHaveURL(/#api-webhooks$/);
+  await expect(page.getByRole('heading', { name: 'Что приходит в вебхук' })).toBeInViewport();
+  await expect(page.getByRole('cell', { name: 'waiter_closed' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'openapi.json' })).toHaveAttribute('href', /api\/v1\/openapi\.json$/);
+
+  await page.goto('/');
+  await page.getByRole('button', { name: /Ольга Белова/ }).click();
+  await page.getByRole('menuitem', { name: 'Профиль' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('tab', { name: 'Вебхуки' }).click();
+  await expect(dialog.getByRole('link', { name: 'Что и в каком виде приходит' })).toHaveAttribute('href', /help#api-webhooks$/);
+  await dialog.getByRole('tab', { name: 'Ключи API' }).click();
+  await expect(dialog.getByRole('link', { name: /Как пользоваться ключом/ })).toHaveAttribute('href', /help#api-calling$/);
+  await dialog.getByRole('tab', { name: 'Боты' }).click();
+  await expect(dialog.getByRole('link', { name: 'Как завести и настроить бота' })).toHaveAttribute('href', /help#api-bots$/);
+});
+
 test('a participant makes a task of their own, which the task waits for, told when they need one', async ({ page }) => {
   await signIn(page, 'pavel@example.com');
   const site = await taskId('сайт', 'новая главная к осенней кампании');

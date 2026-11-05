@@ -17,6 +17,7 @@ import { useEmployees } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { fieldErrors } from '#client/i18n/errors.ts';
 import TeamChart from './TeamChart.tsx';
+import HelpLink from '../App/HelpLink.tsx';
 import { employeeFilter, employeeOption } from '../App/employeeOption.tsx';
 
 /** A key or a secret shown once, with a copy button. */
@@ -101,7 +102,10 @@ export default function (p: { bot: Bot | null; stats?: BotStats; onClose: () => 
     return (
       <Dialog open onClose={p.onClose} fullWidth maxWidth="sm">
         <DialogTitle>{t('bots.createdTitle')}</DialogTitle>
-        <DialogContent><Secret label={t('bots.keyShown')} value={key} /></DialogContent>
+        <DialogContent>
+          <Secret label={t('bots.keyShown')} value={key} />
+          <Typography variant="body2" sx={{ mt: 1.5 }}><HelpLink to="api-calling">{t('bots.howToCall')}</HelpLink></Typography>
+        </DialogContent>
         <DialogActions><Button onClick={p.onClose}>{t('common.close')}</Button></DialogActions>
       </Dialog>
     );
@@ -151,7 +155,7 @@ export default function (p: { bot: Bot | null; stats?: BotStats; onClose: () => 
             />
             <Stack>
               <Typography variant="subtitle2">{t('bots.permissions')}</Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('bots.permissionsHint')}</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('bots.permissionsHint')} <HelpLink to="api-methods">{t('bots.whatCanDo')}</HelpLink></Typography>
               <FormGroup>
                 {BOT_PERMISSIONS.map((perm) => (
                   <FormControlLabel
@@ -175,7 +179,7 @@ export default function (p: { bot: Bot | null; stats?: BotStats; onClose: () => 
               value={form.webhookUrl ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, webhookUrl: e.target.value }))}
               error={!!errors.webhookUrl}
-              helperText={errors.webhookUrl ?? t('bots.webhookHint')}
+              helperText={errors.webhookUrl ?? <>{t('bots.webhookHint')} <HelpLink to="api-webhooks">{t('webhook.format')}</HelpLink></>}
             />
             {bot?.webhookSecret && (
               <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>

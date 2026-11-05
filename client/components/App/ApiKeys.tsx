@@ -1,11 +1,11 @@
-import { Alert, Button, Checkbox, FormControlLabel, FormGroup, Link, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Checkbox, FormControlLabel, FormGroup, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiRight, type ApiKeyInput } from '#shared/apiKey.ts';
-import { url } from '#client/hooks/base.ts';
 import { useFormat } from '#client/hooks/format.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
+import HelpLink from './HelpLink.tsx';
 
 /**
  * A person's keys to the public API (decision 111): nothing is allowed unless
@@ -35,7 +35,7 @@ export default function () {
   return (
     <Stack spacing={2}>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        {t('apiKey.intro')} <Link href={url('/api/v1/openapi.json')} target="_blank" rel="noopener">{t('apiKey.reference')}</Link>
+        {t('apiKey.intro')} <HelpLink to="api-calling">{t('apiKey.reference')}</HelpLink>
       </Typography>
       {made && (
         <Alert severity="warning" onClose={() => setMade(null)}>

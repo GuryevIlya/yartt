@@ -32,7 +32,10 @@ const Param = z.coerce.number().int().positive();
 const Page = z.coerce.number().int().min(1).default(1);
 const Day = z.iso.date();
 /** A text comes as sanitized HTML would, or in Markdown, which language models write. */
-const Text = z.object({ html: z.string().min(1).optional(), markdown: z.string().min(1).optional() });
+const Text = z.object({
+  html: z.string().min(1).optional().describe('The text in HTML; anything outside the allowed list is removed.'),
+  markdown: z.string().min(1).optional().describe('The text in Markdown, instead of html.'),
+});
 const textOf = (t: z.infer<typeof Text>): string | undefined =>
   t.markdown !== undefined ? marked.parse(t.markdown, { async: false }) : t.html;
 
@@ -74,12 +77,12 @@ export const ROUTES: Route[] = [
   route({
     method: 'post', path: '/tasks', summary: 'A new private task owned by the key\'s owner. `waitsFor` and `waitedOnBy` link it.', right: 'tasks.write',
     input: z.object({
-      tags: z.string().array().min(1).max(20),
+      tags: z.string().array().min(1).max(20).describe('The title: existing tags or new ones. The set is unique among tasks.'),
       priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'CRITICAL']).optional(),
-      deadline: z.coerce.date().nullable().optional(),
-      waitsFor: Id.optional(),
-      waitedOnBy: Id.optional(),
-      participants: Id.array().max(100).optional(),
+      deadline: z.coerce.date().nullable().optional().describe('ISO 8601; NULL or left out: no deadline.'),
+      waitsFor: Id.optional().describe('The new task waits for this one; the key\'s owner must see it.'),
+      waitedOnBy: Id.optional().describe('This task waits for the new one; the key\'s owner must see it.'),
+      participants: Id.array().max(100).optional().describe('Brought in at once, each told.'),
     }).extend(Text.shape),
     output: Id,
     run: (api, { html, markdown, ...rest }) => api.Task.create({ ...rest, context: textOf({ html, markdown }) ?? null }),
@@ -97,7 +100,7 @@ export const ROUTES: Route[] = [
   }),
   route({
     method: 'put', path: '/tasks/:id/deadline', summary: 'The owner sets, moves or clears the deadline. Moving it opens a closed task.', right: 'tasks.write',
-    input: TaskId.extend({ deadline: z.coerce.date().nullable() }),
+    input: TaskId.extend({ deadline: z.coerce.date().nullable().describe('ISO 8601; NULL clears it.') }),
     run: (api, input) => api.Task.setDeadline(input),
   }),
   route({
@@ -117,11 +120,11 @@ export const ROUTES: Route[] = [
   route({
     method: 'post', path: '/tasks/:id/comments', summary: 'A comment, in HTML or Markdown; `mentionIds` puts it in their Waiting for me.', right: 'comments.write',
     input: TaskId.extend({
-      replyToId: Id.nullable().default(null),
-      mentionIds: Id.array().max(50).default([]),
-      everyone: z.boolean().default(false),
+      replyToId: Id.nullable().default(null).describe('The comment this one answers.'),
+      mentionIds: Id.array().max(50).default([]).describe('People in the task to mention: it goes into their Waiting for me.'),
+      everyone: z.boolean().default(false).describe('Mention all participants, but `exceptIds`.'),
       exceptIds: Id.array().max(50).default([]),
-      taskIds: Id.array().max(50).default([]),
+      taskIds: Id.array().max(50).default([]).describe('Tasks to attach; a number written in the text attaches one too.'),
       files: z.object({ id: Id, name: z.string().trim().min(1).max(255) }).array().max(50).default([]),
     }).extend(Text.shape),
     output: Id,
@@ -144,7 +147,7 @@ export const ROUTES: Route[] = [
   }),
   route({
     method: 'put', path: '/tasks/:id/waits-for/:value', summary: 'This task waits for another; the latest deadline is its owner\'s alone.', right: 'tasks.write',
-    input: TaskId.extend({ value: Param, latestAt: z.coerce.date().nullable().default(null) }),
+    input: TaskId.extend({ value: Param, latestAt: z.coerce.date().nullable().default(null).describe('The latest deadline of the other task this one can live with. Only this task\'s owner sets it.') }),
     run: (api, { id, value, latestAt }) => api.Dependency.set({ taskId: id, value, latestAt }),
   }),
   route({
@@ -201,6 +204,7 @@ export function openApi(): object {
     const names = [...r.path.matchAll(/:(\w+)/g)].map((m) => m[1]!);
     (paths[path] ??= {})[r.method] = {
       summary: r.summary,
+      description: `${r.right ? `A person's key needs the right \`${r.right}\`.` : 'Any key.'} ${r.right === 'reports.read' ? 'Not for bots.' : 'A bot is checked by its permissions.'}`,
       ...(r.right && { 'x-right': r.right }),
       parameters: names.map((name) => ({ name, in: 'path', required: true, schema: { type: 'integer' } })),
       ...(r.input && r.method !== 'get' && r.method !== 'delete'
@@ -216,7 +220,11 @@ export function openApi(): object {
   }
   return {
     openapi: '3.1.0',
-    info: { title: 'yartt', version: '1' },
+    info: {
+      title: 'yartt',
+      version: '1',
+      description: 'A task tracker built around one owner per task. The guide explains this API in words: /help#api. A key comes from Profile, "API keys" or "Bots".',
+    },
     servers: [{ url: `${env.PUBLIC_URL}/api/v1` }],
     security: [{ key: [] }],
     components: { securitySchemes: { key: { type: 'http', scheme: 'bearer' } } },

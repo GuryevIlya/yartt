@@ -249,8 +249,9 @@ a `matchPath` in `client/components/App.tsx`.
 - `npm run seed -- --reset [--lang en]` — wipes the database in `DATABASE_URL` and fills it with demo data that
   touches every screen (`server/demo.ts`; in the image — every start and every night with `DEMO_DATA=ru|en`).
   Keep it in step with new features, in both languages (`server/demoTexts.ts`).
-- The in-app guide (`shared/i18n/help/`, "?" in the top line) — what yartt is, how-tos
-  and why the unusual rules are so: keep it in step with features, in every language.
+- The in-app guide (`shared/i18n/help/`, "?" in the top line) — what yartt is, how-tos,
+  why the unusual rules are so, and the API and webhooks (`api.*.ts`, `/help#api`; every
+  screen that speaks of them links there): keep it in step with features, in every language.
 - `TEST_DATABASE_URL=postgres://<user>:<password>@localhost:5432/postgres npm test`
 - `TEST_DATABASE_URL=… npm run e2e` — end-to-end tests in Chrome over the demo data
   (`e2e/`, Playwright). How the suites divide the work: `docs/engineering/testing.md`.

@@ -11,6 +11,7 @@ import { useMe } from '#client/hooks/me.ts';
 import { POLL_MS, STATS_POLL_MS, useEmployees } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { useViewAs } from '#client/hooks/viewAs.ts';
+import HelpLink from '../App/HelpLink.tsx';
 import HelpTip from '../App/HelpTip.tsx';
 import SincePicker, { lastDays } from '../App/SincePicker.tsx';
 import BotDialog from './BotDialog.tsx';
@@ -105,9 +106,10 @@ export default function (p: { bare?: boolean; fold?: ReactNode }) {
           <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexGrow: 1 }}>
             <Typography variant="h3" sx={{ fontWeight: 600 }}>{t('bots.title')}</Typography>
             <HelpTip title={t('bots.blockHint')} />
+            <Typography variant="body2"><HelpLink to="api-bots">{t('bots.howTo')}</HelpLink></Typography>
           </Stack>
         )}
-        {p.bare && <Typography variant="body2" sx={{ color: 'text.secondary', flexGrow: 1 }}>{t('bots.hint')}</Typography>}
+        {p.bare && <Typography variant="body2" sx={{ color: 'text.secondary', flexGrow: 1 }}>{t('bots.hint')} <HelpLink to="api-bots">{t('bots.howTo')}</HelpLink></Typography>}
         {!readOnly && <Button size="small" startIcon={<Add />} onClick={() => setOpened('new')}>{t('bots.create')}</Button>}
         {p.fold}
       </Stack>

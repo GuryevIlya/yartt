@@ -31,25 +31,25 @@ export const TaskHeader = z.object({
   tags: Tag.array(),
   priority: Priority,
   /** NULL — no deadline. Passed while the task is open — overdue (decision 93). */
-  deadline: z.date().nullable(),
+  deadline: z.date().nullable().describe('NULL — no deadline. Passed while the task is open — overdue (decision 93).'),
   /** Its owner closed it (db.sql, close_task); only that closes a task. */
-  closed: z.boolean(),
+  closed: z.boolean().describe('Its owner closed it (db.sql, close_task); only that closes a task.'),
   /** NULL — an ownerless task (its owner was dismissed without a manager). */
-  ownerId: Id.nullable(),
+  ownerId: Id.nullable().describe('NULL — an ownerless task (its owner was dismissed without a manager).'),
   isPublic: z.boolean(),
   /**
    * The deadline will not be met by plans (db.sql, deadline_risk): the person
    * whose time left exceeds most their working time until the deadline;
    * NULL — it fits, or nothing to measure.
    */
-  risk: z.object({ employeeId: Id, plannedMinutes: z.number().int(), capacityMinutes: z.number().int() }).nullable(),
+  risk: z.object({ employeeId: Id, plannedMinutes: z.number().int(), capacityMinutes: z.number().int() }).nullable().describe('The deadline will not be met by plans (db.sql, deadline_risk): the person whose time left exceeds most their working time until the deadline; NULL — it fits, or nothing to measure.'),
   /**
    * Open, it waits for these tasks, and their deadline is later than the
    * latest one it can live with, or not set (db.sql, dependency_risk).
    */
-  late: Id.array(),
+  late: Id.array().describe('Open, it waits for these tasks, and their deadline is later than the latest one it can live with, or not set (db.sql, dependency_risk).'),
   /** Open, it delays these tasks: its deadline is later than the latest one they can live with, or not set. */
-  delays: Id.array(),
+  delays: Id.array().describe('Open, it delays these tasks: its deadline is later than the latest one they can live with, or not set.'),
 });
 export type TaskHeader = z.infer<typeof TaskHeader>;
 
@@ -59,9 +59,9 @@ export const Dependency = TaskHeader.extend({
    * The latest deadline of the task waited for that the waiting task can
    * live with; NULL — no constraint. Later, or no deadline: both at risk.
    */
-  latestAt: z.date().nullable(),
+  latestAt: z.date().nullable().describe('A line in "Waits for" / "Waited on by". */ export const Dependency = TaskHeader.extend({ /** The latest deadline of the task waited for that the waiting task can live with; NULL — no constraint. Later, or no deadline: both at risk.'),
   /** Who linked them: they may remove it, as may the owner of the waiting task; NULL — not known (before 0.5). */
-  addedBy: Id.nullable(),
+  addedBy: Id.nullable().describe('Who linked them: they may remove it, as may the owner of the waiting task; NULL — not known (before 0.5).'),
 });
 export type Dependency = z.infer<typeof Dependency>;
 
@@ -76,7 +76,7 @@ export type Dependency = z.infer<typeof Dependency>;
 export const Related = TaskHeader.extend({
   waited: z.enum(['waits', 'waited_by']).nullable(),
   /** NULL — not known (a link made before 0.5). */
-  waitedFrom: z.date().nullable(),
+  waitedFrom: z.date().nullable().describe('A task related to this one, gathered by itself: nothing is added by hand (decision 107). `waited` — waiting that has ended (decision 113): \'waits\' this task waited for it, \'waited_by\' it waited for this one; `waitedFrom` and `waitedTo` say when, `removed` that the link was removed. `mentions` — where one of them mentions the other by number: `out` this task mentions it, in the comment `commentId` of `taskId` or, NULL, in its context. / export const Related = TaskHeader.extend({ waited: z.enum([\'waits\', \'waited_by\']).nullable(), /** NULL — not known (a link made before 0.5).'),
   waitedTo: z.date().nullable(),
   removed: z.boolean(),
   mentions: z.object({ out: z.boolean(), taskId: Id, commentId: Id.nullable() }).array(),
@@ -90,12 +90,12 @@ export type Access = z.infer<typeof Access>;
 /** The part of a task only someone who sees it gets. */
 export const TaskDetails = z.object({
   /** Sanitized HTML. */
-  context: z.string().nullable(),
+  context: z.string().nullable().describe('What the viewer is to the task. */ export const Access = z.enum([\'owner\', \'observer\', \'public\', \'requested\', \'none\']); export type Access = z.infer<typeof Access>;  /** The part of a task only someone who sees it gets. */ export const TaskDetails = z.object({ /** Sanitized HTML.'),
   waitsFor: Dependency.array(),
   waitedOnBy: Dependency.array(),
   related: Related.array(),
   /** What its tags mean along its owner's chain, from the top down (decision 112). */
-  tagDescriptions: TagDescription.array(),
+  tagDescriptions: TagDescription.array().describe('What its tags mean along its owner\'s chain, from the top down (decision 112).'),
 });
 export type TaskDetails = z.infer<typeof TaskDetails>;
 

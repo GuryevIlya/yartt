@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { WEBHOOK_GROUPS, type Webhook, type WebhookGroup, type WebhookLevel, type WebhookLevels } from '#shared/webhook.ts';
 import { useFormat } from '#client/hooks/format.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
+import HelpLink from './HelpLink.tsx';
 
 /** A new webhook says that things happened, with a link: nothing of a task leaves until its owner asks for it. */
 const DEFAULT_LEVELS = Object.fromEntries(WEBHOOK_GROUPS.map((g) => [g, 'event'])) as WebhookLevels;
@@ -27,7 +28,9 @@ export default function () {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('webhook.intro')}</Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        {t('webhook.intro')} <HelpLink to="api-webhooks">{t('webhook.format')}</HelpLink>
+      </Typography>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
         <TextField
           size="small"
