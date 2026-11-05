@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DayHistory, Shift } from '#shared/myDay.ts';
 import type { TaskHeader } from '#shared/task.ts';
+import { waiting } from '#client/hooks/pending.ts';
 import { dayOf, midnightOf, useFormat, useZone } from '#client/hooks/format.ts';
 import { useTaskRefresh } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
@@ -113,7 +114,7 @@ export default function (p: {
   const unscored = shifts.filter((s) => s.spentMinutes !== null && !standing(s));
   const scorable = p.canScore && p.employeeId !== undefined && unscored.length > 0;
   // Where time can go today: my shifts of the day that are not scored.
-  const loggable = mine ? shifts.filter((s) => !standing(s)) : [];
+  const loggable = mine ? shifts.filter((s) => !standing(s) && !waiting(s)) : [];
   const choices = loggable.map((s) => ({
     id: s.id, startedAt: s.startedAt, spentMinutes: s.spentMinutes,
     loggedMinutes: day.entries.filter((e) => e.shiftId === s.id).reduce((sum, e) => sum + e.minutes, 0),
@@ -255,6 +256,7 @@ export default function (p: {
                   {shift.spentMinutes === null
                     ? t(mine ? 'myDay.shift.open' : 'myDay.shift.openOther', { from: moment(shift.startedAt), time: format.minutes(minutesSince(shift.startedAt)) })
                     : t('myDay.shift.closed', { from: moment(shift.startedAt), to: moment(endOf(shift)), time: format.minutes(shift.spentMinutes) })}
+                  {waiting(shift) && ` · ${t('offline.waits')}`}
                 </Typography>
                 {shift.about && (
                   <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap' }}>{shift.about}</Typography>
@@ -281,14 +283,14 @@ export default function (p: {
                   {t('myDay.shift.close')}
                 </Button>
               )}
-              {mine && !frozen && shift.spentMinutes !== null && (
+              {mine && !frozen && !waiting(shift) && shift.spentMinutes !== null && (
                 <Tooltip title={t('myDay.shift.edit')}>
                   <IconButton size="small" onClick={() => setDialog({ mode: 'edit', from: shift.startedAt, to: endOf(shift), about: shift.about })}>
                     <Edit fontSize="small" />
                   </IconButton>
                 </Tooltip>
               )}
-              {mine && !frozen && (
+              {mine && !frozen && !waiting(shift) && (
                 <Tooltip title={t(shift === open ? 'myDay.shift.remove' : 'myDay.shift.delete')}>
                   <IconButton size="small" disabled={removeShift.isPending} onClick={() => {
                     const asked = shift.spentMinutes === null

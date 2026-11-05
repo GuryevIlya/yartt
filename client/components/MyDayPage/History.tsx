@@ -3,7 +3,9 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { dayOf as dayAt, useZone } from '#client/hooks/format.ts';
 import { useMe } from '#client/hooks/me.ts';
+import { openShift, usePending, withPendingShifts } from '#client/hooks/pending.ts';
 import { POLL_MS } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import Day from './Day.tsx';
@@ -40,15 +42,19 @@ export default function (p: { employeeId?: number; canScore?: boolean; onEmploye
   ));
   const history = p.employeeId === undefined ? mine : theirs;
   const data = history.data;
+  // My own shifts waiting to be sent show as they will be (decision 114).
+  const pending = usePending();
+  const zone = useZone();
+  const own = p.employeeId === undefined;
   const tasks = new Map((data?.tasks ?? []).map((task) => [task.id, task]));
   const pages = p.onEmployeePage ? Math.ceil((data?.total ?? 0) / DAYS_PER_PAGE) : 1;
   const dayOf = (day: NonNullable<typeof data>['days'][number]) => (
     <Day
       key={day.day}
-      day={day}
+      day={own ? { ...day, shifts: withPendingShifts(day.shifts, pending, (at) => dayAt(at, zone) === day.day) } : day}
       isToday={day.day === data!.today}
       tasks={tasks}
-      openShiftFrom={data!.openShiftFrom}
+      openShiftFrom={own ? openShift(data!.openShiftFrom, pending) : data!.openShiftFrom}
       employeeId={p.employeeId}
       canScore={p.canScore ?? false}
     />

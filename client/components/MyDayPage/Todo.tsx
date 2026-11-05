@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import type { TodoItem, TodoReview } from '#shared/myDay.ts';
 import { useFormat } from '#client/hooks/format.ts';
+import { usePendingTodo } from '#client/hooks/pending.ts';
 import { POLL_MS, useEmployees, usePronoun, useTaskRefresh } from '#client/hooks/task.ts';
 import { markReviewRead, useStore } from '#client/hooks/store.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
@@ -37,6 +38,9 @@ export default function () {
   const { as, readOnly } = useViewAs();
   const pronoun = usePronoun();
   const todo = useQuery(trpc.MyDay.todo.queryOptions(as === undefined ? undefined : { as }, { refetchInterval: POLL_MS }));
+  // My own answers waiting to be sent count as given (decision 114); a manager's view shows what the server has.
+  const mine = usePendingTodo(todo.data);
+  const items = as === undefined ? mine : todo.data;
   const focus = useStore((s) => s.todoFocus);
   const block = useRef<HTMLDivElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
@@ -65,12 +69,12 @@ export default function () {
         }}
       >
         {readOnly ? t('myDay.todo.titleOf', pronoun(as)) : t('myDay.todo.title')}
-        {todo.data && todo.data.length > 0 && ` · ${new Set(todo.data.map((item) => item.task.id)).size}`}
+        {items && items.length > 0 && ` · ${new Set(items.map((item) => item.task.id)).size}`}
       </Typography>
-      {todo.data?.length === 0 && (
+      {items?.length === 0 && (
         <Typography sx={{ color: 'text.secondary', textAlign: 'center', py: 2 }}>{t('myDay.empty')}</Typography>
       )}
-      <TodoList items={todo.data ?? []} readOnly={readOnly} />
+      <TodoList items={items ?? []} readOnly={readOnly} />
     </Paper>
   );
 }

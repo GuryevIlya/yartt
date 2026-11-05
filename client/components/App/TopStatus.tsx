@@ -1,11 +1,12 @@
 import { CloudOff, NotificationsNone, PlayCircleOutline, StopCircleOutlined } from '@mui/icons-material';
-import { Badge, Button, Chip, IconButton, Tooltip } from '@mui/material';
+import { Badge, Button, Chip, IconButton, Popover, Stack, Tooltip, Typography } from '@mui/material';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useFormat } from '#client/hooks/format.ts';
-import { useOutbox } from '#client/hooks/offline.ts';
+import { openShift, usePending, usePendingTodo } from '#client/hooks/pending.ts';
+import PendingList from './PendingList.tsx';
 import { POLL_MS, useTaskRefresh } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import { focusTodo } from '#client/hooks/store.ts';
@@ -39,8 +40,11 @@ export default function () {
   }, []);
 
   // Tasks, not items: Waiting for me is tasks, each with its groups (decision 94).
-  const count = new Set(todo.data?.map((item) => item.task.id)).size;
-  const outbox = useOutbox();
+  // What waits to be sent counts as done (decision 114).
+  const pending = usePending();
+  const items = usePendingTodo(todo.data);
+  const count = new Set(items?.map((item) => item.task.id)).size;
+  const [listed, setListed] = useState<HTMLElement | null>(null);
   const online = useSyncExternalStore(
     (notify) => {
       window.addEventListener('online', notify);
@@ -49,20 +53,30 @@ export default function () {
     },
     () => navigator.onLine,
   );
-  const startedAt = shift.data?.startedAt;
+  const startedAt = shift.isSuccess ? openShift(shift.data?.startedAt ?? null, pending) : null;
+  const startWaits = startedAt !== null && startedAt.getTime() !== shift.data?.startedAt.getTime();
 
   return (
     <>
-      {(!online || outbox.length > 0) && (
+      {(!online || pending.length > 0) && (
         <Tooltip title={t('offline.hint')}>
           <Chip
             size="small"
             color="warning"
             variant="outlined"
             icon={<CloudOff />}
-            label={outbox.length ? t('offline.pending', { count: outbox.length }) : t('offline.offline')}
+            label={pending.length ? t('offline.pending', { count: pending.length }) : t('offline.offline')}
+            {...(pending.length > 0 && { onClick: (e: React.MouseEvent<HTMLDivElement>) => setListed(e.currentTarget) })}
           />
         </Tooltip>
+      )}
+      {listed && pending.length > 0 && (
+        <Popover open anchorEl={listed} onClose={() => setListed(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
+          <Stack spacing={0.5} sx={{ p: 2, maxWidth: 360 }}>
+            <Typography variant="subtitle2">{t('offline.listTitle')}</Typography>
+            <PendingList pending={pending} />
+          </Stack>
+        </Popover>
       )}
       {shift.isSuccess && !startedAt && (
         <Tooltip title={t('myDay.shift.start')}>
@@ -72,7 +86,7 @@ export default function () {
         </Tooltip>
       )}
       {startedAt && (
-        <Tooltip title={t('nav.closeShift', { from: format.time(startedAt) })}>
+        <Tooltip title={[t('nav.closeShift', { from: format.time(startedAt) }), startWaits && t('offline.waits')].filter(Boolean).join(' · ')}>
           <Button
             size="small"
             color="inherit"

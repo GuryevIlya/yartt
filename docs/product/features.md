@@ -56,7 +56,7 @@ persona goal it serves. Status: **now** — stage one, **next** — stage two,
 | Bots: an employee kind of its own, created by anyone, run by its manager; one key, permissions that only narrow what it sees, its own signed JSON webhook; no timesheet, scores or reports. Bots under My team from any day to today: tasks, comments, calls by day, share refused, share delivered, the quiet first; a yearly word about an old key | Pavel: a failed build lands in the task as a mention, and the bot cannot do more than it should | now (done) |
 | A weekly email for managers: Monday morning, overdue tasks, tasks at risk | Marina: the week starts with what needs her | now (done) |
 | A dark theme: as the system, or chosen in the profile | Pavel: My day open all evening without glare | now (done) |
-| Installable (PWA) and working offline: changes made without a connection are kept and sent at the first chance | everyone: a train or a basement does not stop work | now (done) |
+| Installable (PWA); a lost connection loses no work: changes made offline show at once, marked as waiting, and are sent at the first chance; what was opened before can be read (decision 114) | everyone: a dropped VPN or a train does not stop work | now (done) |
 | The top line: how many TODO items wait for me, starting a shift now, the open shift and closing it, from any page | Pavel: notice a mention and close the day without going back to My day | now (done) |
 | Personal tag colors and weights — in the profile | Pavel: scan lists faster | now (done) |
 

@@ -128,7 +128,7 @@ export const helpEn: Help = {
             'The company account gives no confirmed email? The first time, yartt asks for your work email and sends a link to it. '
               + 'Open it in the same browser.',
             'The sign-in email is changed in the profile: the new address is confirmed by a link sent to it.',
-            'yartt can be installed as an app (browser menu → Install). Offline, changes wait in the browser and go out when the connection is back.',
+            'yartt can be installed as an app (browser menu → Install). A lost connection loses no work: changes show on screen at once, wait in the browser and go out when the connection is back. The "Not sent" chip in the top line lists what waits. Offline you can read what you opened before; tasks you have not opened, search and reports load once the connection is back.',
           ],
         },
         {

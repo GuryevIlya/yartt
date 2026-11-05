@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import type { TagPart } from '#shared/tags.ts';
 import { FIRST_DAY, LAST_DAY, typedMoment } from '#shared/employee.ts';
 import { PRIORITIES, type Priority, type TaskDetails, type TaskPage } from '#shared/task.ts';
+import { usePendingTodo } from '#client/hooks/pending.ts';
 import { fromLocalInput, toLocalInput, useFormat } from '#client/hooks/format.ts';
 import { useDraft } from '#client/hooks/drafts.ts';
 import { useMe } from '#client/hooks/me.ts';
@@ -54,6 +55,7 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
   const update = useMutation(trpc.Task.update.mutationOptions({ onSuccess: refresh }));
   const setDeadline = useMutation(trpc.Task.setDeadline.mutationOptions({ onSuccess: refresh }));
   const todo = useQuery(trpc.MyDay.todo.queryOptions({ taskId: task.id }, { refetchInterval: POLL_MS }));
+  const todoItems = usePendingTodo(todo.data);
   const close = useMutation(trpc.Task.close.mutationOptions({ onSuccess: refresh }));
   const take = useMutation(trpc.Task.take.mutationOptions({ onSuccess: refresh }));
 
@@ -188,12 +190,12 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
         )}
       </Stack>
 
-      {todo.data && todo.data.length > 0 && (
+      {todoItems && todoItems.length > 0 && (
         // What waits for me here, the same as in My day (decision 94).
         <Alert severity="warning" variant="outlined" icon={false} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
           <Stack spacing={1}>
             <Typography sx={label}>{t('myDay.todo.title')}</Typography>
-            <TodoList items={todo.data} inTask />
+            <TodoList items={todoItems} inTask />
           </Stack>
         </Alert>
       )}

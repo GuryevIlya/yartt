@@ -7,12 +7,6 @@ it is decided. Proposals wait for a decision in their own section.
 
 ## Now — stage 6: ready for 1.0
 
-- [ ] **Offline the work is not lost, and what waits is seen** (M,
-  decision 114). Screens show what waits in the outbox as done and
-  waiting: a shift started offline is open and can be ended, never
-  started twice; an item answered offline leaves "Waiting for me". The
-  "Not sent" chip lists what waits, in words. The guide promises only
-  that a lost connection loses no work.
 - [ ] **Contributions with a signed assignment.** Once the repository is
   on GitHub: install CLA Assistant, give it [legal/CAA-individual.md](../../legal/CAA-individual.md)
   as the agreement and check on a test pull request that it blocks

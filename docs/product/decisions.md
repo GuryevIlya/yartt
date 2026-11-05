@@ -2367,7 +2367,9 @@ connection loses no work.
   a report need the server and say so.
 - The guide says exactly this, and no more.
 
-*Implemented:* not yet (roadmap).
+*Implemented:* `client/hooks/pending.ts` (the open shift, the day's shifts
+and "Waiting for me" as they will be), `PendingList.tsx` under the chip in
+`TopStatus.tsx`; `History.tsx`, `Day.tsx`, `Todo.tsx`, `Sheet.tsx` read it.
 
 ### 115. Bots are robots in Russian
 
