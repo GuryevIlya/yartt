@@ -546,6 +546,12 @@ a change applies as of when it arrives, like one made a moment late.
 Logging out with unsent changes asks first; another person signing in
 on the same browser starts with an empty outbox.
 
+Nothing waits for the server offline. A new task's tags are taken by
+name and its title is not checked for being taken: the server judges it
+when the task arrives. A request that cannot go (a visit, a suggestion)
+fails without a message, since the top line already says there is no
+connection.
+
 *Implemented:* `client/hooks/offline.ts` (the offline link, the outbox,
 the saved cache), `client/public/sw.js`, `manifest.webmanifest`.
 

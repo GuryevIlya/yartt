@@ -94,10 +94,17 @@ export default function (p: {
   // `allowNew`; dashed until saved, so a typo shows) or, in the search, the
   // best suggestion — for this very text, so Enter pressed
   // before the suggestions came waits for them (from the cache when they did).
+  // Offline nothing can be asked: a new task takes the text as a tag by name
+  // (the server finds a tag spelled so when the task is saved), the search keeps it.
   const enter = async (value: string) => {
     const name = TagName.safeParse(value);
     if (!name.success) return;
-    const found = await queryClient.fetchQuery(trpc.Tags.suggest.queryOptions({ text: value }));
+    const found = await queryClient.fetchQuery(trpc.Tags.suggest.queryOptions({ text: value })).catch(() => null);
+    if (!found) {
+      if (p.allowNew) add([{ name: name.data }]);
+      else p.onInputChange(value);
+      return;
+    }
     const exact = found.tags.find((tag) => tag.name === name.data);
     if (exact) add([{ tag: exact }]);
     else if (p.allowNew) add([{ name: name.data }]);
@@ -227,7 +234,11 @@ export function useTitle(parts: TagPart[], input: string, own?: number) {
     { enabled: names.length > 0 && names.length <= 20, placeholderData: keepPreviousData },
   ));
   const taken = check.isPlaceholderData || !check.data || check.data.id === own ? null : check.data;
-  const checking = (rest !== null && suggested.isPending) || (names.length > 0 && (check.isPending || check.isPlaceholderData));
+  // Offline the checks wait for a connection (paused): the task is not held for them,
+  // the server judges the title when it arrives, like any queued change.
+  const asking = (query: { fetchStatus: string }) => query.fetchStatus !== 'paused';
+  const checking = (rest !== null && suggested.isPending && asking(suggested))
+    || (names.length > 0 && (check.isPending || check.isPlaceholderData) && asking(check));
   return {
     names,
     /** Every part, the unpicked text as a new tag. */
