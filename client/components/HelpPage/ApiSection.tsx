@@ -1,10 +1,11 @@
 import { Box, Link as MuiLink, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { Help } from '#shared/i18n/help/ru.ts';
 import { url } from '#client/hooks/base.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
+import Method, { type Operation } from './Method.tsx';
 
 const SUBHEAD = { fontWeight: 600, color: 'text.primary', scrollMarginTop: 72 } as const;
 const MONO = { fontFamily: 'monospace', fontSize: 13 } as const;
@@ -71,6 +72,16 @@ export default function (p: { api: Help['api'] }) {
   const { api } = p;
   const base = `${window.location.origin}${url('/api/v1')}`;
   const spec = url('/api/v1/openapi.json');
+  // The spec of the API, public like the guide: the methods open into their format and examples.
+  const [paths, setPaths] = useState<Record<string, Record<string, Operation>> | null>(null);
+  useEffect(() => {
+    let current = true;
+    fetch(spec)
+      .then(async (response) => (await response.json()) as { paths: Record<string, Record<string, Operation>> })
+      .then((loaded) => { if (current) setPaths(loaded.paths); })
+      .catch(() => {}); // offline: the methods stay closed lines
+    return () => { current = false; };
+  }, [spec]);
   const rightName = (right: string | null) =>
     (right === null ? api.methods.noRight : t(`apiKey.rightNames.${right as 'tasks.read'}`));
 
@@ -109,14 +120,20 @@ export default function (p: { api: Help['api'] }) {
 
       <Part id="api-methods" title={api.methods.title}>
         <Typography variant="body2">{api.methods.intro}</Typography>
+        <Typography variant="body2">{api.methods.open}</Typography>
         {api.methods.groups.map((group) => (
           <Stack key={group.title} spacing={0.5} sx={{ pt: 1 }}>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>{group.title}</Typography>
-            <Grid
-              label={group.title}
-              headers={api.methods.headers}
-              rows={group.routes.map((r) => [inCode(`${r.method} ${r.path}`), r.text, rightName(r.right)])}
-            />
+            {group.routes.map((r) => (
+              <Method
+                key={`${r.method} ${r.path}`}
+                {...r}
+                right={rightName(r.right)}
+                base={base}
+                operation={paths?.[r.path.replace(/:(\w+)/g, '{$1}')]?.[r.method.toLowerCase()]}
+                texts={api.methods.method}
+              />
+            ))}
           </Stack>
         ))}
         <Typography variant="body2" sx={{ pt: 1 }}>{api.methods.files}</Typography>

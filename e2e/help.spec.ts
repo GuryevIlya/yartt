@@ -41,4 +41,20 @@ test.describe('the guide', () => {
     // The test server lists no addresses: anywhere outside the network.
     await expect(page.getByText('На этой установке вебхуки уходят на любые адреса вне сети компании, а адреса внутри неё закрыты.')).toBeVisible();
   });
+
+  test('the contents stand on the right; a method of the API opens into its format and examples', async ({ page }) => {
+    await signIn(page, 'olga@example.com');
+    await page.goto('/help#api-methods');
+    const contents = page.getByRole('navigation', { name: 'Содержание' });
+    const text = page.getByRole('heading', { name: 'Как работать в яртт' });
+    expect((await contents.boundingBox())!.x).toBeGreaterThan((await text.boundingBox())!.x + 400);
+
+    const method = page.getByRole('button', { name: /^GET \/tasks\/:id Задача/ });
+    await method.click();
+    const details = method.locator('xpath=../..');
+    await expect(details.getByText(/curl "http.*\/api\/v1\/tasks\/42"/)).toBeVisible();
+    await expect(details.getByText(/deadline\??: string \(date-time\) \| null/)).toBeVisible();
+    await expect(details.getByText(/"priority": "/)).toBeVisible();
+    await page.screenshot({ path: 'test-results/help-method.png' });
+  });
 });

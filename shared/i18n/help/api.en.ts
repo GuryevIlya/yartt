@@ -30,6 +30,15 @@ export const apiEn: typeof apiRu = {
     intro: 'The "Right" column says what a personal key needs. A bot is checked by its permissions, and shifts and reports are not for bots. Writing shifts, time entries and scores is in the API for nobody: the figures should show what was done, not what a script did.',
     headers: ['Request', 'What it does', 'Right'],
     noRight: 'any key',
+    open: 'Click a method to see the format and an example of its request and answer.',
+    method: {
+      request: 'Request',
+      response: 'Answer',
+      format: 'Format:',
+      example: 'Example:',
+      noBody: 'No request body.',
+      empty: 'No body in the answer, code 204.',
+    },
     groups: [
       {
         title: 'Who am I and who is around',

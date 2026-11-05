@@ -1,5 +1,5 @@
 import { ArrowForward, ExpandMore } from '@mui/icons-material';
-import { Accordion, AccordionDetails, AccordionSummary, Box, Link as MuiLink, Paper, Stack, Typography } from '@mui/material';
+import { Accordion, AccordionDetails, AccordionSummary, Box, Link as MuiLink, Paper, Stack, Typography, useMediaQuery, type Theme } from '@mui/material';
 import { useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router';
@@ -63,11 +63,10 @@ export default function () {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
   }, [hash]);
 
-  return (
-    <Stack spacing={2} sx={{ width: '100%', maxWidth: 960, mx: 'auto', alignSelf: 'flex-start' }}>
-      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-        <Typography variant="h1" sx={{ fontWeight: 600, mb: 1 }}>{help.title}</Typography>
-        <Box component="nav" aria-label={help.contents} sx={{ mt: 1.5 }}>
+  // Wide, the contents stand beside the text and stay in view; narrow, they open the guide.
+  const wide = useMediaQuery((theme: Theme) => theme.breakpoints.up('md'));
+  const contents = (
+        <Box component="nav" aria-label={help.contents} sx={wide ? {} : { mt: 1.5 }}>
           <Typography variant="h3" component="h2" sx={SUBHEAD}>{help.contents}</Typography>
           <Box component="ul" sx={{ m: 0, p: 0 }}>
             <Entry to="principles" title={help.principlesTitle} />
@@ -83,6 +82,19 @@ export default function () {
               ['api-bots', help.api.bots.title]].map(([to, title]) => <Entry key={to} to={to!} title={title!} nested />)}
           </Box>
         </Box>
+  );
+
+  return (
+    <Box
+      sx={{
+        width: '100%', maxWidth: { xs: 960, md: 1240 }, mx: 'auto', alignSelf: 'flex-start',
+        display: 'grid', gap: 2, gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 260px' },
+      }}
+    >
+    <Stack spacing={2} sx={{ minWidth: 0 }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+        <Typography variant="h1" sx={{ fontWeight: 600, mb: 1 }}>{help.title}</Typography>
+        {!wide && contents}
         <Typography id="principles" sx={{ mt: 3, mb: 1, scrollMarginTop: 72 }}>{help.intro}</Typography>
         {help.principles.map((principle, i) => (
           <Box key={principle.title} component="section" aria-label={principle.title} sx={{ mt: 3 }}>
@@ -156,5 +168,16 @@ export default function () {
         <ApiSection api={help.api} />
       </Paper>
     </Stack>
+    {wide && (
+      <Paper
+        sx={{
+          p: 2, position: 'sticky', top: 72, alignSelf: 'start',
+          maxHeight: 'calc(100vh - 88px)', overflowY: 'auto',
+        }}
+      >
+        {contents}
+      </Paper>
+    )}
+    </Box>
   );
 }
