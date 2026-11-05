@@ -331,7 +331,7 @@ export const helpEn: Help = {
             'The owners of both tasks are told of a new link; the owner of the waiting one, also of every move of the other\'s deadline.',
             'Once either of two tasks is closed, the waiting is over: the line leaves "Waits for" and "Waited on by" for the folded "Related". Reopened, the task brings it back with its latest deadline.',
             '"Related" also gathers tasks mentioned by number in contexts and comments, on both sides, with a link to the mention. Nothing is added there by hand.',
-            'A task that waits for another may close first. The owner of that other task then sees it in "Waiting for me" and decides whether the work is still needed.',
+            'A task that waits for another may close first, and a link may be removed. The owner of that other task then sees it in "Waiting for me" and decides whether the work is still needed. The line stays under "Related" on both, with dates, so it is clear why the task was started.',
           ],
         },
       ],

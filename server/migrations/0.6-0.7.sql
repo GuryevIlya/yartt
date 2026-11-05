@@ -118,11 +118,11 @@ dependency_added) and see it in their review. latest_at is the owner of
 task_id''s alone; a dependency is removed by the owner of task_id or by
 whoever added it. Checked by the application.
 Cycles are forbidden (trigger). Self-dependency is forbidden (CHECK).
-Deletion is physical. No audit.
 When finished_at of value is set, moved or cleared, owners of all
 dependent tasks are notified.
 The row outlives closing: waiting is shown while both tasks are open, after
-that under "Related" (decision 107), and reopening brings it back.';
+that under "Related" on both (decisions 107, 113), and reopening brings it
+back. A removed link moves to dependency_removed.';
 
 
 COMMENT ON COLUMN notification.payload IS
@@ -203,6 +203,8 @@ RULES:
   - a task closed by its owner (close_task) -> the owners of the tasks
     waiting for it (dependency_done), and the owners of the open tasks it
     was waiting for (waiter_closed): nobody may need their work any more.
+  - a link removed -> the owner of the open task it waited for, unless they
+    removed it (waiter_closed).
   - a new dependency -> the owner of the task waited for (with the latest
     deadline the waiting task can live with, if set; dependency_added),
     and the owner of the waiting task (waits_added) — but not whoever
@@ -1081,3 +1083,36 @@ CRON JOBS (outside SQL)
   - every day:    UPDATE human SET next_day = NULL
                    WHERE next_day <= local_today(employee_id);
 ';
+
+-- A removed link stays known to both tasks (decision 113).
+
+CREATE TABLE dependency_removed (
+    task_id INT NOT NULL REFERENCES task(id),
+    value INT NOT NULL REFERENCES task(id),
+    added_at TIMESTAMPTZ,
+    removed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    removed_by INT NOT NULL REFERENCES employee(id),
+    PRIMARY KEY (task_id, value)
+);
+CREATE INDEX idx_dependency_removed_value ON dependency_removed(value);
+
+COMMENT ON TABLE dependency_removed IS
+'A link that was removed: task_id waited for value from added_at to removed_at
+(decision 113). Both tasks keep it under "Related", so whoever started a task
+because someone needed it can still tell why. Linked again, the row goes, and
+the link is in dependency once more.';
+
+COMMENT ON COLUMN dependency_removed.task_id IS
+'The task that waited.';
+
+COMMENT ON COLUMN dependency_removed.value IS
+'The task it waited for.';
+
+COMMENT ON COLUMN dependency_removed.added_at IS
+'When the waiting began. NULL — not known (a link made before 0.5).';
+
+COMMENT ON COLUMN dependency_removed.removed_at IS
+'When the link was removed.';
+
+COMMENT ON COLUMN dependency_removed.removed_by IS
+'Who removed it.';

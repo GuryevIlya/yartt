@@ -67,13 +67,18 @@ export type Dependency = z.infer<typeof Dependency>;
 
 /**
  * A task related to this one, gathered by itself: nothing is added by hand
- * (decision 107). `waited` — waiting that has ended: 'waits' this task waited
- * for it, 'waited_by' it waits for this one, closed. `mentions` — where one
+ * (decision 107). `waited` — waiting that has ended (decision 113): 'waits' this
+ * task waited for it, 'waited_by' it waited for this one; `waitedFrom` and
+ * `waitedTo` say when, `removed` that the link was removed. `mentions` — where one
  * of them mentions the other by number: `out` this task mentions it, in the
  * comment `commentId` of `taskId` or, NULL, in its context.
  */
 export const Related = TaskHeader.extend({
   waited: z.enum(['waits', 'waited_by']).nullable(),
+  /** NULL — not known (a link made before 0.5). */
+  waitedFrom: z.date().nullable(),
+  waitedTo: z.date().nullable(),
+  removed: z.boolean(),
   mentions: z.object({ out: z.boolean(), taskId: Id, commentId: Id.nullable() }).array(),
 });
 export type Related = z.infer<typeof Related>;

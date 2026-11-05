@@ -471,9 +471,12 @@ const LinkRow = z.object({
   value: z.number(),
   latestAt: z.date().nullable(),
   addedBy: z.number().nullable(),
+  addedAt: z.date().nullable(),
   waitingClosed: z.boolean(),
   valueClosed: z.boolean(),
+  endedAt: z.date().nullable(),
 });
+const RemovedRow = z.object({ taskId: z.number(), value: z.number(), addedAt: z.date().nullable(), removedAt: z.date() });
 const MentionRow = z.object({ other: z.number(), commentId: z.number().nullable(), out: z.boolean() });
 
 const AccessRow = z.object({
@@ -515,8 +518,10 @@ export async function get(viewerId: number, taskId: number): Promise<TaskPage> {
     SELECT context FROM task WHERE id = ${taskId}
   `);
   const links = LinkRow.array().parse(await sql`
-    SELECT d.task_id, d.value, d.latest_at, d.added_by,
-           wf.confirmed_at IS NOT NULL AS waiting_closed, vf.confirmed_at IS NOT NULL AS value_closed
+    SELECT d.task_id, d.value, d.latest_at, d.added_by, d.added_at,
+           wf.confirmed_at IS NOT NULL AS waiting_closed, vf.confirmed_at IS NOT NULL AS value_closed,
+           -- Waiting ends with whichever closed first.
+           LEAST(wf.confirmed_at, vf.confirmed_at) AS ended_at
       FROM dependency d
       LEFT JOIN finished_at wf ON wf.task_id = d.task_id AND wf.expired_at IS NULL
       LEFT JOIN finished_at vf ON vf.task_id = d.value AND vf.expired_at IS NULL
@@ -529,16 +534,30 @@ export async function get(viewerId: number, taskId: number): Promise<TaskPage> {
   const waitsFor = waiting.filter((l) => !l.waitingClosed && !l.valueClosed).map((l) => row(l, l.value));
   const waitedOnBy = waitedOn.filter((l) => !l.waitingClosed && !l.valueClosed).map((l) => row(l, l.taskId));
 
-  const related = new Map<number, Pick<Related, 'waited' | 'mentions'>>();
+  type Found = Pick<Related, 'waited' | 'waitedFrom' | 'waitedTo' | 'removed' | 'mentions'>;
+  const related = new Map<number, Found>();
   const entry = (id: number) => {
     const found = related.get(id);
     if (found) return found;
-    const made: Pick<Related, 'waited' | 'mentions'> = { waited: null, mentions: [] };
+    const made: Found = { waited: null, waitedFrom: null, waitedTo: null, removed: false, mentions: [] };
     related.set(id, made);
     return made;
   };
-  for (const l of waiting) if (l.waitingClosed || l.valueClosed) entry(l.value).waited = 'waits';
-  for (const l of waitedOn) if (l.valueClosed && !l.waitingClosed) entry(l.taskId).waited = 'waited_by';
+  // Once waited for, always known: both tasks keep it, with when (decision 113).
+  const ended = (id: number, waited: Related['waited'], from: Date | null, to: Date | null, removed: boolean) =>
+    Object.assign(entry(id), { waited, waitedFrom: from, waitedTo: to, removed });
+  for (const l of links) {
+    if (!l.waitingClosed && !l.valueClosed) continue;
+    if (l.taskId === taskId) ended(l.value, 'waits', l.addedAt, l.endedAt, false);
+    else ended(l.taskId, 'waited_by', l.addedAt, l.endedAt, false);
+  }
+  const removed = RemovedRow.array().parse(await sql`
+    SELECT task_id, value, added_at, removed_at FROM dependency_removed WHERE task_id = ${taskId} OR value = ${taskId}
+  `);
+  for (const r of removed) {
+    if (r.taskId === taskId) ended(r.value, 'waits', r.addedAt, r.removedAt, true);
+    else ended(r.taskId, 'waited_by', r.addedAt, r.removedAt, true);
+  }
   const mentions = MentionRow.array().parse(await sql`
     SELECT value AS other, comment_id, TRUE AS out FROM task_mention WHERE task_id = ${taskId}
     UNION ALL

@@ -119,7 +119,7 @@ export const en: Translation = {
       planLeftHint: 'Done or no longer needed — clear your plan, and the owner can finish the task. If the work is still needed, say so in the task.',
       clearPlan: 'Clear my plan',
       done: 'A task this one waits for is done',
-      waiterClosed: 'A task that waited for this one closed: check whether the work is still needed',
+      waiterClosed: 'A task no longer waits for this one: it was closed or the link removed. Check whether the work is still needed',
     },
     waiting: {
       title: 'Waiting for others',
@@ -543,7 +543,7 @@ export const en: Translation = {
       comments: 'comments ({{count}})',
       links: 'new links ({{count}})',
       done: 'tasks it waits for, done ({{count}})',
-      waiterClosed: 'tasks that waited for it and closed first ({{count}})',
+      waiterClosed: 'tasks no longer waiting for it ({{count}})',
       closing: 'the deadline a day ahead',
       table: 'New comments',
       who: 'Who',
@@ -558,6 +558,9 @@ export const en: Translation = {
     relatedShow: 'Related: {{count}}',
     relatedWaits: 'this task waited for it',
     relatedWaitedBy: 'waited for this task',
+    relatedPeriod: '{{what}} from {{from}} to {{to}}',
+    relatedUntil: '{{what}} until {{to}}',
+    relatedRemoved: '{{what}}, the link was removed',
     relatedOutComment: 'mentioned in a comment',
     relatedOutContext: 'mentioned in the context',
     relatedInComment: 'mentions this task in a comment',
@@ -1098,7 +1101,7 @@ export const en: Translation = {
     },
     waiter_closed: {
       subject: 'Your task is no longer waited for: {{task}}',
-      body: 'The task "{{dependent}}", which waited for your task "{{task}}", closed before it. Check whether this work is still needed.',
+      body: 'The task "{{dependent}}" no longer waits for your task "{{task}}": it was closed or the link removed. Check whether this work is still needed.',
     },
     waits_added: {
       subject: 'Your task now waits for another: {{task}}',

@@ -48,6 +48,7 @@ export async function setIn(db: Sql, actorId: number, input: SetDependencyInput)
     VALUES (${input.taskId}, ${input.value}, ${input.latestAt}, ${actorId})
     ON CONFLICT (task_id, value) DO UPDATE SET latest_at = EXCLUDED.latest_at
   `;
+  await db`DELETE FROM dependency_removed WHERE task_id = ${input.taskId} AND value = ${input.value}`;
   if (ends.exists) return;
   if (ends.valueOwnerId !== null && ends.valueOwnerId !== actorId) {
     await db`SELECT notify(${ends.valueOwnerId}, ${input.value}, ${db.json({
@@ -75,6 +76,19 @@ export async function remove(actorId: number, taskId: number, value: number): Pr
     `);
     if (!link) throw new AppError('not_found');
     if (actorId !== link.ownerId && actorId !== link.addedBy) throw new AppError('forbidden');
+    // Kept for both tasks (decision 113): whoever started one for the other can still tell why.
+    await db`
+      INSERT INTO dependency_removed (task_id, value, added_at, removed_by)
+      SELECT task_id, value, added_at, ${actorId} FROM dependency WHERE task_id = ${taskId} AND value = ${value}
+      ON CONFLICT (task_id, value) DO UPDATE
+        SET added_at = EXCLUDED.added_at, removed_at = NOW(), removed_by = EXCLUDED.removed_by
+    `;
     await db`DELETE FROM dependency WHERE task_id = ${taskId} AND value = ${value}`;
+    // Its work may not be needed any more.
+    await db`
+      SELECT notify(v.owner_id, v.id, ${db.json({ kind: 'waiter_closed', dependentId: taskId })})
+        FROM task v LEFT JOIN finished_at f ON f.task_id = v.id AND f.expired_at IS NULL
+       WHERE v.id = ${value} AND v.owner_id IS NOT NULL AND v.owner_id <> ${actorId} AND f.confirmed_at IS NULL
+    `;
   });
 }

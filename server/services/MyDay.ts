@@ -99,17 +99,22 @@ export async function todo(me: number, viewerId: number = me, taskId?: number): 
        AND d.done_at > ${since()} ${only(sql`k.id`)}
      ORDER BY d.done_at
   `);
-  // What waited for my open task closed first, not by me: is my work still needed?
+  // What waited for my open task closed first or stopped waiting, not by me: is my work still needed?
   const waiterClosed = DoneRow.array().parse(await sql`
-    SELECT k.id AS task_id, d.task_id AS value, wf.confirmed_at AS at
-      FROM dependency d
-      JOIN task k ON k.id = d.value
-      JOIN task w ON w.id = d.task_id
-      JOIN finished_at wf ON wf.task_id = w.id AND wf.expired_at IS NULL AND wf.confirmed_at IS NOT NULL
+    SELECT k.id AS task_id, w.other AS value, w.at
+      FROM task k
       LEFT JOIN finished_at kf ON kf.task_id = k.id AND kf.expired_at IS NULL
-     WHERE k.owner_id = ${me} AND w.owner_id IS DISTINCT FROM ${me} AND kf.confirmed_at IS NULL
-       AND wf.confirmed_at > ${since()} ${only(sql`k.id`)}
-     ORDER BY wf.confirmed_at
+      JOIN LATERAL (
+        SELECT d.task_id AS other, wf.confirmed_at AS at
+          FROM dependency d
+          JOIN task t ON t.id = d.task_id
+          JOIN finished_at wf ON wf.task_id = d.task_id AND wf.expired_at IS NULL AND wf.confirmed_at IS NOT NULL
+         WHERE d.value = k.id AND t.owner_id IS DISTINCT FROM ${me}
+        UNION ALL
+        SELECT r.task_id, r.removed_at FROM dependency_removed r WHERE r.value = k.id AND r.removed_by <> ${me}
+      ) w ON TRUE
+     WHERE k.owner_id = ${me} AND kf.confirmed_at IS NULL AND w.at > ${since()} ${only(sql`k.id`)}
+     ORDER BY w.at
   `);
   // A deadline reminds, it never closes (decision 93): a day ahead, until a
   // review after that, then overdue until the owner closes the task or moves it.

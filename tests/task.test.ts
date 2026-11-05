@@ -646,13 +646,29 @@ describe('related tasks (decision 107)', () => {
     expect((await api.Task.get({ id: waiting })).details).toMatchObject({ waitsFor: [{ id: needed }], related: [] });
   });
 
-  test('a waiting task closed first is shown by nobody else, and its owner of what it waited for hears', async () => {
+  test('a waiting task closed first stays known to both, with when, and the owner of what it waited for hears', async () => {
     const { other, waiting, needed, api, otherApi } = await pair();
     await api.Task.close({ id: waiting });
-    expect((await otherApi.Task.get({ id: needed })).details).toMatchObject({ waitedOnBy: [], related: [] });
+    expect((await otherApi.Task.get({ id: needed })).details).toMatchObject({
+      waitedOnBy: [], related: [{ id: waiting, waited: 'waited_by', removed: false, waitedFrom: expect.any(Date), waitedTo: expect.any(Date) }],
+    });
     expect((await api.Task.get({ id: waiting })).details).toMatchObject({ waitsFor: [], related: [{ id: needed, waited: 'waits' }] });
     expect(await notifications(other.id)).toContainEqual(expect.objectContaining({ kind: 'waiter_closed', dependentId: waiting }));
     expect((await otherApi.MyDay.todo()).find((i) => i.task.id === needed)).toMatchObject({ waiterClosed: [{ task: { id: waiting } }] });
+  });
+
+  test('a removed link stays known to both with when, its owner hears, and linked again it is back', async () => {
+    const { other, waiting, needed, api, otherApi } = await pair();
+    await api.Dependency.remove({ taskId: waiting, value: needed });
+    expect((await otherApi.Task.get({ id: needed })).details).toMatchObject({
+      waitedOnBy: [], related: [{ id: waiting, waited: 'waited_by', removed: true, waitedTo: expect.any(Date) }],
+    });
+    expect((await api.Task.get({ id: waiting })).details).toMatchObject({ waitsFor: [], related: [{ id: needed, waited: 'waits', removed: true }] });
+    expect(await notifications(other.id)).toContainEqual(expect.objectContaining({ kind: 'waiter_closed', dependentId: waiting }));
+    expect((await otherApi.MyDay.todo()).find((i) => i.task.id === needed)).toMatchObject({ waiterClosed: [{ task: { id: waiting } }] });
+
+    await api.Dependency.set({ taskId: waiting, value: needed, latestAt: null });
+    expect((await api.Task.get({ id: waiting })).details).toMatchObject({ waitsFor: [{ id: needed }], related: [] });
   });
 
   test('a number in a comment or the context is a mention, with its place, on both sides; a task not seen stays out', async () => {

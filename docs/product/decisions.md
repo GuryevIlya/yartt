@@ -2306,3 +2306,22 @@ author's descriptions go to their manager, unless the manager has one.
 *Implemented:* `tag_description`, `employee_chain()`, `dismiss_employee()`,
 migration `0.6-0.7`; `Tags.descriptions`, `Tags.setDescription`,
 `TaskDetails.tagDescriptions`; `TagDescriptions.tsx`, `TagDescriptionDialog.tsx`.
+
+### 113. Once a task waited for another, both keep it
+
+Pavel starts a task because Marina's waits for it. Marina closes hers, or removes
+the link, and his task no longer says why it exists. Decision 107 hid a closed
+waiting task from the task it waited for, and removing a link erased it.
+
+So anything that ever waited stays under "Related" on both tasks, with the
+period: "waited for this task from ... to ...", marked if the link was removed.
+The period ends with whichever task closed first, or with the removal; a reopened
+task or a link made again goes back to "Waits for". The owner of the open task
+hears of a removal as of a close, unless they removed it. This changes what 107
+says of a closed waiting task.
+
+A mistaken link leaves a line too. It is folded and says it was removed, and the
+data never lies.
+
+*Implemented:* `dependency_removed`, migration `0.6-0.7`; `Dependency.remove`,
+`Task.get`'s `related`, `MyDay.todo`'s `waiterClosed`; `RelatedTasks.tsx`.
