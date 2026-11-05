@@ -43,7 +43,8 @@ test.describe('the top line', () => {
     await sql`INSERT INTO work (employee_id, started_at) VALUES (${id}, date_trunc('minute', NOW()) - INTERVAL '2 hours 5 minutes')`;
     await signIn(page, 'oleg@example.com');
     const shift = page.getByRole('button', { name: /^Смена идёт с \d\d:\d\d — закрыть$/ });
-    await expect(shift).toHaveText('Смена · 2ч 5м');
+    // A minute may turn between the insert and the screen: 2h 5m, or 6m by then.
+    await expect(shift).toHaveText(/^Смена · 2ч [56]м$/);
     await shift.click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: 'Закрыть смену' })).toBeVisible();

@@ -48,6 +48,8 @@ export default function (p: { employeeId?: number; canScore?: boolean; onEmploye
   const own = p.employeeId === undefined;
   const tasks = new Map((data?.tasks ?? []).map((task) => [task.id, task]));
   const pages = p.onEmployeePage ? Math.ceil((data?.total ?? 0) / DAYS_PER_PAGE) : 1;
+  // While the days of another page load, the ones shown are not that page's: said, not only dimmed.
+  const busy = history.isPending || history.isPlaceholderData;
   const dayOf = (day: NonNullable<typeof data>['days'][number]) => (
     <Day
       key={day.day}
@@ -73,6 +75,7 @@ export default function (p: { employeeId?: number; canScore?: boolean; onEmploye
       )}
       {p.onEmployeePage ? (
         <Box
+          aria-busy={busy}
           sx={{
             display: 'grid', gap: 1.5, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
             opacity: history.isPlaceholderData ? 0.6 : 1,
@@ -83,7 +86,7 @@ export default function (p: { employeeId?: number; canScore?: boolean; onEmploye
           ))}
         </Box>
       ) : (
-        <Stack spacing={2} divider={<Divider />} sx={{ opacity: history.isPlaceholderData ? 0.6 : 1 }}>
+        <Stack aria-busy={busy} spacing={2} divider={<Divider />} sx={{ opacity: history.isPlaceholderData ? 0.6 : 1 }}>
           {data?.days.map(dayOf)}
         </Stack>
       )}

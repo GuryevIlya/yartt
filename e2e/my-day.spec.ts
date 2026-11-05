@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createTask, editable, signIn, taskId, unfold, unique } from './helpers.ts';
+import { createTask, editable, signIn, sql, taskId, unfold, unique } from './helpers.ts';
 
 // My day of the first employee over the demo data (scripts/seed.ts).
 test.describe('My day', () => {
@@ -26,7 +26,10 @@ test.describe('My day', () => {
     await editable(page).click();
     await page.keyboard.type('Подпишу сегодня');
     await page.getByRole('button', { name: 'Отправить' }).click();
-    await expect(item.getByRole('button', { name: 'Готово' })).toBeEnabled({ timeout: 15_000 });
+    // "Send" holds the comment for seconds before it goes: the answer is waited for where it lands,
+    // and only then its mention, so a slow machine does not eat the hold out of the timeout.
+    await expect.poll(async () => (await sql`SELECT 1 FROM comment WHERE value LIKE '%Подпишу сегодня%'`).length, { timeout: 30_000 }).toBe(1);
+    await expect(item.getByRole('button', { name: 'Готово' })).toBeEnabled();
     await expect(item.getByText(/Мой ответ · .*«Подпишу сегодня»/)).toBeVisible(); // the answer shows inside its mention
     await item.getByRole('button', { name: 'Готово' }).click();
     await expect(todo.getByText('Нужна ваша подпись')).toHaveCount(0);
@@ -166,11 +169,18 @@ test.describe('My day', () => {
     // Older days are in History, Pavel's own page.
     await page.locator('.MuiPaper-root').filter({ has: page.getByRole('heading', { name: 'Табель' }) })
       .getByRole('link', { name: 'История' }).click();
+    // The page itself first: My day, still on screen for a moment, has a timesheet of its own.
+    await expect(page).toHaveURL(/\/employees\/\d+$/);
+    await expect(page.getByRole('heading', { name: 'Показатели' })).toBeVisible();
     const hint = page.getByText('Похоже на смену 20:10–21:05');
-    for (let page2 = 2; page2 <= 3; page2++) {
-      await page.waitForLoadState('networkidle');
+    // Each page is looked at once its own days are shown (aria-busy), never the previous page's
+    // while it loads: a glance right after the network is quiet could miss a slow render.
+    for (let next = 2; ; next++) {
+      // My day stays mounted, hidden, under the page: only what is on screen counts.
+      await expect(page.locator('[aria-busy="false"]:visible')).toHaveCount(1);
+      await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
       if (await hint.isVisible()) break;
-      await page.getByRole('button', { name: `Go to page ${page2}` }).click();
+      await page.getByRole('button', { name: `Go to page ${next}` }).click();
     }
     await page.locator('.MuiPaper-root').filter({ hasText: 'Похоже на смену 20:10–21:05' }).last()
       .getByRole('button', { name: 'Подтвердить' }).click();
