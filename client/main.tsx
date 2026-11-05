@@ -1,5 +1,5 @@
 import { CssBaseline, ThemeProvider } from '@mui/material';
-import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createTRPCClient, createTRPCUntypedClient, httpBatchLink, httpLink, splitLink } from '@trpc/client';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -53,6 +53,19 @@ const queryClient = new QueryClient({
     // Mutations always reach the links: the offline link decides what waits.
     mutations: { retry: false, networkMode: 'always' },
   },
+});
+
+// Back to a window, the data is asked again. A tab and the installed app side
+// by side are both visible all along: going from one to the other is a focus,
+// which React Query alone does not notice.
+focusManager.setEventListener((handleFocus) => {
+  const onFocus = () => handleFocus();
+  window.addEventListener('focus', onFocus);
+  document.addEventListener('visibilitychange', onFocus);
+  return () => {
+    window.removeEventListener('focus', onFocus);
+    document.removeEventListener('visibilitychange', onFocus);
+  };
 });
 
 restoreCache(queryClient);

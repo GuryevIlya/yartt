@@ -552,6 +552,11 @@ when the task arrives. A request that cannot go (a visit, a suggestion)
 fails without a message, since the top line already says there is no
 connection.
 
+The outbox is shared by every window of the browser, a tab and the
+installed app alike. When one window sends it, the others ask for their
+data again. Going back to a window asks for it too, even when both stayed
+on screen side by side.
+
 *Implemented:* `client/hooks/offline.ts` (the offline link, the outbox,
 the saved cache), `client/public/sw.js`, `manifest.webmanifest`.
 

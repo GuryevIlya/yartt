@@ -23,8 +23,10 @@ import { showError, showInfo } from './store.ts';
 /** `employeeId` — who made it; missing in changes queued before it was kept. */
 type Item = { id: string; path: string; input: string; at: number; employeeId?: number | null };
 
+const OUTBOX_KEY = storageKey('yartt-outbox');
+
 const useOutboxStore = create<{ items: Item[] }>()(persist(() => ({ items: [] as Item[] }), {
-  name: storageKey('yartt-outbox'),
+  name: OUTBOX_KEY,
   storage: createJSONStorage(() => localStorage),
 }));
 
@@ -85,6 +87,15 @@ export function offlineLink(): TRPCLink<AppRouter> {
   });
 }
 
+/**
+ * Everything is asked again after changes were sent. A request already on
+ * its way may have left before they arrived: React Query would keep its
+ * answer, so it is cancelled first.
+ */
+function refreshAll(queryClient: QueryClient): void {
+  void queryClient.cancelQueries().then(() => queryClient.invalidateQueries());
+}
+
 let flushing = false;
 
 /**
@@ -137,7 +148,7 @@ async function send(client: TRPCUntypedClient<AppRouter>, queryClient: QueryClie
   }
   if (sent > 0) {
     showInfo(i18n.t('offline.sent', { count: sent }));
-    void queryClient.invalidateQueries();
+    refreshAll(queryClient);
   }
 }
 
@@ -206,6 +217,21 @@ export function startOffline(client: TRPCUntypedClient<AppRouter>, queryClient: 
     }, 1000);
   });
   const tryFlush = () => void flush(client, queryClient);
+  // Another window (a tab, the installed app) sent what waited: what it
+  // changed is stale here too, and the count in the top line is its.
+  window.addEventListener('storage', (event) => {
+    if (event.key !== OUTBOX_KEY) return;
+    const count = (text: string | null) => {
+      try {
+        return (JSON.parse(text ?? '{}') as { state?: { items?: unknown[] } }).state?.items?.length ?? 0;
+      } catch {
+        return 0;
+      }
+    };
+    const sent = count(event.oldValue) > count(event.newValue);
+    void useOutboxStore.persist.rehydrate();
+    if (sent) refreshAll(queryClient);
+  });
   // Signed in again: what waited for them goes now.
   queryClient.getQueryCache().subscribe((event) => {
     const [path] = event.query.queryKey as [string[]?];
