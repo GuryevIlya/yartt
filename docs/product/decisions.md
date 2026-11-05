@@ -2244,3 +2244,36 @@ could copy it anyway.
 *Implemented:* `webhook`, `fail_notification()`, migration `0.6-0.7`;
 `shared/webhook.ts`, `server/services/Webhook.ts`, `server/webhook.ts`,
 `client/components/App/Webhooks.tsx`.
+
+### 111. A public API of its own, with a person's keys
+
+Bots used the interface's API, so documenting it for anyone would have made a
+promise of every procedure the interface needs today. And someone wanting to
+automate their own work, from exporting reports to routine edits, had no way:
+a bot does not see what its manager sees, and decision 49 took personal keys
+away, because a person's key outlived their leaving.
+
+Now `/api/v1` is the list of what is on offer, and `/api/trpc` takes sessions
+only. Each route runs the interface's procedure, so the rules cannot differ.
+Plain JSON; its description is generated from the same schemas that check the
+calls. A language model writes Markdown, so texts may come in it.
+
+A person has keys again (this changes decision 49), under these conditions,
+since a manager's key shows their people's data: nothing is allowed unless
+ticked, reading included; every key has an end date; it stops on dismissal and
+when the identity provider refuses the person, which is what ended the old
+objection. Keys are made only in the interface, so a leaked key cannot make
+another.
+
+A bot keeps its one key and its permissions, which still only narrow its
+relationships; a read-only bot is a real case, and a broken program or a leaked
+key then spoils nothing. The three stay separate: a webhook tells, a person's
+key acts in their name, a bot is a virtual employee.
+
+Shifts, time entries and scores can be read, under a right of their own, but
+not written: a script keeping a timesheet would make the figures mean nothing,
+and a score is a person's judgement. A person's key does not upload files yet.
+
+*Implemented:* `api_key`, `create_api_key()`, `authenticate_api_key()`, migration
+`0.6-0.7`; `server/publicApi.ts`, `server/services/ApiKey.ts`, `shared/apiKey.ts`,
+`client/components/App/ApiKeys.tsx`; `docs/admin/api.md`.

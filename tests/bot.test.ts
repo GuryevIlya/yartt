@@ -16,24 +16,26 @@ describe('bots', () => {
   beforeAll(async () => {
     server = express().use('/api', api).listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
-    url = `http://localhost:${(server.address() as AddressInfo).port}/api/trpc`;
+    url = `http://localhost:${(server.address() as AddressInfo).port}/api`;
   });
   afterAll(() => {
     server.close();
   });
 
-  /** A raw HTTP call as a script would make it: tRPC with superjson's { json } envelope. */
-  async function call(key: string, path: string, input: unknown, method: 'GET' | 'POST' = 'POST') {
-    const headers = { authorization: `Bearer ${key}`, 'content-type': 'application/json' };
-    const response = method === 'GET'
-      ? await fetch(`${url}/${path}?input=${encodeURIComponent(JSON.stringify({ json: input }))}`, { headers })
-      : await fetch(`${url}/${path}`, { method, headers, body: JSON.stringify({ json: input }) });
-    return {
-      status: response.status,
-      body: (await response.json()) as { result?: { data: { json: unknown } }; error?: { json: { message: string } } },
-    };
+  /** A raw HTTP call to the public API, as a script would make it. */
+  async function call(key: string, method: string, path: string, body?: unknown) {
+    const response = await fetch(`${url}/v1${path}`, {
+      method,
+      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const text = await response.text();
+    return { status: response.status, body: (text ? JSON.parse(text) : null) as { error?: { code: string; params?: unknown } } & Record<string, unknown> };
   }
-  const me = async (key: string) => (await call(key, 'Auth.me', undefined, 'GET')).body.result?.data.json;
+  const me = async (key: string) => {
+    const answer = await call(key, 'GET', '/me');
+    return answer.status === 200 ? answer.body : null;
+  };
   const newBot = (permissions: ('task' | 'task.transfer' | 'comment' | 'observers')[] = []) =>
     ({ fullName: 'CI bot', pronoun: null, about: null, permissions, webhookUrl: null });
 
@@ -46,19 +48,20 @@ describe('bots', () => {
 
     const task = await leadApi.Task.create({ tags: [`ci-${lead.id}`] });
     await leadApi.Observer.add({ taskId: task, employeeId: id });
-    const posted = await call(key, 'Comment.create', {
-      taskId: task, html: '<p>Build #512 failed</p>', replyToId: null, files: [], mentionIds: [lead.id], taskIds: [],
-    });
+    const posted = await call(key, 'POST', `/tasks/${task}/comments`, { markdown: '**Build #512** failed', mentionIds: [lead.id] });
     expect(posted.status).toBe(200);
+    expect(JSON.stringify((await leadApi.Comment.list({ taskId: task, filter: 'all', page: 1 })).items)).toContain('<strong>Build #512</strong>');
     expect((await leadApi.MyDay.todo()).map((i) => i.kind)).toContain('mention');
 
     // Without `task` it creates nothing; what only people do it never does; reading is open.
-    const refused = await call(key, 'Task.create', { tags: [`bot-${id}`] });
-    expect([refused.status, refused.body.error?.json.message]).toEqual([403, 'bot_not_permitted']);
-    expect((await call(key, 'Visit.log', { taskId: null })).status).toBe(403);
-    expect((await call(key, 'Employee.setManager', { managerId: null })).status).toBe(403);
-    expect((await call(key, 'Task.get', { id: task }, 'GET')).status).toBe(200);
-    expect((await call('yartt_' + '0'.repeat(64), 'Auth.me', undefined, 'GET')).body.result?.data.json).toBeNull();
+    const refused = await call(key, 'POST', '/tasks', { tags: [`bot-${id}`] });
+    expect([refused.status, refused.body.error?.code]).toEqual([403, 'bot_not_permitted']);
+    expect((await call(key, 'GET', '/days')).status).toBe(403);
+    expect((await call(key, 'POST', '/visits', {})).status).toBe(404);
+    expect((await call(key, 'GET', `/tasks/${task}`)).status).toBe(200);
+    expect(await me('yartt_' + '0'.repeat(64))).toBeNull();
+    // The interface's API takes no key: it is not a promise to anyone outside.
+    expect((await (await fetch(`${url}/trpc/Task.get?input=${encodeURIComponent(JSON.stringify({ json: { id: task } }))}`, { headers: { authorization: `Bearer ${key}` } })).json() as { error?: { json: { message: string } } }).error?.json.message).toBe('unauthorized');
   });
 
   test('only its direct manager changes it; a new key stops the old one', async () => {
@@ -132,10 +135,10 @@ describe('bots', () => {
     const lead = await createEmployee();
     const leadApi = await client(lead.id);
     const { id, key } = await leadApi.Bot.create(newBot(['comment', 'task']));
-    const task = (await call(key, 'Task.create', { tags: [`stats-${id}`] })).body.result?.data.json as number;
-    await call(key, 'Comment.create', { taskId: task, html: '<p>Up</p>', replyToId: null, files: [], mentionIds: [lead.id], taskIds: [] });
-    await call(key, 'Task.transfer', { id: task, ownerId: lead.id }); // no task.transfer: refused
-    await call(key, 'Task.get', { id: task }, 'GET');
+    const task = (await call(key, 'POST', '/tasks', { tags: [`stats-${id}`] })).body as unknown as number;
+    await call(key, 'POST', `/tasks/${task}/comments`, { html: '<p>Up</p>', mentionIds: [lead.id] });
+    await call(key, 'POST', `/tasks/${task}/transfer`, { ownerId: lead.id }); // no task.transfer: refused
+    await call(key, 'GET', `/tasks/${task}`);
 
     const today = new Date().toISOString().slice(0, 10);
     const [stats] = (await leadApi.Bot.stats({ since: today })).filter((b) => b.id === id);
@@ -171,6 +174,66 @@ describe('bots', () => {
     await leadApi.Bot.resetKey({ id });
     await sql`SELECT send_bot_key_reminders()`;
     expect(await told()).toBe(2);
+  });
+
+  describe('a person\'s key', () => {
+    const key = async (id: number, rights: ('tasks.read' | 'tasks.write' | 'comments.write' | 'participants.write' | 'reports.read')[], days: 30 | 90 | 365 = 30) =>
+      (await (await client(id)).ApiKey.create({ name: 'скрипт', rights, days })).key;
+
+    test('it acts in its owner\'s name with only the rights ticked, and shows it is in use', async () => {
+      const me_ = await createEmployee();
+      const api = await client(me_.id);
+      const task = await api.Task.create({ tags: [`key-${me_.id}`] });
+      const reader = await key(me_.id, ['tasks.read']);
+      expect(reader).toMatch(/^yartt_k_[0-9a-f]{64}$/);
+      expect(await me(reader)).toMatchObject({ id: me_.id });
+      expect((await call(reader, 'GET', `/tasks/${task}`)).status).toBe(200);
+      const refused = await call(reader, 'POST', `/tasks/${task}/comments`, { html: '<p>x</p>' });
+      expect([refused.status, refused.body.error?.code]).toEqual([403, 'key_not_permitted']);
+      expect((await call(reader, 'GET', '/days')).status).toBe(403);
+
+      const writer = await key(me_.id, ['tasks.write', 'comments.write']);
+      const made = await call(writer, 'POST', '/tasks', { tags: [`key2-${me_.id}`], markdown: '# Заголовок', deadline: new Date(Date.now() + 86_400_000).toISOString() });
+      expect(made.status).toBe(200);
+      const created = made.body as unknown as number;
+      expect((await api.Task.get({ id: created })).details?.context).toContain('<h1>');
+      expect((await call(writer, 'POST', `/tasks/${created}/close`)).status).toBe(204);
+      expect((await api.ApiKey.list()).find((k) => k.rights.includes('tasks.read'))?.lastUsedAt).toBeInstanceOf(Date);
+      expect((await call(reader, 'GET', '/tasks/999999999')).status).toBe(404);
+      expect((await call(writer, 'POST', '/tasks', { tags: [] })).body.error?.code).toBe('invalid_input');
+
+      // No key makes keys, and the time cannot be written at all.
+      expect((await call(writer, 'POST', '/api-keys', {})).status).toBe(404);
+      expect((await call(writer, 'POST', '/time', {})).status).toBe(404);
+    });
+
+    test('it ends when revoked, expired or when its owner is dismissed; another\'s is out of reach', async () => {
+      const boss = await createEmployee();
+      const dev = await createEmployee({ managerId: boss.id });
+      const api = await client(dev.id);
+      const revoked = await key(dev.id, ['tasks.read']);
+      const [listed] = await api.ApiKey.list();
+      await expect((await client(boss.id)).ApiKey.revoke({ id: listed!.id })).rejects.toMatchObject({ message: 'not_found' });
+      await api.ApiKey.revoke({ id: listed!.id });
+      expect(await me(revoked)).toBeNull();
+
+      const expired = await key(dev.id, ['tasks.read']);
+      await sql`UPDATE api_key SET expires_at = NOW() - INTERVAL '1 minute' WHERE employee_id = ${dev.id} AND revoked_at IS NULL`;
+      expect(await me(expired)).toBeNull();
+      expect(await api.ApiKey.list()).toEqual([]);
+
+      const working = await key(dev.id, ['reports.read']);
+      expect((await call(working, 'GET', '/days')).status).toBe(200);
+      await (await client(boss.id)).Employee.dismiss({ id: dev.id });
+      expect(await me(working)).toBeNull();
+    });
+
+    test('the description of the API needs no key and lists what is on offer', async () => {
+      const response = await fetch(`${url}/v1/openapi.json`);
+      const description = await response.json() as { paths: Record<string, Record<string, { summary: string; 'x-right'?: string }>> };
+      expect(description.paths['/tasks/{id}']?.get?.['x-right']).toBe('tasks.read');
+      expect(Object.keys(description.paths).some((p) => /score|time|work|key|webhook/i.test(p))).toBe(false);
+    });
   });
 
   describe('its webhook', () => {

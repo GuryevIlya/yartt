@@ -31,6 +31,7 @@ export const ERROR_CODES = [
 
   // bots
   'bot_not_permitted',
+  'key_not_permitted',
   'webhook_url_not_allowed',
   'webhook_limit',
 

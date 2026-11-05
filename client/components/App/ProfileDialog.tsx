@@ -19,6 +19,7 @@ import Bots from '../MyDayPage/Bots.tsx';
 import MyTags from './MyTags.tsx';
 import { employeeFilter, employeeOption } from './employeeOption.tsx';
 import Webhooks from './Webhooks.tsx';
+import ApiKeys from './ApiKeys.tsx';
 
 const TIME_ZONES = Intl.supportedValuesOf('timeZone');
 
@@ -36,7 +37,7 @@ export default function (p: { onClose: () => void }) {
 
   const refresh = () => queryClient.invalidateQueries();
   // Who I am, and my tags (colors and weights only I see).
-  const [section, setSection] = useState<'profile' | 'tags' | 'webhooks' | 'bots'>('profile');
+  const [section, setSection] = useState<'profile' | 'tags' | 'webhooks' | 'keys' | 'bots'>('profile');
   // The picture is cropped and scaled in the browser, then uploaded around tRPC.
   const [avatarBusy, setAvatarBusy] = useState(false);
   const changeAvatar = async (action: () => Promise<void>) => {
@@ -82,15 +83,17 @@ export default function (p: { onClose: () => void }) {
   return (
     <Dialog open onClose={p.onClose} fullWidth maxWidth="md" slotProps={{ paper: { sx: { height: 'min(720px, calc(100% - 64px))' } } }}>
       <DialogTitle sx={{ pb: 0 }}>{t('profile.title')}</DialogTitle>
-      <Tabs value={section} onChange={(_, v: 'profile' | 'tags' | 'webhooks' | 'bots') => setSection(v)} sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}>
+      <Tabs value={section} onChange={(_, v: 'profile' | 'tags' | 'webhooks' | 'keys' | 'bots') => setSection(v)} sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}>
         <Tab value="profile" label={t('profile.sectionProfile')} />
         <Tab value="tags" label={t('profile.sectionTags')} />
         <Tab value="webhooks" label={t('profile.sectionWebhooks')} />
+        <Tab value="keys" label={t('profile.sectionKeys')} />
         <Tab value="bots" label={t('profile.sectionBots')} />
       </Tabs>
       <DialogContent>
         {section === 'bots' ? <Box sx={{ pt: 2 }}><Bots bare /></Box>
           : section === 'webhooks' ? <Box sx={{ pt: 2 }}><Webhooks /></Box>
+          : section === 'keys' ? <Box sx={{ pt: 2 }}><ApiKeys /></Box>
           : section === 'tags' ? <Box sx={{ pt: 2 }}><MyTags onOpen={p.onClose} /></Box> : (
         <Stack spacing={3} sx={{ pt: 2 }}>
           <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>

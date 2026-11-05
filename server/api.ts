@@ -4,6 +4,7 @@ import attachments from './attachments.ts';
 import avatars from './avatars.ts';
 import ctx from './ctx.ts';
 import { sql } from './pg.ts';
+import publicApi from './publicApi.ts';
 import sso from './sso.ts';
 import trpc from './trpc/index.ts';
 
@@ -18,6 +19,7 @@ export default Router()
     }
   })
   .use('/trpc', createExpressMiddleware({ router: trpc, createContext: ({ req, res }) => ctx(req, res) }))
+  .use('/v1', publicApi)
   .use('/sso', sso)
   .use('/attachments', attachments)
   .use('/avatars', avatars);

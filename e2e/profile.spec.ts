@@ -77,7 +77,7 @@ test.describe('profile', () => {
       return b && { width: b.width, height: b.height };
     };
     const first = await box();
-    for (const name of ['Теги', 'Вебхуки', 'Боты', 'Профиль']) {
+    for (const name of ['Теги', 'Вебхуки', 'Ключи API', 'Боты', 'Профиль']) {
       await page.getByRole('dialog').getByRole('tab', { name }).click();
       await expect(page.getByRole('dialog').getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
       expect(await box()).toEqual(first);
@@ -96,6 +96,19 @@ test.describe('profile', () => {
     await page.getByRole('option', { name: 'С полным текстом' }).click();
     await expect(item.getByRole('combobox', { name: 'Упоминания' })).toHaveText('С полным текстом');
     await item.getByRole('button', { name: 'Убрать вебхук' }).click();
+    await expect(item).toHaveCount(0);
+  });
+
+  test('API keys: one is made with the rights ticked, shown once, then revoked', async ({ page }) => {
+    await page.getByRole('dialog').getByRole('tab', { name: 'Ключи API' }).click();
+    await expect(page.getByRole('button', { name: 'Создать ключ' })).toBeDisabled();
+    await page.getByLabel('Для чего этот ключ').fill('Выгрузка отчётов');
+    await page.getByRole('checkbox', { name: /Читать смены/ }).check();
+    await page.getByRole('button', { name: 'Создать ключ' }).click();
+    await expect(page.getByText(/^yartt_k_[0-9a-f]{64}$/)).toBeVisible();
+    const item = page.getByRole('region', { name: 'Выгрузка отчётов' });
+    await expect(item.getByText('ещё не использовался', { exact: false })).toBeVisible();
+    await item.getByRole('button', { name: 'Отозвать' }).click();
     await expect(item).toHaveCount(0);
   });
 });

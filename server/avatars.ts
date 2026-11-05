@@ -16,7 +16,7 @@ const TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const AvatarRow = z.object({ value: z.instanceof(Buffer), mime: z.string(), updatedAt: z.date() });
 
 async function employeeId(req: Request, res: Response): Promise<number | null> {
-  const context = await ctx(req, res);
+  const context = await ctx(req, res, { bots: true });
   if (context.employeeId === null) res.status(401).json({ appCode: 'unauthorized' });
   return context.employeeId;
 }

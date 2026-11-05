@@ -16,7 +16,7 @@ const INLINE = /^image\/(png|jpeg|gif|webp|avif)$/;
 
 /** Who asks; a bot uploads only to comment (its `comment` permission). */
 async function employeeId(req: Request, res: Response, upload = false): Promise<number | null> {
-  const context = await ctx(req, res);
+  const context = await ctx(req, res, { bots: true });
   if (context.employeeId === null) {
     res.status(401).json({ appCode: 'unauthorized' });
     return null;

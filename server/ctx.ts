@@ -38,9 +38,13 @@ export type Context = {
   setLoginBrowserCookie: (key: string) => void;
 };
 
-export default async function ctx(req: Request, res: Response): Promise<Context> {
-  // A bot sends its key; a browser has the session cookie.
-  const bearer = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')?.[1] ?? null;
+/**
+ * The tRPC API belongs to the interface: a browser with its session cookie.
+ * Keys go to the public API (publicApi.ts); only files, served apart, still
+ * take a bot's key (`bots`).
+ */
+export default async function ctx(req: Request, res: Response, options: { bots?: boolean } = {}): Promise<Context> {
+  const bearer = options.bots ? /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')?.[1] ?? null : null;
   const cookies = parseCookie(req.headers.cookie ?? '');
   const sessionToken = bearer ? null : cookies[SESSION_COOKIE] ?? null;
   const bot = bearer ? await Bots.authenticate(bearer) : null;

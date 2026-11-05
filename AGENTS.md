@@ -73,7 +73,8 @@ server/
   pg.ts             — `sql` (the postgres library)
   ctx.ts            — tRPC context: the employee from the session cookie
   trpc.ts           — initTRPC: router, procedure, authedProcedure, error format
-  api.ts            — mounts /api/trpc
+  api.ts            — mounts /api/trpc (the interface, sessions only) and /api/v1
+  publicApi.ts      — /api/v1: the public API with keys, a list of routes over the procedures
   trpc/index.ts     — root router; keys are client namespaces (trpc.Employee.list)
   trpc/<Entity>.ts  — an entity router: procedure descriptions only
   services/<Entity>.ts — SQL and business logic

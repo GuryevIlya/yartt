@@ -1,9 +1,20 @@
-# API for bots
+# The public API
 
-A program — a CI pipeline, monitoring, a chat bot — acts in yartt as a
-bot: an employee of its own that owns tasks, comments and is mentioned
-like a person, through the same API the interface uses, with its key
-instead of a browser session. People have no API keys.
+Programs work with yartt through `/api/v1`, with a key. There are three
+independent things, and most jobs need one of them:
+
+- **A webhook** tells a program that something happened. Anyone adds one under
+  **Profile → Webhooks**; a Telegram receiver needs nothing else ([below](#a-persons-webhooks)).
+- **A person's key** lets a program act in that person's name, to automate
+  their own work: anything from exporting reports to routine edits. Made under
+  **Profile → API keys**, with the rights ticked and a lifetime.
+- **A bot** is a virtual employee: it comments, is mentioned and does work,
+  seeing only what it was invited to, never its manager's data. It has one key
+  and one webhook.
+
+The interface's own API (`/api/trpc`) takes no keys and may change with any
+release. `/api/v1` is the promise; its full description, from the same schemas
+that check the calls, is at `/api/v1/openapi.json`, without a key.
 
 ## Create a bot
 
@@ -105,35 +116,37 @@ and confirmation links never come here.
 
 ## Calling the API
 
-The API is tRPC over HTTP at `https://<your yartt>/api/trpc/<Namespace>.<procedure>`,
-JSON with the [superjson](https://github.com/flightcontrolhq/superjson)
-envelope: the input goes inside `{"json": ...}`, the result comes back
-inside `{"result": {"data": {"json": ...}}}`.
-
-- **Queries** — `GET` with `?input=` (URL-encoded JSON); without input,
-  no parameter.
-- **Mutations** — `POST` with the JSON body.
-- **Authorization** — `Authorization: Bearer <key>`.
+JSON over HTTP at `https://<your yartt>/api/v1`, with the key in
+`Authorization: Bearer <key>`. Moments are ISO 8601. Path, query and body are
+one set of fields.
 
 Who am I:
 
 ```sh
-curl -s https://yartt.company.com/api/trpc/Auth.me \
-  -H "Authorization: Bearer $YARTT_KEY"
+curl -s https://yartt.company.com/api/v1/me -H "Authorization: Bearer $YARTT_KEY"
 ```
 
-A comment that mentions someone (task 42, employee 7):
+A comment that mentions someone, in Markdown (`html` works too):
 
 ```sh
-curl -s https://yartt.company.com/api/trpc/Comment.create \
+curl -s https://yartt.company.com/api/v1/tasks/42/comments \
   -H "Authorization: Bearer $YARTT_KEY" -H 'content-type: application/json' \
-  -d '{"json": {"taskId": 42, "html": "<p>Build #512 failed on e2e</p>",
-                "replyToId": null, "files": [], "mentionIds": [7], "taskIds": []}}'
+  -d '{"markdown": "**Build #512** failed on e2e", "mentionIds": [7]}'
 ```
 
-Errors come back with an HTTP status and a stable code in
-`error.json.message` (`no_access`, `not_found`, `bot_not_permitted` —
-403, the bot lacks the permission, ...); the codes are listed in
-`shared/errors.ts`. Every procedure, its input and what it throws are
-described next to it in `server/trpc/<Namespace>.ts`; a mutation a bot
-may call says which permission it needs (`.meta({ bot: ... })`).
+A task's context and comments accept Markdown, which language models write.
+
+A change answers 204 or the new id; a refusal answers with an HTTP status and
+`{"error": {"code": "...", "params": {...}, "issues": [...]}}`: `no_access`,
+`not_found`, `key_not_permitted`, `bot_not_permitted` and the rest of
+`shared/errors.ts`.
+
+What a person's key may do is what its owner may, within the rights ticked:
+reading tasks, writing tasks, comments, participants, and reading shifts, time
+entries and scores (their own and their people's). Writing those three is not
+in the API for anyone: a script keeping a timesheet would make the figures
+mean nothing. Keys, webhooks, profiles and dismissals are not in it either, so
+a leaked key cannot make itself another. A key always ends by its date, and
+stops when its owner revokes it, is dismissed or refused by the identity
+provider. A person's key does not upload files yet; a bot's does, at
+`/api/attachments`.

@@ -10,12 +10,6 @@ it is decided. Proposals wait for a decision in their own section.
 Decided after the first team's meeting about moving in (2026-11-03), all
 in one version, before stage 6 goes on.
 
-- [ ] **A public API of its own, with personal keys.** `/api/v1` takes keys
-  only, `/api/trpc` sessions only. A person has keys with rights and an
-  expiry, gone on dismissal; a bot keeps its one key and permissions.
-  Shifts, time entries and scores are read only, under a right of their
-  own. The reference is generated from the schemas; Markdown is accepted
-  for comments and the context.
 - [ ] **Descriptions of tags.** Anyone describes a tag for themselves and
   the people below them. A task shows the descriptions of its tags along
   its owner's chain, from the top down, the same for everyone in it. One

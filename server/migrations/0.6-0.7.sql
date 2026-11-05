@@ -265,3 +265,95 @@ COMMENT ON FUNCTION fail_notification(BIGINT, TEXT) IS
 'Records a failed attempt to deliver a person''s notification and
 returns when to try again: after 1, 5 and 15 minutes, then every hour;
 NULL — three days have passed since the first failure, it is given up.';
+
+-- A person's keys to the public API (decision 111).
+
+CREATE TABLE api_key (
+    id SERIAL PRIMARY KEY,
+    employee_id INT NOT NULL REFERENCES human(employee_id),
+    name TEXT NOT NULL,
+    hash BYTEA NOT NULL UNIQUE,
+    rights TEXT[] NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    last_used_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+
+    CONSTRAINT chk_api_key_rights CHECK (
+        cardinality(rights) > 0
+        AND rights <@ ARRAY['tasks.read', 'tasks.write', 'comments.write', 'participants.write', 'reports.read']
+    )
+);
+CREATE INDEX idx_api_key_employee ON api_key(employee_id);
+
+COMMENT ON TABLE api_key IS
+'A key a person makes to automate their own work: a program acts in their name
+(decision 111), within what they see and only with the rights ticked. Unlike a
+bot''s key it always ends: a leaked key of a manager shows their people''s data.
+It stops at once when revoked, expired, or when its owner is dismissed or
+refused by the identity provider (authenticate_api_key()). The key itself is
+never stored, only its SHA-256, and it is shown once. A key neither makes keys
+nor reaches the interface''s API: it works only at /api/v1, where writing
+shifts, time entries and scores does not exist.';
+
+COMMENT ON COLUMN api_key.name IS
+'What it is for, in its owner''s words.';
+
+COMMENT ON COLUMN api_key.hash IS
+'SHA-256 of the key.';
+
+COMMENT ON COLUMN api_key.rights IS
+'What it may do (ApiRight in shared/apiKey.ts); nothing else.';
+
+COMMENT ON COLUMN api_key.expires_at IS
+'When it ends by itself.';
+
+COMMENT ON COLUMN api_key.last_used_at IS
+'For its owner to see whether it is still in use; updated at most every five minutes.';
+
+COMMENT ON COLUMN api_key.revoked_at IS
+'When its owner ended it. Rows stay: who had what key is worth knowing later.';
+
+COMMENT ON COLUMN api_key.employee_id IS
+'Whose it is, and in whose name it acts.';
+
+COMMENT ON COLUMN api_key.created_at IS
+'When it was made.';
+
+
+CREATE OR REPLACE FUNCTION create_api_key(p_employee_id INT, p_name TEXT, p_rights TEXT[], p_days INT)
+RETURNS TABLE (id INT, key TEXT) AS $$
+DECLARE
+    v_key TEXT := 'yartt_k_' || encode(gen_random_bytes(32), 'hex');
+    v_id INT;
+BEGIN
+    INSERT INTO api_key (employee_id, name, hash, rights, expires_at)
+    VALUES (p_employee_id, p_name, digest(v_key, 'sha256'), p_rights, NOW() + make_interval(days => p_days))
+    RETURNING api_key.id INTO v_id;
+    RETURN QUERY SELECT v_id, v_key;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION create_api_key(INT, TEXT, TEXT[], INT) IS
+'Makes a key and returns it: the only time it is seen.';
+
+
+CREATE OR REPLACE FUNCTION authenticate_api_key(p_key TEXT)
+RETURNS TABLE (employee_id INT, rights TEXT[]) AS $$
+BEGIN
+    UPDATE api_key k SET last_used_at = NOW()
+     WHERE k.hash = digest(p_key, 'sha256')
+       AND (k.last_used_at IS NULL OR k.last_used_at < NOW() - INTERVAL '5 minutes');
+    RETURN QUERY
+    SELECT k.employee_id, k.rights
+      FROM api_key k
+      JOIN employee e ON e.id = k.employee_id
+      JOIN human h ON h.employee_id = k.employee_id
+     WHERE k.hash = digest(p_key, 'sha256') AND k.revoked_at IS NULL AND k.expires_at > NOW()
+       AND e.dismissed_at IS NULL AND h.idp_blocked_at IS NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION authenticate_api_key(TEXT) IS
+'Whose key it is and what it may do; no row if unknown, revoked, expired, or
+its owner is dismissed or refused by the identity provider.';

@@ -382,12 +382,22 @@ export const helpEn: Help = {
           ],
         },
         {
-          title: 'Set up automation',
+          title: 'Set up a virtual employee',
           steps: [
-            'A bot is an account for builds, monitoring and integrations. Profile → Bots: create one, tick what it may change '
-              + 'and keep its key. The key is shown once.',
-            'A bot works with tasks through the API (say, reports a broken build with a mention) and gets its notifications on its webhook.',
-            'The Bots block shows whether it works: calls by day and refusals.',
+            'A bot is an employee that is a program: it comments, answers mentions and runs tasks of its own. It sees only what it was invited to, never its manager\'s data.',
+            'Profile, "Bots": create a bot, tick what it may change and save its key. The key is shown once.',
+            'For the bot to hear of mentions at once, give it a webhook address in its settings: all its notifications go there.',
+            'The "Bots" block shows whether it works: calls by day and refusals.',
+          ],
+        },
+        {
+          title: 'Automate your own work',
+          steps: [
+            'An API key lets a program act in your name: export reports, make tasks, write comments. No bot is needed.',
+            'Profile, "API keys": say what the key is for, how long it lives and what it may do. Nothing is allowed unless ticked. The key is shown once.',
+            'A key sees what you see, so tick only what is needed. If it leaks, revoke it at once.',
+            'A link to the API description is there too. Comments and contexts may be sent in Markdown.',
+            'Shifts, time entries and scores cannot be written through the API: the figures should show what was done, not what a script did.',
           ],
         },
         {
