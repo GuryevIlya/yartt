@@ -1,4 +1,5 @@
-import { Extension } from '@tiptap/core';
+import { Extension, InputRule, PasteRule, type ExtendedRegExpMatchArray, type Range } from '@tiptap/core';
+import type { EditorState } from '@tiptap/pm/state';
 import { Plugin } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
@@ -50,6 +51,23 @@ export const imageSx = {
   '& img': { maxWidth: '100%', height: 'auto' },
   '& img:not([width])': { maxWidth: `min(100%, ${IMAGE_MAX_WIDTH}px)` },
 };
+/** `[text](https://...)`, as language models and other trackers write a link. */
+const MARKDOWN_LINK = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
+
+function toLink({ state, range, match }: { state: EditorState; range: Range; match: ExtendedRegExpMatchArray }): void {
+  const [, text, href] = match;
+  const link = state.schema.marks.link;
+  if (!text || !href || !link) return;
+  state.tr.replaceWith(range.from, range.to, state.schema.text(text, [link.create({ href })])).removeStoredMark(link);
+}
+
+/** A Markdown link typed or pasted into the text becomes a link. */
+const MarkdownLinks = Extension.create({
+  name: 'markdownLinks',
+  addInputRules: () => [new InputRule({ find: new RegExp(`${MARKDOWN_LINK.source}$`), handler: toLink })],
+  addPasteRules: () => [new PasteRule({ find: new RegExp(MARKDOWN_LINK.source, 'g'), handler: toLink })],
+});
+
 export function richTextExtensions(placeholder?: string) {
   return [
     StarterKit.configure({
@@ -62,6 +80,7 @@ export function richTextExtensions(placeholder?: string) {
     TableHeader,
     TableCell,
     TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right'] }),
+    MarkdownLinks,
     ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
   ];
 }

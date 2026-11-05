@@ -119,6 +119,25 @@ test('Markdown goes into the context as formatted text, a table too', async ({ p
   await expect(shown.getByRole('cell', { name: 'Выгрузка' })).toBeVisible();
 });
 
+test('a Markdown link typed or pasted into the text becomes a link', async ({ page }) => {
+  await signIn(page, 'olga@example.com');
+  await createTask(page, [unique('ссылки')]);
+  await page.locator('#context').getByRole('button', { name: 'Изменить' }).click();
+  const editor = page.locator('#context .ProseMirror[contenteditable="true"]');
+  await editor.click();
+  await page.keyboard.type('См. [релиз](https://example.com/releases/1) и ');
+  await editor.evaluate((element) => {
+    const data = new DataTransfer();
+    data.setData('text/plain', 'вставка [заметки](https://example.com/notes)');
+    element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await page.locator('#context').getByRole('button', { name: 'Сохранить' }).click();
+  const shown = page.locator('#context');
+  await expect(shown.getByRole('link', { name: 'релиз' })).toHaveAttribute('href', 'https://example.com/releases/1');
+  await expect(shown.getByRole('link', { name: 'заметки' })).toHaveAttribute('href', 'https://example.com/notes');
+  await expect(shown).not.toContainText('](');
+});
+
 test('a tag is described in the profile and shown in tasks with it', async ({ page }) => {
   await signIn(page, 'olga@example.com');
   const tag = unique('регламент');
