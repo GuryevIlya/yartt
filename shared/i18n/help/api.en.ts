@@ -4,7 +4,7 @@ import type { apiRu } from './api.ru.ts';
 
 export const apiEn: typeof apiRu = {
   title: 'API and webhooks',
-  intro: 'Programs work with yartt in three ways. They do not depend on each other, and one of them is usually enough.',
+  intro: 'There are three ways to integrate yartt with other applications. They do not depend on each other, and one of them is usually enough.',
   choose: {
     title: 'Which to choose',
     headers: ['Way', 'What for', 'Where to set it up'],
