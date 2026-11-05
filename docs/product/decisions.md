@@ -2368,3 +2368,16 @@ connection loses no work.
 - The guide says exactly this, and no more.
 
 *Implemented:* not yet (roadmap).
+
+### 115. Bots are robots in Russian
+
+"Бот" read two ways. yartt's bot is a program with an employee's place: it
+is invited to tasks, mentioned, answers. But the guide also sends people
+to a Telegram bot for a webhook, and a person's own key lets a program act
+as them, so "бот" was any of the three. The Russian interface and guide now
+say "робот" for yartt's own: short enough for a button, and never taken for
+a person or for someone else's bot. A Telegram bot stays a bot.
+
+The English interface keeps "bot", which is not ambiguous there. As with
+decision 63, the code, the API and `db.sql` keep `bot`: a word does not
+change the schema or anyone's integration.

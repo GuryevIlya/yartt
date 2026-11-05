@@ -16,13 +16,13 @@ test.describe('profile', () => {
   });
 
   test('bots: one is created with what it may do, its key shown once, then replaced', async ({ page }) => {
-    await page.getByRole('dialog').getByRole('tab', { name: 'Боты' }).click();
-    await page.getByRole('button', { name: 'Новый бот' }).click();
-    const form = page.getByRole('dialog', { name: 'Новый бот' });
+    await page.getByRole('dialog').getByRole('tab', { name: 'Роботы' }).click();
+    await page.getByRole('button', { name: 'Новый робот' }).click();
+    const form = page.getByRole('dialog', { name: 'Новый робот' });
     await form.getByLabel('Имя').fill('Мониторинг');
     await form.getByRole('checkbox', { name: /Комментарии/ }).check();
     await form.getByRole('button', { name: 'Создать' }).click();
-    const created = page.getByRole('dialog', { name: 'Бот создан' });
+    const created = page.getByRole('dialog', { name: 'Робот создан' });
     await expect(created.getByText(/^yartt_[0-9a-f]{64}$/)).toBeVisible();
     await created.getByRole('button', { name: 'Закрыть' }).click();
 
@@ -77,7 +77,7 @@ test.describe('profile', () => {
       return b && { width: b.width, height: b.height };
     };
     const first = await box();
-    for (const name of ['Теги', 'Вебхуки', 'Ключи API', 'Боты', 'Профиль']) {
+    for (const name of ['Теги', 'Вебхуки', 'Ключи API', 'Роботы', 'Профиль']) {
       await page.getByRole('dialog').getByRole('tab', { name }).click();
       await expect(page.getByRole('dialog').getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
       expect(await box()).toEqual(first);

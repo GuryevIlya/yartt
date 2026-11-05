@@ -10,7 +10,7 @@ test('the tag summary: the most active rubrics, a tag unfolds into its people, p
   await expect(block.getByRole('row').nth(1)).toBeVisible();
   // What the block shows is under a "?", not in a line of text.
   await block.getByRole('img', { name: 'Пояснение' }).first().hover();
-  await expect(page.getByRole('tooltip')).toContainText('боты не учитываются');
+  await expect(page.getByRole('tooltip')).toContainText('роботы не учитываются');
   await page.mouse.move(0, 0);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
   await block.getByRole('button', { name: '7 дн.' }).click();
@@ -26,7 +26,7 @@ test('the tag summary: the most active rubrics, a tag unfolds into its people, p
   await expect(block.getByText('План по дням')).toBeVisible();
   await expect(block.getByRole('columnheader', { name: /Доля времени/ })).toBeVisible();
   await expect(block.getByRole('cell', { name: 'Павел Орлов', exact: true })).toBeVisible();
-  await expect(block.getByRole('cell', { name: 'CI-бот', exact: true })).toHaveCount(0);
+  await expect(block.getByRole('cell', { name: 'CI-робот', exact: true })).toHaveCount(0);
 
   const search = block.getByRole('combobox');
   for (const tag of ['api', 'документация']) {

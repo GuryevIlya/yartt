@@ -15,7 +15,7 @@ const ru = {
     oleg: { email: 'oleg@example.com', name: 'Олег Смирнов', about: 'Административный отдел' },
     sergey: { email: 'sergey@example.com', name: 'Сергей Волков' },
     anna: { email: 'anna@example.com', name: 'Анна Петрова' },
-    bot: { name: 'CI-бот', about: 'Сборки сайта в GitHub Actions: пишет в задачу, когда сборка упала. Вопросы — Алексею.' },
+    bot: { name: 'CI-робот', about: 'Сборки сайта в GitHub Actions: пишет в задачу, когда сборка упала. Вопросы — Алексею.' },
   },
   tagDescription: '<p>Задачи о сайте компании. Перед выкладкой проверьте, как страница выглядит на телефоне. Тексты согласуем с маркетингом.</p>',
   tags: {

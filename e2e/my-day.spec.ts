@@ -11,7 +11,7 @@ test.describe('My day', () => {
     const todo = page.locator('div.MuiPaper-root').filter({ has: page.getByRole('heading', { name: /Ждёт меня/ }) }).first();
     await expect(todo.getByText('Олег Смирнов просит доступ')).toBeVisible();
     await expect(todo.getByText('Марина Соколова упомянула вас')).toBeVisible(); // her pronoun
-    await expect(todo.getByText('CI-бот упомянул(а) вас')).toBeVisible(); // a bot: no pronoun
+    await expect(todo.getByText('CI-робот упомянул(а) вас')).toBeVisible(); // a bot: no pronoun
     await expect(todo.getByText(/Новые комментарии: \d+, от Павел Орлов/)).toBeVisible();
 
     await todo.getByRole('button', { name: 'Принять' }).click();
@@ -69,7 +69,7 @@ test.describe('My day', () => {
   test('TODO: reply right from My day', async ({ page }) => {
     const item = page.locator('.MuiStack-root').filter({ hasText: 'Сборка #512 упала' }).filter({ has: page.getByRole('button', { name: 'Ответить' }) }).last();
     await item.getByRole('button', { name: 'Ответить' }).click();
-    await expect(page.getByText(/Ответ на комментарий CI-бот/)).toBeVisible();
+    await expect(page.getByText(/Ответ на комментарий CI-робот/)).toBeVisible();
   });
 
   test('current tasks: mine, my team\'s and others, with pages', async ({ page }) => {

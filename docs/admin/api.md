@@ -23,7 +23,7 @@ that check the calls, is at `/api/v1/openapi.json`, without a key.
 ## Create a bot
 
 1. **Create it.** In **Profile → Bots** (or in **Bots** under My team),
-   **New bot**: a name ("CI-бот"), how to speak of it, what it does, and
+   **New bot**: a name ("CI-робот"), how to speak of it, what it does, and
    what it may change. You become its manager. The key is shown once —
    put it into the program's secrets right away.
 2. **Say what it may change.** A bot reads what an employee in its place
@@ -79,7 +79,7 @@ const ok = signature.length === expected.length && timingSafeEqual(Buffer.from(s
 {
   "version": 1,
   "kind": "mention",
-  "to": { "employeeId": 12, "kind": "bot", "email": null, "fullName": "CI-бот", "locale": "ru", "timeZone": "Europe/Moscow" },
+  "to": { "employeeId": 12, "kind": "bot", "email": null, "fullName": "CI-робот", "locale": "ru", "timeZone": "Europe/Moscow" },
   "taskId": 42,
   "data": { "by": 7, "commentId": 3 }
 }

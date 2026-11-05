@@ -178,8 +178,8 @@ test('the guide has contents leading to the API, and the screens that speak of i
   await expect(dialog.getByRole('link', { name: 'Что и в каком виде приходит' })).toHaveAttribute('href', /help#api-webhooks$/);
   await dialog.getByRole('tab', { name: 'Ключи API' }).click();
   await expect(dialog.getByRole('link', { name: /Как пользоваться ключом/ })).toHaveAttribute('href', /help#api-calling$/);
-  await dialog.getByRole('tab', { name: 'Боты' }).click();
-  await expect(dialog.getByRole('link', { name: 'Как завести и настроить бота' })).toHaveAttribute('href', /help#api-bots$/);
+  await dialog.getByRole('tab', { name: 'Роботы' }).click();
+  await expect(dialog.getByRole('link', { name: 'Как завести и настроить робота' })).toHaveAttribute('href', /help#api-bots$/);
 });
 
 test('a participant makes a task of their own, which the task waits for, told when they need one', async ({ page }) => {
