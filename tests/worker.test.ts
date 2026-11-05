@@ -192,10 +192,12 @@ describe('notification delivery', () => {
     }
   });
 
-  test('an address the administrator does not allow is refused', async () => {
+  test('an address the administrator does not allow is refused, naming what is allowed', async () => {
     const api = await client((await createEmployee()).id);
     const levels = Object.fromEntries(WEBHOOK_GROUPS.map((g) => [g, 'event'])) as WebhookLevels;
-    await expect(api.Webhook.create({ url: 'https://evil.example/h', levels })).rejects.toMatchObject({ message: 'webhook_url_not_allowed' });
+    expect(await api.Webhook.allowed()).toEqual({ urls: ['http://localhost/'] });
+    await expect(api.Webhook.create({ url: 'https://evil.example/h', levels }))
+      .rejects.toMatchObject({ message: 'webhook_url_not_allowed', cause: { params: { allowed: 'http://localhost/' } } });
     await expect(api.Webhook.create({ url: 'http://localhost.evil.example/h', levels })).rejects.toMatchObject({ message: 'webhook_url_not_allowed' });
     await expect(api.Webhook.create({ url: 'http://localhost@evil.example/h', levels })).rejects.toMatchObject({ message: 'webhook_url_not_allowed' });
   });

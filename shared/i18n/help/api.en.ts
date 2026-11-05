@@ -100,6 +100,10 @@ export const apiEn: typeof apiRu = {
   webhooks: {
     title: 'What a webhook gets',
     intro: 'For each event yartt POSTs JSON to the address. An answer of 2xx counts as delivered. If the address did not take it, yartt tries again after 1, 5 and 15 minutes and an hour, then stops. Emails come in any case. Sign-in links never go to a webhook.',
+    where: {
+      any: 'On this installation webhooks go to any address outside the company\'s network; addresses inside it are closed.',
+      listed: 'On this installation webhooks go only to addresses starting with: {{allowed}}. The administrator has not allowed others.',
+    },
     levels: {
       title: 'What to send',
       intro: 'For each group of events you choose how much. That decides which fields come:',

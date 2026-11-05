@@ -2,10 +2,20 @@ import { z } from 'zod';
 import { Id } from '#shared/employee.ts';
 import { Webhook, WebhookInput } from '#shared/webhook.ts';
 import * as Webhooks from '../services/Webhook.ts';
+import { allowedWebhookUrls } from '../webhook.ts';
 import { authedProcedure, router } from '../trpc.ts';
 
 // For people only: a bot has one webhook, in its settings.
 export default router({
+  /**
+   * Where webhooks may go on this installation (WEBHOOK_ALLOWED_URLS): the
+   * beginnings of the addresses allowed; empty — anywhere outside the
+   * company's network. For the signed-in only: the list names inner hosts.
+   */
+  allowed: authedProcedure
+    .output(z.object({ urls: z.string().array() }))
+    .query(() => ({ urls: allowedWebhookUrls() })),
+
   /** The signed-in person's webhooks, with their secrets and how the last attempt went. */
   list: authedProcedure
     .output(Webhook.array())

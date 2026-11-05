@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { Bot, BotPermission, BotStats, type BotInput, type BotKey } from '#shared/bot.ts';
 import { AppError } from '../errors.ts';
 import { sql, type Sql } from '../pg.ts';
-import { webhookAllowed } from '../webhook.ts';
+import { notAllowedParams, webhookAllowed } from '../webhook.ts';
 import { untilToday } from './Tags.ts';
 
 const KeyRow = z.object({ botId: z.number(), key: z.string() });
@@ -39,7 +39,7 @@ async function get(viewerId: number, id: number): Promise<Bot> {
 
 /** A person creates a bot under themselves; its key is returned only now. */
 function assertWebhook(input: BotInput): void {
-  if (input.webhookUrl !== null && !webhookAllowed(input.webhookUrl)) throw new AppError('webhook_url_not_allowed');
+  if (input.webhookUrl !== null && !webhookAllowed(input.webhookUrl)) throw new AppError('webhook_url_not_allowed', notAllowedParams());
 }
 
 export async function create(actorId: number, input: BotInput): Promise<BotKey> {

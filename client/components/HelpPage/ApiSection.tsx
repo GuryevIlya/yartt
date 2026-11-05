@@ -1,11 +1,26 @@
 import { Box, Link as MuiLink, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { Help } from '#shared/i18n/help/ru.ts';
 import { url } from '#client/hooks/base.ts';
+import { useTRPC } from '#client/hooks/trpc.ts';
 
 const SUBHEAD = { fontWeight: 600, color: 'text.primary', scrollMarginTop: 72 } as const;
 const MONO = { fontFamily: 'monospace', fontSize: 13 } as const;
+
+/** Where webhooks may go on this installation; nothing for someone not signed in. */
+function WebhookAddresses(p: { where: { any: string; listed: string } }) {
+  const trpc = useTRPC();
+  const allowed = useQuery(trpc.Webhook.allowed.queryOptions(undefined, { retry: false, meta: { quiet: true } }));
+  if (!allowed.data) return null;
+  const urls = allowed.data.urls;
+  return (
+    <Typography variant="body2">
+      {urls.length === 0 ? p.where.any : p.where.listed.replace('{{allowed}}', urls.join(', '))}
+    </Typography>
+  );
+}
 
 function Code(p: { children: string }) {
   return (
@@ -117,6 +132,7 @@ export default function (p: { api: Help['api'] }) {
 
       <Part id="api-webhooks" title={api.webhooks.title}>
         <Typography variant="body2">{api.webhooks.intro}</Typography>
+        <WebhookAddresses where={api.webhooks.where} />
         <Typography variant="body2" sx={{ fontWeight: 600, pt: 1 }}>{api.webhooks.levels.title}</Typography>
         <Typography variant="body2">{api.webhooks.levels.intro}</Typography>
         <Grid label={api.webhooks.levels.title} headers={api.webhooks.levels.headers} rows={api.webhooks.levels.rows.map((r) => [r.name, r.fields])} />

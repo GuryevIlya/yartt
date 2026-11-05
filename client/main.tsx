@@ -37,7 +37,9 @@ const outboxClient = createTRPCUntypedClient<AppRouter>({ links: [http()] });
 // says. A server that is not reached is asked twice more first.
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
+    // A query that may fail by design (for the signed-in only, shown when allowed) says so: meta: { quiet: true }.
     onError: (error, query) => {
+      if (query.meta?.quiet) return;
       if (!(unreachable(error) && (query.state.data !== undefined || !navigator.onLine))) showError(error);
     },
   }),

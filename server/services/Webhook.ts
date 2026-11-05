@@ -6,7 +6,7 @@ import env from '../env.ts';
 import { AppError } from '../errors.ts';
 import { plainText } from '../html.ts';
 import { sql, type Sql } from '../pg.ts';
-import { sendWebhook, webhookAllowed } from '../webhook.ts';
+import { notAllowedParams, sendWebhook, webhookAllowed } from '../webhook.ts';
 import { countDelivery } from './Bot.ts';
 import { renderMail } from './Mail.ts';
 
@@ -24,7 +24,7 @@ export async function list(employeeId: number): Promise<Webhook[]> {
 }
 
 function assertAllowed(url: string): void {
-  if (!webhookAllowed(url)) throw new AppError('webhook_url_not_allowed');
+  if (!webhookAllowed(url)) throw new AppError('webhook_url_not_allowed', notAllowedParams());
 }
 
 export async function create(employeeId: number, input: WebhookInput): Promise<Webhook> {

@@ -1009,7 +1009,7 @@ export const en: Translation = {
     manager_self: 'Nobody can be their own manager.',
     bot_not_permitted: 'The bot may not do this: its manager sets what it may change in its settings.',
     key_not_permitted: 'This key may not do this.',
-    webhook_url_not_allowed: 'Webhooks may not go to this address: the administrator has set it so.',
+    webhook_url_not_allowed: 'Webhooks may not go to this address. The administrator allows only addresses starting with: {{allowed}}',
     webhook_limit: 'You have {{limit}} webhooks, the most allowed. Remove one you do not need.',
     tag_set_taken: 'A task with this set of tags already exists — add a tag to tell them apart.',
     unknown_tag: 'Unknown tag.',

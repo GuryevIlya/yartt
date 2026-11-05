@@ -34,4 +34,11 @@ test.describe('the guide', () => {
     await page.getByRole('button', { name: 'Create a task' }).click();
     await expect(page.getByText(/Press "New task" in the block/)).toBeVisible();
   });
+
+  test('says where webhooks may go on this installation', async ({ page }) => {
+    await signIn(page, 'olga@example.com');
+    await page.goto('/help#api-webhooks');
+    // The test server lists no addresses: anywhere outside the network.
+    await expect(page.getByText('На этой установке вебхуки уходят на любые адреса вне сети компании, а адреса внутри неё закрыты.')).toBeVisible();
+  });
 });

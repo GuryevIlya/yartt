@@ -110,6 +110,12 @@ export function webhookListed(address: URL): boolean {
   });
 }
 
+/** Where webhooks may go, as the administrator listed it; empty — anywhere outside the network. */
+export const allowedWebhookUrls = (): string[] => env.WEBHOOK_ALLOWED_URLS;
+
+/** Refused: the error names what is allowed, so the person can fix the address. */
+export const notAllowedParams = () => ({ allowed: env.WEBHOOK_ALLOWED_URLS.join(', ') });
+
 /** May this address be saved as a webhook? */
 export function webhookAllowed(address: string): boolean {
   return env.WEBHOOK_ALLOWED_URLS.length === 0 || webhookListed(new URL(address));
