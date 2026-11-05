@@ -90,41 +90,41 @@ const Due = z.object({
   secret: z.string().nullable(),
 });
 
-/** Tries again what is due. FOR UPDATE SKIP LOCKED: several workers never take the same one. */
-export async function retryDue(sql_: Sql): Promise<number> {
-  return sql_.begin(async (tx) => {
-    const db = tx as unknown as Sql;
-    const rows = Due.array().parse(await db`
-      SELECT r.id, r.webhook_id, r.bot_id, r.body, r.attempts,
-             COALESCE(w.url, b.webhook_url) AS url, COALESCE(w.secret, b.webhook_secret) AS secret
-        FROM webhook_retry r
-        LEFT JOIN webhook w ON w.id = r.webhook_id
-        LEFT JOIN bot b ON b.employee_id = r.bot_id
-       WHERE r.next_at <= NOW()
-       ORDER BY r.next_at
-       LIMIT 50
-         FOR UPDATE OF r SKIP LOCKED
-    `);
-    for (const row of rows) {
-      let done = row.url === null; // a bot's webhook taken away: nowhere to send it
-      if (!done) {
-        if (row.webhookId !== null) {
-          done = await send(db, { id: row.webhookId, url: row.url!, secret: row.secret! }, row.body);
-        } else {
-          try {
-            await sendWebhook(row.body, { url: row.url!, secret: row.secret ?? '' });
-            done = true;
-          } catch (error) {
-            console.error(`[worker] webhook retry of bot ${row.botId} failed:`, error);
-          }
-          await countDelivery(db, row.botId!, !done);
+/**
+ * Tries again what is due, inside the caller's transaction: a job of the worker
+ * runs in one, under its lock. FOR UPDATE SKIP LOCKED: several workers never take the same one.
+ */
+export async function retryDue(db: Sql): Promise<number> {
+  const rows = Due.array().parse(await db`
+    SELECT r.id, r.webhook_id, r.bot_id, r.body, r.attempts,
+           COALESCE(w.url, b.webhook_url) AS url, COALESCE(w.secret, b.webhook_secret) AS secret
+      FROM webhook_retry r
+      LEFT JOIN webhook w ON w.id = r.webhook_id
+      LEFT JOIN bot b ON b.employee_id = r.bot_id
+     WHERE r.next_at <= NOW()
+     ORDER BY r.next_at
+     LIMIT 50
+       FOR UPDATE OF r SKIP LOCKED
+  `);
+  for (const row of rows) {
+    let done = row.url === null; // a bot's webhook taken away: nowhere to send it
+    if (!done) {
+      if (row.webhookId !== null) {
+        done = await send(db, { id: row.webhookId, url: row.url!, secret: row.secret! }, row.body);
+      } else {
+        try {
+          await sendWebhook(row.body, { url: row.url!, secret: row.secret ?? '' });
+          done = true;
+        } catch (error) {
+          console.error(`[worker] webhook retry of bot ${row.botId} failed:`, error);
         }
+        await countDelivery(db, row.botId!, !done);
       }
-      if (done || row.attempts >= RETRY_MINUTES.length) await db`DELETE FROM webhook_retry WHERE id = ${row.id}`;
-      else await db`UPDATE webhook_retry SET attempts = attempts + 1, next_at = ${nextAt(row.attempts + 1)} WHERE id = ${row.id}`;
     }
-    return rows.length;
-  });
+    if (done || row.attempts >= RETRY_MINUTES.length) await db`DELETE FROM webhook_retry WHERE id = ${row.id}`;
+    else await db`UPDATE webhook_retry SET attempts = attempts + 1, next_at = ${nextAt(row.attempts + 1)} WHERE id = ${row.id}`;
+  }
+  return rows.length;
 }
 
 /** Sends the owner a test: says whether the address takes it. */

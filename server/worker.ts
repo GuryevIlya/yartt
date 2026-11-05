@@ -109,6 +109,11 @@ const JOBS: { name: string; every: number; run: (sql: Sql) => Promise<unknown> }
 ];
 
 // A job runs under an advisory lock: with several instances only one runs it at a time.
+/** Runs the worker's job as the worker does: in a transaction, under its lock. */
+export async function runJobNamed(sql: Sql, name: string): Promise<void> {
+  await runJob(sql, JOBS.find((job) => job.name === name)!);
+}
+
 async function runJob(sql: Sql, job: (typeof JOBS)[number]): Promise<void> {
   await sql.begin(async (tx) => {
     const [lock] = Lock.array().parse(await tx`

@@ -6,8 +6,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Message } from '../server/delivery.ts';
 import env from '../server/env.ts';
 import { sql } from '../server/pg.ts';
-import { retryDue } from '../server/services/Webhook.ts';
-import { deliverNotifications } from '../server/worker.ts';
+import { deliverNotifications, runJobNamed } from '../server/worker.ts';
 import { client, createEmployee } from './helpers.ts';
 
 const sent: (Message & { mail: boolean })[] = [];
@@ -177,14 +176,14 @@ describe('notification delivery', () => {
       answer = 200;
       await sql`UPDATE webhook_retry SET next_at = NOW() WHERE webhook_id = ${webhook.id}`;
       received.length = 0;
-      await retryDue(sql);
+      await runJobNamed(sql, 'webhook_retries');
       expect(received).toHaveLength(1);
       expect((await sql`SELECT 1 FROM webhook_retry WHERE webhook_id = ${webhook.id}`).length).toBe(0);
       expect((await api.Webhook.list()).find((w: { id: number }) => w.id === webhook.id)?.lastError).toBeNull();
       // After the last attempt it is dropped.
       answer = 500;
       await sql`INSERT INTO webhook_retry (webhook_id, body, attempts, next_at) VALUES (${webhook.id}, '{}', 4, NOW())`;
-      await retryDue(sql);
+      await runJobNamed(sql, 'webhook_retries');
       expect((await sql`SELECT 1 FROM webhook_retry WHERE webhook_id = ${webhook.id}`).length).toBe(0);
       // Someone else's webhook is out of reach.
       await expect(otherApi.Webhook.remove({ id: webhook.id })).rejects.toMatchObject({ message: 'not_found' });
