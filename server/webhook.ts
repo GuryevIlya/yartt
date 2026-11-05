@@ -74,7 +74,7 @@ const publicOnly: LookupFunction = (hostname, options, callback) => {
 function post(url: URL, headers: Record<string, string>, body: string, anywhere: boolean): Promise<number> {
   return new Promise((resolve, reject) => {
     const host = url.hostname.replace(/^\[|\]$/g, '');
-    const allowed = anywhere || env.BOT_WEBHOOK_INTERNAL_HOSTS.includes(host.toLowerCase());
+    const allowed = anywhere;
     if (!allowed && isIP(host) && isPrivateAddress(host)) {
       reject(new PrivateAddressError(`${host} is inside the network`));
       return;
@@ -94,32 +94,42 @@ function post(url: URL, headers: Record<string, string>, body: string, anywhere:
   });
 }
 
-// People's messages go to the company's webhook (WEBHOOK_URL): the delivery
-// channel (email, Telegram, ...) and the text in the recipient's language
-// are up to its receiver; the administrator sets it, so it may be inside.
-// A bot's go to its own (bot.webhook_url), signed with its own secret, and
-// only outside the company's network unless its host is listed in
-// BOT_WEBHOOK_INTERNAL_HOSTS. Without WEBHOOK_URL a person's message is
-// logged (development mode).
-export async function sendWebhook(message: WebhookMessage, target?: WebhookTarget): Promise<void> {
-  const body = JSON.stringify({ version: WEBHOOK_VERSION, ...message });
-  const to = target ?? (env.WEBHOOK_URL ? { url: env.WEBHOOK_URL, secret: env.WEBHOOK_SECRET ?? '' } : null);
+/**
+ * May a webhook go there? With WEBHOOK_ALLOWED_URLS only to what it lists,
+ * inside the network too: host and port as written (any port if none is) and
+ * the path from its start, so "corp.local.evil.com" or "corp.local@evil.com"
+ * never pass for "corp.local". Without it, anywhere outside the network, which
+ * is checked at the connection.
+ */
+export function webhookListed(address: URL): boolean {
+  return env.WEBHOOK_ALLOWED_URLS.some((allowed) => {
+    const prefix = new URL(allowed);
+    return prefix.protocol === address.protocol && prefix.hostname === address.hostname
+      && (prefix.port === '' || prefix.port === address.port)
+      && address.pathname.startsWith(prefix.pathname) && address.username === '' && address.password === '';
+  });
+}
 
-  if (!to) {
-    console.log(`[webhook] ${body}`);
-    return;
-  }
+/** May this address be saved as a webhook? */
+export function webhookAllowed(address: string): boolean {
+  return env.WEBHOOK_ALLOWED_URLS.length === 0 || webhookListed(new URL(address));
+}
 
-  // The moment is signed with the body: a receiver refuses an old one, so a
-  // request caught on the way cannot be sent to it again later.
+/**
+ * POSTs a signed body: a bot's message to its webhook, or a person's to theirs.
+ * The moment is signed with the body: a receiver refuses an old one, so a
+ * request caught on the way cannot be sent to it again later.
+ */
+export async function sendWebhook(body: string, to: WebhookTarget): Promise<void> {
+  const url = new URL(to.url);
+  const listed = webhookListed(url);
+  if (env.WEBHOOK_ALLOWED_URLS.length > 0 && !listed) throw new Error(`${url.host} is not among the allowed webhook addresses`);
   const timestamp = String(Math.floor(Date.now() / 1000));
   const signature = createHmac('sha256', to.secret).update(`${timestamp}.${body}`).digest('hex');
-  const status = await post(new URL(to.url), {
+  const status = await post(url, {
     'content-type': 'application/json',
     'x-yartt-timestamp': timestamp,
     'x-yartt-signature': `sha256=${signature}`,
-  }, body, target === undefined);
-  if (status < 200 || status >= 300) {
-    throw new Error(`Webhook responded with ${status}`);
-  }
+  }, body, listed);
+  if (status < 200 || status >= 300) throw new Error(`Webhook responded with ${status}`);
 }

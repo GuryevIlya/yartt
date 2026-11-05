@@ -10,9 +10,8 @@ export default defineConfig({
     env: {
       PUBLIC_URL: 'http://yartt.test',
       COOKIE_SECURE: 'false',
-      WEBHOOK_URL: '',
       // Bots' webhooks in the tests listen on this machine.
-      BOT_WEBHOOK_INTERNAL_HOSTS: 'localhost',
+      WEBHOOK_ALLOWED_URLS: 'http://localhost/',
     },
   },
 });

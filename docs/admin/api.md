@@ -71,10 +71,37 @@ const ok = signature.length === expected.length && timingSafeEqual(Buffer.from(s
 ```
 
 `kind` and `data` are the notification and its payload
-(`shared/notification.ts`); `version` changes when the envelope does.
-The company's webhook (`WEBHOOK_URL`) gets people's notifications in the
-same envelope. A bot's webhook gets one attempt per notification: if it
-is down, the notification stays only in the bot's bell.
+(`shared/notification.ts`); `version` changes when the envelope does. A bot's
+webhook gets one attempt per notification: if it is down, the notification
+stays only in the bot's bell. Where webhooks may go: `WEBHOOK_ALLOWED_URLS`
+([install](install.md)).
+
+## A person's webhooks
+
+Anyone adds webhooks under **Profile → Webhooks**, no bot and no key needed:
+a receiver gives a person an address with their id in it, they paste it and
+choose for each group of events how much goes there. Signed like a bot's, with
+the secret shown next to it; a receiver may rely on the address being secret
+instead. One attempt per notification; how the last one went is shown there.
+
+```json
+{
+  "version": 2,
+  "kind": "mention",
+  "to": { "employeeId": 12 },
+  "taskId": 42,
+  "url": "https://yartt.company.com/tasks/42",
+  "subject": "…",
+  "text": "…",
+  "comment": "…",
+  "data": { "kind": "mention", "by": 7, "commentId": 3 }
+}
+```
+
+`event` sends up to `url`, `title` adds `subject` (the task's title in the
+person's language), `text` adds the rest: the message as in the email, the
+comment's text and the payload. `kind: "test"` is the "Test" button. Sign-in
+and confirmation links never come here.
 
 ## Calling the API
 

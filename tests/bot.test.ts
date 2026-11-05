@@ -5,6 +5,7 @@ import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import api from '../server/api.ts';
 import { sql } from '../server/pg.ts';
+import env from '../server/env.ts';
 import { isPrivateAddress } from '../server/webhook.ts';
 import { deliverNotifications } from '../server/worker.ts';
 import { client, createEmployee } from './helpers.ts';
@@ -70,8 +71,8 @@ describe('bots', () => {
 
     await expect((await client(stranger.id)).Bot.update({ id, ...newBot(['task']) })).rejects.toMatchObject({ message: 'not_manager' });
     await expect((await client(above.id)).Bot.resetKey({ id })).rejects.toMatchObject({ message: 'not_manager' });
-    expect(await leadApi.Bot.update({ id, ...newBot(['task', 'task', 'comment']), webhookUrl: 'https://ci.example.com/hook' }))
-      .toMatchObject({ permissions: ['task', 'comment'], webhookUrl: 'https://ci.example.com/hook' });
+    expect(await leadApi.Bot.update({ id, ...newBot(['task', 'task', 'comment']), webhookUrl: 'http://localhost/hook' }))
+      .toMatchObject({ permissions: ['task', 'comment'], webhookUrl: 'http://localhost/hook' });
 
     // Managers above see it, without its webhook secret; strangers do not see it.
     expect((await (await client(above.id)).Bot.list()).find((b) => b.id === id)).toMatchObject({ webhookSecret: null });
@@ -233,12 +234,15 @@ describe('bots', () => {
         const port = (hook.address() as AddressInfo).port;
         const lead = await createEmployee();
         const leadApi = await client(lead.id);
-        // Listed (BOT_WEBHOOK_INTERNAL_HOSTS=localhost in the tests): reached.
+        // Listed (WEBHOOK_ALLOWED_URLS=http://localhost/ in the tests): reached.
         const listed = await leadApi.Bot.create({ ...newBot(), webhookUrl: `http://localhost:${port}/hook` });
-        // The same machine by its address: refused, and counted as a failed delivery.
-        const inside = await leadApi.Bot.create({ ...newBot(), webhookUrl: `http://127.0.0.1:${port}/hook` });
-        const task = await leadApi.Task.create({ tags: [`inside-${inside.id}`] });
+        const task = await leadApi.Task.create({ tags: [`inside-${listed.id}`] });
         await leadApi.Observer.add({ taskId: task, employeeId: listed.id });
+        await deliverNotifications(sql);
+        expect(hits).toBe(1);
+        // Nothing listed: outside the network only. Refused, and counted as a failed delivery.
+        env.WEBHOOK_ALLOWED_URLS = [];
+        const inside = await leadApi.Bot.create({ ...newBot(), webhookUrl: `http://127.0.0.1:${port}/hook` });
         await leadApi.Observer.add({ taskId: task, employeeId: inside.id });
         await deliverNotifications(sql);
         expect(hits).toBe(1);
@@ -246,6 +250,7 @@ describe('bots', () => {
         const stats = await leadApi.Bot.stats({ since: today });
         expect(stats.find((b) => b.id === inside.id)).toMatchObject({ deliveries: 1, failedDeliveries: 1 });
       } finally {
+        env.WEBHOOK_ALLOWED_URLS = ['http://localhost/'];
         hook.close();
       }
     });

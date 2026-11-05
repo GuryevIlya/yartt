@@ -124,6 +124,58 @@ dependent tasks are notified.
 The row outlives closing: waiting is shown while both tasks are open, after
 that under "Related" (decision 107), and reopening brings it back.';
 
+
+COMMENT ON COLUMN notification.payload IS
+'JSONB context. Contains kind:
+  comment | mention | task_mention | remind | access_request |
+  access_opened | access_closed | finished_at_change | dependency_added |
+  dependency_done | waiter_closed | waits_added |
+  owner_change | owner_handed |
+  score | invite | welcome | new_report | weekly_digest | bot_key_old.
+Payload keys are camelCase (employeeId, dependencyId, ...).
+A copy for an absent employee''s manager has for = the recipient id.';
+
+-- A person's own webhooks (decision 110). The company's WEBHOOK_URL is gone, so
+-- a webhook no longer fails a person's notification: only the email is tried again.
+
+CREATE TABLE webhook (
+    id SERIAL PRIMARY KEY,
+    employee_id INT NOT NULL REFERENCES human(employee_id),
+    url TEXT NOT NULL,
+    secret TEXT NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+    levels JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_at TIMESTAMPTZ,
+    last_error TEXT
+);
+CREATE INDEX idx_webhook_employee ON webhook(employee_id);
+
+
+COMMENT ON TABLE webhook IS
+'A place a person sends their notifications to, besides the email and the
+bell: a receiver for Telegram gives them an address, they paste it (decision
+110). Each sees only what its owner is notified of. Sign-in and confirmation
+links never come here. One attempt per notification: it is someone''s program,
+and may be down for days. Where they may go is the administrator''s
+(WEBHOOK_ALLOWED_URLS); by default only outside the company''s network, so
+nobody can make the server call inside it. A bot has its own (bot.webhook_url).';
+
+COMMENT ON COLUMN webhook.employee_id IS
+'Whose it is: only they see and change it.';
+COMMENT ON COLUMN webhook.url IS
+'Where to POST. It may carry the receiver''s id for the person, so it is secret.';
+COMMENT ON COLUMN webhook.secret IS
+'Signs every body (HMAC-SHA256), for a receiver that checks.';
+COMMENT ON COLUMN webhook.levels IS
+'For each group of events (WebhookLevels in shared/webhook.ts): off, event
+(that it happened, with a link), title, text.';
+COMMENT ON COLUMN webhook.created_at IS
+'When it was added.';
+COMMENT ON COLUMN webhook.last_at IS
+'The last attempt.';
+COMMENT ON COLUMN webhook.last_error IS
+'What the last attempt failed with; NULL — it went through, or none yet.';
+
 COMMENT ON TABLE notification IS
 'Notification queue. Not an inbox.
 Created only through notify(), which handles absence and dismissal.
@@ -166,17 +218,50 @@ RULES:
 If the recipient is away, a copy goes to their manager (recursively).
 Dismissed employees get no notifications.
 
-Delivery: an email in the employee.locale language (SMTP_URL) and/or the
-outgoing webhook (WEBHOOK_URL), whose receiver picks other channels
-(Telegram, Slack, ...); a bot gets its own webhook only.';
+Delivery: an email in the employee.locale language (SMTP_URL), and whatever
+webhooks the person set up (webhook); a bot gets its own webhook only.';
 
-COMMENT ON COLUMN notification.payload IS
-'JSONB context. Contains kind:
-  comment | mention | task_mention | remind | access_request |
-  access_opened | access_closed | finished_at_change | dependency_added |
-  dependency_done | waiter_closed | waits_added |
-  owner_change | owner_handed |
-  score | invite | welcome | new_report | weekly_digest | bot_key_old.
-Payload keys are camelCase (employeeId, dependencyId, ...).
-A copy for an absent employee''s manager has for = the recipient id.';
+COMMENT ON TABLE notification_failure IS
+'A person''s notification that could not be delivered: the mail server
+refused it (a mailbox deleted, a full one).
+It waits here for its next attempt while the queue goes on: one broken
+address never holds the others. Attempts after 1, 5 and 15 minutes, then
+every hour, for three days (fail_notification()); then it is given up
+and stays for the administrator to see (node server/admin.ts
+deliveries). Delivered at last, the row goes. A webhook is not here: it
+gets one attempt, a failure is noted for its owner (webhook.last_error,
+bot_usage).';
 
+ALTER TABLE notification_failure DROP COLUMN mailed;
+
+DROP FUNCTION fail_notification(BIGINT, TEXT, BOOLEAN);
+CREATE OR REPLACE FUNCTION fail_notification(p_id BIGINT, p_error TEXT)
+RETURNS TIMESTAMPTZ AS $$
+DECLARE
+    v_attempts INT;
+    v_first TIMESTAMPTZ;
+    v_next TIMESTAMPTZ;
+BEGIN
+    INSERT INTO notification_failure AS f (notification_id, attempts, error)
+    VALUES (p_id, 1, p_error)
+    ON CONFLICT (notification_id) DO UPDATE
+       SET attempts = f.attempts + 1, last_failed_at = NOW(),
+           error = EXCLUDED.error
+    RETURNING attempts, first_failed_at INTO v_attempts, v_first;
+
+    v_next := NOW() + CASE v_attempts WHEN 1 THEN INTERVAL '1 minute'
+                                      WHEN 2 THEN INTERVAL '5 minutes'
+                                      WHEN 3 THEN INTERVAL '15 minutes'
+                                      ELSE INTERVAL '1 hour' END;
+    IF v_next > v_first + INTERVAL '3 days' THEN
+        v_next := NULL;
+    END IF;
+    UPDATE notification_failure SET next_attempt_at = v_next WHERE notification_id = p_id;
+    RETURN v_next;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION fail_notification(BIGINT, TEXT) IS
+'Records a failed attempt to deliver a person''s notification and
+returns when to try again: after 1, 5 and 15 minutes, then every hour;
+NULL — three days have passed since the first failure, it is given up.';

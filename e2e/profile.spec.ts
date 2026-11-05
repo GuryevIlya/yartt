@@ -77,10 +77,25 @@ test.describe('profile', () => {
       return b && { width: b.width, height: b.height };
     };
     const first = await box();
-    for (const name of ['Теги', 'Боты', 'Профиль']) {
+    for (const name of ['Теги', 'Вебхуки', 'Боты', 'Профиль']) {
       await page.getByRole('dialog').getByRole('tab', { name }).click();
       await expect(page.getByRole('dialog').getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
       expect(await box()).toEqual(first);
     }
+  });
+
+  test('webhooks: an address is added with a level for each group, what the last attempt did is said', async ({ page }) => {
+    await page.getByRole('dialog').getByRole('tab', { name: 'Вебхуки' }).click();
+    await page.getByLabel('Адрес вебхука').fill('http://127.0.0.1:9/hook');
+    await page.getByRole('button', { name: 'Добавить вебхук' }).click();
+    const item = page.getByRole('region', { name: 'http://127.0.0.1:9/hook' });
+    await expect(item.getByText('Ещё ничего не отправлялось')).toBeVisible();
+    await item.getByRole('button', { name: 'Проверить' }).click();
+    await expect(item.getByText(/Последняя отправка не прошла/)).toBeVisible();
+    await item.getByRole('combobox', { name: 'Упоминания' }).click();
+    await page.getByRole('option', { name: 'С полным текстом' }).click();
+    await expect(item.getByRole('combobox', { name: 'Упоминания' })).toHaveText('С полным текстом');
+    await item.getByRole('button', { name: 'Убрать вебхук' }).click();
+    await expect(item).toHaveCount(0);
   });
 });

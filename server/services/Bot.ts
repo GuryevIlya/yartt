@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Bot, BotPermission, BotStats, type BotInput, type BotKey } from '#shared/bot.ts';
 import { AppError } from '../errors.ts';
 import { sql, type Sql } from '../pg.ts';
+import { webhookAllowed } from '../webhook.ts';
 import { untilToday } from './Tags.ts';
 
 const KeyRow = z.object({ botId: z.number(), key: z.string() });
@@ -37,7 +38,12 @@ async function get(viewerId: number, id: number): Promise<Bot> {
 }
 
 /** A person creates a bot under themselves; its key is returned only now. */
+function assertWebhook(input: BotInput): void {
+  if (input.webhookUrl !== null && !webhookAllowed(input.webhookUrl)) throw new AppError('webhook_url_not_allowed');
+}
+
 export async function create(actorId: number, input: BotInput): Promise<BotKey> {
+  assertWebhook(input);
   return sql.begin(async (tx) => {
     const [row] = KeyRow.array().parse(await tx`SELECT bot_id, key FROM create_bot(${actorId}, ${input.fullName})`);
     await tx`
@@ -54,6 +60,7 @@ export async function create(actorId: number, input: BotInput): Promise<BotKey> 
 
 /** Its direct manager changes it (check_bot_manager). */
 export async function update(actorId: number, id: number, input: BotInput): Promise<Bot> {
+  assertWebhook(input);
   await sql.begin(async (tx) => {
     await tx`SELECT check_bot_manager(${id}, ${actorId})`;
     await tx`

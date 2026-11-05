@@ -81,7 +81,7 @@ persona goal it serves. Status: **now** — stage one, **next** — stage two,
 | Notifications and sign-in links by email, in each person's language | everyone: works right after installation | now (done) |
 | Only the company's mail domains (`EMAIL_DOMAINS`); someone with another address signs in only to change it, and is asked by mail once a day | the company: the tracker on its own addresses, nobody locked out when it is turned on | now (done) |
 | Sign-in through the company's identity provider (OIDC: Entra, Google, Okta, Keycloak): the only way in, people created on first sign-in; a session lasts a day; every day the provider is asked, and someone it refuses is out, bots included | the company: one account, one switch to cut someone off | now (done) |
-| An extra webhook channel (Telegram, Slack, ...) | Pavel: be reached where he already is | now (done) |
+| A person's own webhooks (Telegram, Slack, ...): how much goes there for each group of events | Pavel: be reached where he already is | now (done) |
 | Visits are logged: who opened my task, when I opened My day | Marina: see that her task was looked at; Pavel: shift suggested from activity | now (in the database) |
 | While someone is away, their notifications also go to their manager | Marina: nothing waits for a vacation | now (done) |
 | Personal reminders on a task | Pavel: come back at the right time | now (done) |

@@ -15,13 +15,11 @@ const EnvSchema = z.object({
   // Email: smtp://user:password@host:587 or smtps://user:password@host:465.
   SMTP_URL: z.url().optional().or(z.literal('').transform(() => undefined)),
   MAIL_FROM: z.string().optional(),
-  // Optional extra channel for other messengers.
-  WEBHOOK_URL: z.url().optional().or(z.literal('').transform(() => undefined)),
-  WEBHOOK_SECRET: z.string().optional(),
-  // A bot's own webhook reaches only outside addresses, except these hosts
-  // inside the company's network (comma-separated, e.g. ci.corp.local).
-  BOT_WEBHOOK_INTERNAL_HOSTS: z.string().optional()
-    .transform((value) => (value ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean)),
+  // Where webhooks may go, comma-separated beginnings of addresses
+  // (https://hooks.corp.local/). Empty: only outside the company's network.
+  WEBHOOK_ALLOWED_URLS: z.string().optional()
+    .transform((value) => (value ?? '').split(',').map((u) => u.trim()).filter(Boolean))
+    .pipe(z.url({ protocol: /^https?$/ }).array()),
   COOKIE_SECURE: z.stringbool().default(true),
   CLIENT_DIST: z.string().optional(),
   FIRST_EMPLOYEE_EMAIL: z.email().optional(),
@@ -88,10 +86,6 @@ if (result.data.OIDC_ISSUER && result.data.DEMO_DATA) {
 }
 if (result.data.S3_BUCKET && (!result.data.S3_ACCESS_KEY_ID || !result.data.S3_SECRET_ACCESS_KEY)) {
   console.error('Invalid configuration: S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are required with S3_BUCKET');
-  process.exit(1);
-}
-if (result.data.WEBHOOK_URL && !result.data.WEBHOOK_SECRET) {
-  console.error('Invalid configuration: WEBHOOK_SECRET is required with WEBHOOK_URL');
   process.exit(1);
 }
 

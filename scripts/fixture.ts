@@ -70,7 +70,6 @@ try {
       DATABASE_URL: url.toString(),
       PUBLIC_URL: 'http://localhost:3000',
       SMTP_URL: '',
-      WEBHOOK_URL: '',
     };
     const seed = spawnSync(process.execPath, [join(root, 'scripts', 'seed.ts')], { env, stdio: ['ignore', 'ignore', 'inherit'] });
     if (seed.status !== 0) throw new Error('The seed failed');

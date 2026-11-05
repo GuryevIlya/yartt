@@ -5,6 +5,7 @@ import { refreshDemo } from './demo.ts';
 import { outsideDomains } from './domains.ts';
 import * as Attachments from './services/Attachment.ts';
 import * as Bots from './services/Bot.ts';
+import * as Webhooks from './services/Webhook.ts';
 import { checkPeople } from './sso.ts';
 import { deliver } from './delivery.ts';
 import env from './env.ts';
@@ -126,8 +127,6 @@ const PendingNotification = z.object({
   webhookSecret: z.string().nullable(),
   /** Asked to change an address outside the domains within the last day. */
   toldToday: z.boolean(),
-  /** An earlier attempt sent the email, the webhook failed: only the webhook now. */
-  mailed: z.boolean(),
   fullName: z.string(),
   // An unsupported language falls back to the default one.
   locale: Locale.catch('ru'),
@@ -138,16 +137,13 @@ const NextAttempt = z.object({ next: z.date().nullable() });
 
 const BATCH_SIZE = 20;
 
-/** The email went before the webhook failed (DeliveryError in delivery.ts). */
-const mailedBefore = (error: unknown) => typeof error === 'object' && error !== null && 'mailed' in error && error.mailed === true;
-
 // Delivers notifications (email and/or webhook) and returns how many were
 // processed. FOR UPDATE SKIP LOCKED: several workers never take the same
 // notification. A person's notification that fails waits aside for its
 // next attempt (notification_failure, fail_notification() in db.sql) and
-// the queue goes on: one broken address never holds the others. A bot's
-// webhook is someone's program and may be down for days: it gets one
-// attempt, a failure is logged and passed over. A payload that does not
+// the queue goes on: one broken address never holds the others. A webhook
+// is someone's program and may be down for days: it gets one attempt, a
+// failure is noted where its owner sees it and passed over. A payload that does not
 // parse is logged and skipped, so it cannot block the queue. A deadline
 // change is held until the deadline settles (deadline_settles() in db.sql).
 // The demo's people are made up: there nothing goes out, the queue is only
@@ -161,8 +157,7 @@ export async function deliverNotifications(sql: Sql): Promise<number> {
     const rows = PendingNotification.array().parse(await tx`
       SELECT n.id, n.employee_id, n.task_id, n.payload, e.kind, e.email, e.dismissed_at IS NOT NULL AS dismissed,
              e.full_name, e.locale, e.time_zone, b.webhook_url, b.webhook_secret,
-             COALESCE(h.outside_domains_told_at > NOW() - INTERVAL '1 day', FALSE) AS told_today,
-             COALESCE(f.mailed, FALSE) AS mailed
+             COALESCE(h.outside_domains_told_at > NOW() - INTERVAL '1 day', FALSE) AS told_today
         FROM notification n
         JOIN employee e ON e.id = n.employee_id
         LEFT JOIN bot b ON b.employee_id = e.id
@@ -195,14 +190,15 @@ export async function deliverNotifications(sql: Sql): Promise<number> {
             await tx`UPDATE human SET outside_domains_told_at = NOW() WHERE employee_id = ${row.employeeId}`;
             for (const other of rows) if (other.employeeId === row.employeeId) other.toldToday = true;
           }
-          await deliver({ to, taskId: row.taskId, payload: payload.data }, { mail: !outside && !row.mailed });
+          await deliver({ to, taskId: row.taskId, payload: payload.data }, { mail: !outside });
+          if (row.kind === 'human') await Webhooks.deliver(tx as unknown as Sql, to, row.taskId, payload.data);
           if (webhook) await Bots.countDelivery(tx as unknown as Sql, row.employeeId, false);
           await tx`DELETE FROM notification_failure WHERE notification_id = ${row.id}`;
         } catch (error) {
           if (row.kind === 'human') {
             const reason = error instanceof Error ? error.message : String(error);
             const [attempt] = NextAttempt.array().parse(await tx`
-              SELECT fail_notification(${row.id}, ${reason.slice(0, 1000)}, ${mailedBefore(error)}) AS next
+              SELECT fail_notification(${row.id}, ${reason.slice(0, 1000)}) AS next
             `);
             console.error(attempt?.next
               ? `[worker] notification ${row.id} delivery failed, next attempt at ${attempt.next.toISOString()}:`

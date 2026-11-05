@@ -74,24 +74,13 @@ A new major version can be reached only from the last minor one: for
 example, 1.2 → 1.4 → 2.0 (upgrade to the latest 1.x first). The schema
 version history is in the `schema_version` table.
 
-### Webhook (optional)
+### Webhooks (optional)
 
-For channels other than email, every message (sign-in links, invites,
-notifications) can also be sent as a POST request to `WEBHOOK_URL`:
-
-```json
-{
-  "kind": "login",
-  "to": { "employeeId": 1, "email": "a@b.c", "fullName": "…", "locale": "ru" },
-  "taskId": null,
-  "data": { "url": "https://…/login/…" }
-}
-```
-
-The `x-yartt-signature: sha256=<hex>` header is the HMAC-SHA256 of the body
-with `WEBHOOK_SECRET`. The receiver picks the channel (email, Telegram, …)
-and writes the text in the `to.locale` language. A non-2xx response keeps
-the notification in the queue, and it is retried.
+A person sends their notifications to another program by themselves: a
+receiver for Telegram, say, gives them an address, and they paste it under
+**Profile → Webhooks**, choosing how much goes there for each group of events.
+Emails keep coming. `WEBHOOK_ALLOWED_URLS` says where webhooks may go; empty,
+anywhere outside the company's network. Details: [docs/admin/api.md](docs/admin/api.md).
 
 ### Scaling
 
@@ -109,7 +98,7 @@ cp .env.example .env   # set DATABASE_URL
 npm run dev            # server :3000 + client :5173
 ```
 
-Without `SMTP_URL` and `WEBHOOK_URL` messages are written to the server
+Without `SMTP_URL` messages are written to the server
 log — take the sign-in link from there. Or `npm run seed -- --reset` and
 `DEMO_DATA=ru` (or `en`) in `.env`: the demo company, and no sign-in.
 

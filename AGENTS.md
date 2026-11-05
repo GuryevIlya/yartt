@@ -81,7 +81,7 @@ server/
   html.ts           — sanitizes rich text (comments, context) to an allow-list
   attachments.ts    — /api/attachments: raw upload and download, outside tRPC
   storage.ts        — files in an S3-compatible object storage (S3_BUCKET), else in PostgreSQL
-  delivery.ts       — every outgoing message: email (mail.ts) and/or webhook (webhook.ts)
+  delivery.ts       — every outgoing message: email (mail.ts), a bot's webhook (webhook.ts)
   services/Mail.ts  — renders an email in the recipient's language
   migrate.ts, migrations/, bootstrap.ts, worker.ts
   admin.ts          — installation administrator commands (dismiss with an heir), outside the API
@@ -206,8 +206,10 @@ a `matchPath` in `client/components/App.tsx`.
   `FOR UPDATE SKIP LOCKED`, every cron job runs under an advisory lock.
 - Every outgoing message (notifications, sign-in links, invites) goes
   through `deliver()`: an email in the recipient's language (`SMTP_URL`,
-  `MAIL_FROM`) and/or the webhook for other channels (`WEBHOOK_URL`, body
-  signed with HMAC-SHA256). Sign-in links bypass the queue.
+  `MAIL_FROM`), or a bot's own webhook. Notifications also go to the webhooks
+  a person set up (`server/services/Webhook.ts`, body signed with
+  HMAC-SHA256); `WEBHOOK_ALLOWED_URLS` says where webhooks may go. Sign-in
+  links bypass the queue and go by email only.
 - Visits (a task, "My day") are logged through `Visit.log` (`useVisit`):
   on opening and on returning to a tab hidden for 10+ minutes, throttled to
   one per 10 minutes in the database; they feed "who looked at my task" and shift

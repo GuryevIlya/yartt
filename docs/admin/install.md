@@ -32,8 +32,7 @@ work, [demo.env.example](../../demo.env.example) for a trial. Copy one to
 | `ROLE` | no | `all` (default) — the API and the background worker in one process; `api` / `worker` to run them in separate containers |
 | `SMTP_URL` | yes, but in the demo | `smtp://user:password@host:587` or `smtps://user:password@host:465` |
 | `MAIL_FROM` | with `SMTP_URL` | e.g. `yartt <noreply@example.com>` |
-| `WEBHOOK_URL`, `WEBHOOK_SECRET` | no | an extra channel (Telegram, Slack, …): every message is POSTed there as JSON, signed as a bot's webhook is ([api.md](api.md#its-webhook)): `X-Yartt-Timestamp` and `X-Yartt-Signature: sha256=<hex>`, HMAC-SHA256 of `<timestamp>.<body>` with the secret. A sign-in link in it works only in the browser that asked for it, so the receiver cannot sign in with one |
-| `BOT_WEBHOOK_INTERNAL_HOSTS` | no | hosts inside the company's network that bots' own webhooks may reach, comma-separated (`ci.corp.local`). Any employee may set a bot's webhook, so by default it reaches only outside addresses: never this server, the private networks or the cloud's metadata service; the name is checked as it is resolved, at the connection |
+| `WEBHOOK_ALLOWED_URLS` | no | where webhooks of people and bots may go, comma-separated beginnings of addresses (`https://hooks.corp.local/`), inside the network too. Empty: anywhere outside the company's network, never inside it. A company that keeps its data on its own servers lists only its own receiver here, so nothing leaves |
 | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | no | sign-in through the company's identity provider (OpenID Connect) — then the only way in ([below](#sign-in-through-the-companys-identity-provider)) |
 | `OIDC_NAME` | no | the provider's name on the sign-in button, e.g. `Microsoft`; default `SSO` |
 | `EMAIL_DOMAINS` | no | the company's mail domains, comma-separated (`corp.com,corp.kz`): no other address can be invited or set; someone who already has one signs in only to change it, and their mail gets that request instead of notifications, once a day. Exact domains, subdomains are not included. Empty — any address |
@@ -226,7 +225,7 @@ top). Everyone affected is notified as usual.
 ## Notifications that did not go
 
 A notification the mail server refuses (a deleted mailbox, a full one) or
-the webhook does not take waits aside for another attempt, after 1, 5 and
+the mail server does not take waits aside for another attempt, after 1, 5 and
 15 minutes, then every hour, while the others go on. After three days it
 is given up; the log says so each time. To see what did not go, with the
 last error:

@@ -34,7 +34,6 @@ const env = {
   ROLE: 'all',
   COOKIE_SECURE: 'false',
   SMTP_URL: '',
-  WEBHOOK_URL: '',
   DEMO_DATA: demo ? 'en' : '',
 };
 if (!demo) {

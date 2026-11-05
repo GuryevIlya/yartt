@@ -10,13 +10,6 @@ it is decided. Proposals wait for a decision in their own section.
 Decided after the first team's meeting about moving in (2026-11-03), all
 in one version, before stage 6 goes on.
 
-- [ ] **Webhooks of a person's own.** Anyone adds a URL (a Telegram bot
-  gives one) and chooses for each event what goes there: nothing, the event
-  with a link, the title, the whole text. Email is always sent. The
-  company's `WEBHOOK_URL` goes away: one address getting everyone's
-  messages is the worst place for them. A list of URL prefixes set by the
-  administrator says where webhooks may go; without it, only outside
-  addresses. Sign-in links go by email only.
 - [ ] **A public API of its own, with personal keys.** `/api/v1` takes keys
   only, `/api/trpc` sessions only. A person has keys with rights and an
   expiry, gone on dismissal; a bot keeps its one key and permissions.

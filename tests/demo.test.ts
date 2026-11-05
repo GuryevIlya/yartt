@@ -64,7 +64,7 @@ function withDemo(url: string, lang: string, when: 'start' | 'night' = 'start') 
   const script = `const { refreshDemo } = await import(${JSON.stringify(join(import.meta.dirname, '..', 'server', 'demo.ts'))});
     await refreshDemo(${JSON.stringify(lang)}, ${JSON.stringify(when)}); process.exit(0);`;
   return spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-    env: { ...process.env, DATABASE_URL: url, PUBLIC_URL: 'http://yartt.test', SMTP_URL: '', WEBHOOK_URL: '' },
+    env: { ...process.env, DATABASE_URL: url, PUBLIC_URL: 'http://yartt.test', SMTP_URL: '' },
     encoding: 'utf8',
   });
 }
@@ -81,7 +81,7 @@ describe.each(['ru', 'en'] as const)('the demo in %s', (lang) => {
     const db = postgres(url.toString(), { onnotice: () => {} });
     try {
       const seed = spawnSync(process.execPath, [join(import.meta.dirname, '..', 'scripts', 'seed.ts'), '--lang', lang], {
-        env: { ...process.env, DATABASE_URL: url.toString(), PUBLIC_URL: 'http://yartt.test', SMTP_URL: '', WEBHOOK_URL: '' },
+        env: { ...process.env, DATABASE_URL: url.toString(), PUBLIC_URL: 'http://yartt.test', SMTP_URL: '' },
         encoding: 'utf8',
       });
       expect(seed.stderr).toBe('');

@@ -390,6 +390,15 @@ export const helpEn: Help = {
             'The Bots block shows whether it works: calls by day and refusals.',
           ],
         },
+        {
+          title: 'Get notifications in another program',
+          steps: [
+            'A webhook passes your notifications to another program, a Telegram bot for example. It needs neither a yartt bot nor a key.',
+            'Write to the receiver\'s bot and it gives you an address. Paste it under Profile, "Webhooks", and press "Test".',
+            'For each group of events choose what is sent: nothing, the event and a link, with the title or with the whole text. Emails keep coming as usual.',
+            'The title and the text go wherever the address leads. If it leads outside the company, so does the data, so turn on the whole text with care.',
+          ],
+        },
       ],
     },
   ],

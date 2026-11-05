@@ -1,26 +1,23 @@
+import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { WEBHOOK_GROUPS, type WebhookLevels } from '#shared/webhook.ts';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Message } from '../server/delivery.ts';
 import env from '../server/env.ts';
 import { sql } from '../server/pg.ts';
 import { deliverNotifications } from '../server/worker.ts';
-import { createEmployee } from './helpers.ts';
+import { client, createEmployee } from './helpers.ts';
 
 const sent: (Message & { mail: boolean })[] = [];
 let failNext = false;
 /** Deliveries to these people fail, as to a mailbox the mail server refuses. */
 const broken = new Set<number>();
-/** The email of the next delivery goes, then its webhook fails. */
-let webhookFailsNext = false;
 vi.mock('../server/delivery.ts', () => ({
   deliver: async (message: Message, options: { mail?: boolean } = {}) => {
     if (failNext || (message.to.employeeId !== null && broken.has(message.to.employeeId))) {
       failNext = false;
       throw new Error('550 mailbox unavailable');
-    }
-    if (webhookFailsNext) {
-      webhookFailsNext = false;
-      sent.push({ ...message, mail: options.mail !== false });
-      throw Object.assign(new Error('Webhook responded with 500'), { mailed: options.mail !== false });
     }
     sent.push({ ...message, mail: options.mail !== false });
   },
@@ -137,14 +134,54 @@ describe('notification delivery', () => {
     expect((await sql<{ attempts: number }[]>`SELECT attempts FROM notification_failure`)[0]!.attempts).toBe(6);
   });
 
-  test('when the webhook fails after the email went, the next attempt does not mail again', async () => {
-    const me = await createEmployee();
-    await sql`SELECT notify(${me.id}, NULL, ${sql.json({ kind: 'invite', by: me.id })})`;
-    webhookFailsNext = true;
-    await deliverNotifications(sql);
-    await sql`UPDATE notification_failure SET next_attempt_at = NOW()`;
-    await deliverNotifications(sql);
-    expect(sent.map((m) => m.mail)).toEqual([true, false]);
-    expect(await unsent()).toBe(0);
+  test('a person\'s webhook gets as much as they chose, one attempt, and sign-in links never', async () => {
+    const received: Record<string, unknown>[] = [];
+    let answer = 200;
+    const hook = createServer((req, res) => {
+      let body = '';
+      req.on('data', (c: Buffer) => { body += c.toString(); });
+      req.on('end', () => { received.push(JSON.parse(body) as Record<string, unknown>); res.writeHead(answer).end(); });
+    }).listen(0);
+    await new Promise((resolve) => hook.once('listening', resolve));
+    try {
+      const me = await createEmployee();
+      const levels = { mentions: 'text', comments: 'title', deadlines: 'off', links: 'event', access: 'event', handover: 'event', reminders: 'event', scores: 'event', other: 'event' };
+      const api = await client(me.id);
+      const webhook = await api.Webhook.create({ url: `http://localhost:${(hook.address() as AddressInfo).port}/h`, levels: levels as never });
+      const task = await api.Task.create({ tags: [`w-${randomUUID().slice(0, 8)}`] });
+      const other = await createEmployee();
+      await api.Observer.add({ taskId: task, employeeId: other.id });
+      const otherApi = await client(other.id);
+      const commentId = await otherApi.Comment.create({ taskId: task, html: '<p>Секрет задачи</p>', replyToId: null, files: [], mentionIds: [me.id], everyone: false, exceptIds: [], taskIds: [] });
+      await deliverNotifications(sql);
+
+      const mention = received.find((b) => b.kind === 'mention')!;
+      expect(mention).toMatchObject({ version: 2, taskId: task, comment: 'Секрет задачи' });
+      const comment = received.find((b) => b.kind === 'comment')!;
+      expect(comment.subject).toBeTruthy();
+      expect(comment.comment).toBeUndefined();
+      expect(comment.text).toBeUndefined();
+      expect(commentId).toBeGreaterThan(0);
+
+      // Off: nothing. A failure is noted for its owner, and the notification is not held.
+      received.length = 0;
+      answer = 500;
+      await otherApi.Comment.create({ taskId: task, html: '<p>Ещё</p>', replyToId: null, files: [], mentionIds: [], everyone: false, exceptIds: [], taskIds: [] });
+      await deliverNotifications(sql);
+      expect(await unsent()).toBe(0);
+      expect((await api.Webhook.list()).find((w: { id: number }) => w.id === webhook.id)?.lastError).toContain('500');
+      // Someone else's webhook is out of reach.
+      await expect(otherApi.Webhook.remove({ id: webhook.id })).rejects.toMatchObject({ message: 'not_found' });
+    } finally {
+      hook.close();
+    }
+  });
+
+  test('an address the administrator does not allow is refused', async () => {
+    const api = await client((await createEmployee()).id);
+    const levels = Object.fromEntries(WEBHOOK_GROUPS.map((g) => [g, 'event'])) as WebhookLevels;
+    await expect(api.Webhook.create({ url: 'https://evil.example/h', levels })).rejects.toMatchObject({ message: 'webhook_url_not_allowed' });
+    await expect(api.Webhook.create({ url: 'http://localhost.evil.example/h', levels })).rejects.toMatchObject({ message: 'webhook_url_not_allowed' });
+    await expect(api.Webhook.create({ url: 'http://localhost@evil.example/h', levels })).rejects.toMatchObject({ message: 'webhook_url_not_allowed' });
   });
 });

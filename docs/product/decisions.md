@@ -2209,3 +2209,38 @@ The context gets a button that finds a task by tags and writes its number
 
 *Implemented:* `richText.ts`, `RichEditor.tsx`, `server/html.ts`; `marked`,
 `@tiptap/extension-text-align`.
+
+### 110. A webhook is a person's own
+
+One `WEBHOOK_URL` took every message of the company. A receiver for Telegram
+had to match its users with yartt's by email, an administrator had to set it
+up, nobody chose what was sent, and one address held everyone's notifications,
+managers' included: the worst place to keep them. No case was found that a
+person's own webhook does not cover.
+
+So a webhook now belongs to a person. A Telegram bot gives them an address with
+their id in it, they paste it into their profile and choose for each group of
+events how much goes there: nothing, the event with a link, the title, the
+whole text. It sees only what they are notified of, so access does not widen.
+No yartt bot and no key are involved (a bot is a virtual employee, decision 49;
+it keeps its one webhook, which gets everything). A new webhook sends events
+with a link: nothing of a task leaves until the person asks for it.
+
+Email is always sent: a message in Telegram does not replace it. A webhook gets
+one attempt, like a bot's, and how it went is shown next to it; only the email
+is tried again (decision 102 is narrowed), so `notification_failure.mailed` is
+gone. Sign-in links go by email only: a webhook must not be a way into an
+account.
+
+The administrator sets nothing up, and may limit where webhooks go:
+`WEBHOOK_ALLOWED_URLS` lists beginnings of addresses, inside the network too,
+replacing `BOT_WEBHOOK_INTERNAL_HOSTS`. It is a list rather than a pattern,
+because a mistaken pattern lets `corp.local.evil.com` through. Without it,
+webhooks go anywhere outside the company's network and never inside, since the
+server would otherwise make requests inside for anyone who pastes an address.
+With no list set, a person can send the text of tasks they see outside: they
+could copy it anyway.
+
+*Implemented:* `webhook`, `fail_notification()`, migration `0.6-0.7`;
+`shared/webhook.ts`, `server/services/Webhook.ts`, `server/webhook.ts`,
+`client/components/App/Webhooks.tsx`.

@@ -1,0 +1,118 @@
+import { z } from 'zod';
+import { type NotificationPayload } from '#shared/notification.ts';
+import { Webhook, WebhookLevels, webhookGroup, type WebhookInput } from '#shared/webhook.ts';
+import type { Message } from '../delivery.ts';
+import env from '../env.ts';
+import { AppError } from '../errors.ts';
+import { plainText } from '../html.ts';
+import { sql, type Sql } from '../pg.ts';
+import { sendWebhook, webhookAllowed } from '../webhook.ts';
+import { renderMail } from './Mail.ts';
+
+/** How many webhooks a person keeps: a channel or two, not a mailing list. */
+const MAX_WEBHOOKS = 10;
+/** The body's shape; a bot's webhook is version 1. */
+const VERSION = 2;
+
+const COLUMNS = sql`id, url, secret, levels, last_at, last_error`;
+
+export async function list(employeeId: number): Promise<Webhook[]> {
+  return Webhook.array().parse(await sql`
+    SELECT ${COLUMNS} FROM webhook WHERE employee_id = ${employeeId} ORDER BY id
+  `);
+}
+
+function assertAllowed(url: string): void {
+  if (!webhookAllowed(url)) throw new AppError('webhook_url_not_allowed');
+}
+
+export async function create(employeeId: number, input: WebhookInput): Promise<Webhook> {
+  assertAllowed(input.url);
+  const rows = Webhook.array().parse(await sql`
+    INSERT INTO webhook (employee_id, url, levels)
+    SELECT ${employeeId}, ${input.url}, ${sql.json(input.levels)}
+     WHERE (SELECT count(*) FROM webhook WHERE employee_id = ${employeeId}) < ${MAX_WEBHOOKS}
+    RETURNING ${COLUMNS}
+  `);
+  if (!rows[0]) throw new AppError('webhook_limit', { limit: MAX_WEBHOOKS });
+  return rows[0];
+}
+
+export async function update(employeeId: number, id: number, input: WebhookInput): Promise<Webhook> {
+  assertAllowed(input.url);
+  const [row] = Webhook.array().parse(await sql`
+    UPDATE webhook SET url = ${input.url}, levels = ${sql.json(input.levels)}
+     WHERE id = ${id} AND employee_id = ${employeeId}
+    RETURNING ${COLUMNS}
+  `);
+  if (!row) throw new AppError('not_found');
+  return row;
+}
+
+export async function remove(employeeId: number, id: number): Promise<void> {
+  const rows = await sql`DELETE FROM webhook WHERE id = ${id} AND employee_id = ${employeeId} RETURNING id`;
+  if (rows.length === 0) throw new AppError('not_found');
+}
+
+const Target = z.object({ id: z.number(), url: z.string(), secret: z.string(), levels: WebhookLevels });
+
+async function send(db: Sql, target: { id: number; url: string; secret: string }, body: object): Promise<string | null> {
+  let failure: string | null = null;
+  try {
+    await sendWebhook(JSON.stringify({ version: VERSION, ...body }), target);
+  } catch (error) {
+    failure = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+  }
+  await db`UPDATE webhook SET last_at = NOW(), last_error = ${failure} WHERE id = ${target.id}`;
+  return failure;
+}
+
+/** Sends the owner a test: says whether the address takes it. */
+export async function test(employeeId: number, id: number): Promise<Webhook> {
+  const [target] = Target.array().parse(await sql`
+    SELECT id, url, secret, levels FROM webhook WHERE id = ${id} AND employee_id = ${employeeId}
+  `);
+  if (!target) throw new AppError('not_found');
+  await send(sql, target, { kind: 'test', to: { employeeId }, taskId: null, url: `${env.PUBLIC_URL}/` });
+  const [row] = (await list(employeeId)).filter((w) => w.id === id);
+  return row!;
+}
+
+const CommentText = z.object({ value: z.string() });
+
+/**
+ * A notification to a person's webhooks, each getting as much as it was told
+ * to for this kind of event. One attempt: a webhook is someone's program, and
+ * the email and the bell have told the person anyway. Never throws.
+ */
+export async function deliver(db: Sql, to: Message['to'], taskId: number | null, payload: NotificationPayload): Promise<void> {
+  if (to.employeeId === null) return;
+  const targets = Target.array().parse(await db`
+    SELECT id, url, secret, levels FROM webhook WHERE employee_id = ${to.employeeId}
+  `);
+  if (targets.length === 0) return;
+  const level = (t: z.infer<typeof Target>) => t.levels[webhookGroup(payload.kind)];
+  const envelope = {
+    kind: payload.kind,
+    to: { employeeId: to.employeeId },
+    taskId,
+    url: `${env.PUBLIC_URL}${taskId === null ? '/' : `/tasks/${taskId}`}`,
+  };
+  const rendered = targets.some((t) => level(t) === 'title' || level(t) === 'text')
+    ? await renderMail({ to, taskId, payload })
+    : null;
+  let comment: string | null = null;
+  if (targets.some((t) => level(t) === 'text') && taskId !== null && 'commentId' in payload) {
+    const [row] = CommentText.array().parse(await db`SELECT value FROM comment WHERE task_id = ${taskId} AND id = ${payload.commentId}`);
+    comment = row ? plainText(row.value) : null;
+  }
+  for (const target of targets) {
+    const how = level(target);
+    if (how === 'off') continue;
+    await send(db, target, {
+      ...envelope,
+      ...(how !== 'event' && { subject: rendered?.subject }),
+      ...(how === 'text' && { text: rendered?.text, comment, data: payload }),
+    });
+  }
+}
