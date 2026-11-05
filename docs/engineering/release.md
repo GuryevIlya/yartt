@@ -90,8 +90,13 @@ it.
    and waits while that CI is still running. Tag the latest commit —
    CI of an earlier one may have been cancelled by the next push, and
    then the release stops. When it is green the image is on Docker
-   Hub and the release with its notes is on GitHub; the notes are the
-   commit messages, which is why they are written as a changelog.
+   Hub and the release with its notes is on GitHub. The notes are made by
+   `scripts/release-notes.ts` from the history since the previous release:
+   the commit subjects, which is why they are written as a changelog, and
+   "Before upgrading" — a schema change with what each migration does, the
+   settings that came or went, the installation guide that changed. See
+   them before tagging: `node scripts/release-notes.ts <previous tag>` shows
+   the last ones, and the next ones once the tag is made locally.
 5. Check the image as a company would: `docker pull yartt/yartt:1.0.0`
    and start it against an empty PostgreSQL by
    [admin/install.md](../admin/install.md).

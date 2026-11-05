@@ -109,7 +109,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: GitHub release with generated notes
+      # The notes from the history: the commits since the previous release, and what an
+      # administrator must know before upgrading (scripts/release-notes.ts).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: GitHub release with its notes
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --title "yartt $GITHUB_REF_NAME" --latest=${{ steps.floating.outputs.latest }}
+        run: |
+          node scripts/release-notes.ts "$GITHUB_REF_NAME" > release-notes.md
+          gh release create "$GITHUB_REF_NAME" --notes-file release-notes.md --title "yartt $GITHUB_REF_NAME" --latest=${{ steps.floating.outputs.latest }}
