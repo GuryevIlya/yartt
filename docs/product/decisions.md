@@ -2339,3 +2339,32 @@ data never lies.
 
 *Implemented:* `dependency_removed`, migration `0.6-0.7`; `Dependency.remove`,
 `Task.get`'s `related`, `MyDay.todo`'s `waiterClosed`; `RelatedTasks.tsx`.
+
+### 114. Offline the work is not lost, and what waits is seen
+
+Decision 43 said yartt works offline. A tester took it at its word and
+found the edges. A shift started offline was still not started on screen,
+so she started it again, and each start waited to be sent; back online
+the second one conflicted with the first. A shift could not be ended at
+all: on screen there was none. An item answered in "Waiting for me"
+stayed where it was, as if nothing had been done.
+
+A full offline mode would load all of a person's tasks ahead and apply
+every change on the device. The rules live in the database, so the
+device would need a copy of them, and the two would drift. yartt is
+installed inside a company's network: offline there is a dropped VPN or
+a train, minutes, not days. So the promise is narrower and kept: a lost
+connection loses no work.
+
+- What waits to be sent is shown as done, marked as waiting. A shift
+  started offline is open on screen and can be ended; it cannot be
+  started twice. An item of "Waiting for me" answered offline leaves it.
+  The screens read this from the outbox itself, not from a copy: what
+  the server refuses on arrival comes back, with the reason.
+- The chip "Not sent" in the top line opens the list of what waits, in
+  words: "Shift started 09:03", "Comment on #12".
+- What was opened before is there to read. A task never opened, a search,
+  a report need the server and say so.
+- The guide says exactly this, and no more.
+
+*Implemented:* not yet (roadmap).
