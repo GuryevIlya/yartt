@@ -6,7 +6,8 @@ name: CI
 
 on:
   push:
-    # master and the maintenance branches of older lines (v1.2), released from too.
+    # master and the release branches (v1.2): the one being prepared, and the
+    # maintenance branches of released lines, released from too.
     branches: [master, 'v[0-9]+.[0-9]+']
   pull_request:
 

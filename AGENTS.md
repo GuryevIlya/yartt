@@ -269,6 +269,10 @@ a `matchPath` in `client/components/App.tsx`.
 The history is the changelog: someone reading `git log` learns what the
 product gained and why. Always, without being asked:
 
+- **Where:** a feature goes to the branch of the release being prepared
+  (`v0.8`); a fix of the released version goes to `master`, and `master`
+  is merged into that branch. `master` holds only releases and their
+  fixes (docs/engineering/release.md, Branches).
 - **One commit per feature or fix.** Everything that belongs to it goes
   together — code, schema (`db.sql`), translations, tests, demo data
   (`scripts/seed.ts`), docs and the roadmap tick. Unrelated changes (a

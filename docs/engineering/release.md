@@ -44,11 +44,29 @@ release becomes an image on Docker Hub that a company runs
      `DOCKERHUB_TOKEN` (the token from step 2);
    - variable `DOCKERHUB_REPOSITORY` = `yartt/yartt`.
 
+## Branches
+
+`master` holds released versions and fixes to them, nothing half done:
+whoever builds yartt from `master` gets the latest release or a patch of
+it.
+
+- **A release is prepared on its own branch**, `v<major>.<minor>`, made
+  from `master`: `v0.8` for 0.8.0. Features go there. Its version in
+  `package.json` is `0.8.0-alpha` while features come in, `0.8.0-beta`
+  when they are all in and being checked; the footer shows it, so a
+  build from the branch says it is not a release.
+- **A fix of the released version goes to `master`** (as the next
+  patch, if it is to be released at once), and `master` is merged into
+  the release branch, so the release keeps it.
+- **At the release** the branch gets the final version, is merged into
+  `master`, and the tag is put on `master`. The branch stays as the
+  maintenance branch of its line ([below](#a-fix-for-an-older-line)).
+
 ## Every release
 
-1. On `master`, with CI green, decide the version: patch — fixes only,
-   never the schema; minor — features; major — only from the last minor
-   (AGENTS.md, Database).
+1. On the release branch, with CI green, decide the version: patch —
+   fixes only, never the schema, and made on `master`; minor — features;
+   major — only from the last minor (AGENTS.md, Database).
 2. If the schema changed since the last release, there is a migration
    `server/migrations/<from>-<to>.sql` and the new version in `db.sql`.
    The first schema version is 0.0. CI checks every migration against
@@ -62,6 +80,7 @@ release becomes an image on Docker Hub that a company runs
    push:
 
    ```sh
+   git switch master && git merge v1.0   # a patch is tagged on master as it is
    git tag 1.0.0
    git push origin master 1.0.0
    ```
