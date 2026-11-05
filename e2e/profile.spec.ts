@@ -49,7 +49,7 @@ test.describe('profile', () => {
     await page.getByRole('button', { name: 'Close' }).click();
     await expect(page.getByRole('heading', { name: /Waiting for me/ })).toBeVisible();
     await expect(page.getByRole('link', { name: 'My day', exact: true })).toBeVisible();
-    await expect(page.getByText(/^yartt [0-9.]+ · ©/)).toBeVisible();
+    await expect(page.getByText(/^yartt [0-9.]+(-[a-z0-9.]+)? · ©/)).toBeVisible();
 
     await page.getByRole('button', { name: /Ольга Белова/ }).click();
     await page.getByRole('menuitem', { name: 'Profile' }).click();
@@ -58,7 +58,7 @@ test.describe('profile', () => {
     await page.getByRole('button', { name: 'Закрыть' }).click();
     await expect(page.getByRole('heading', { name: /Ждёт меня/ })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Мой день', exact: true })).toBeVisible();
-    await expect(page.getByText(/^яртт [0-9.]+ · ©/)).toBeVisible();
+    await expect(page.getByText(/^яртт [0-9.]+(-[a-z0-9.]+)? · ©/)).toBeVisible();
   });
 
   test('the pronoun applies at once', async ({ page }) => {
