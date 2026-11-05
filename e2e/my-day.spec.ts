@@ -133,7 +133,9 @@ test.describe('My day', () => {
     const [from, to] = [await dialog.getByLabel('Начало').inputValue(), await dialog.getByLabel('Конец').inputValue()];
     await dialog.getByLabel('Начало').fill('22:00');
     await dialog.getByLabel('Конец').fill('02:00');
-    await expect(dialog.getByText(/4ч · заканчивается на следующий день/)).toBeVisible();
+    // Only the next day is checked: in the first hours after midnight such a shift of yesterday
+    // still ends in the future, and then the error stands where its length is.
+    await expect(dialog.getByText(/заканчивается на следующий день/)).toBeVisible();
     await dialog.getByLabel('Начало').fill(from);
     await dialog.getByLabel('Конец').fill(to);
     await dialog.getByLabel('Что сделано').fill('Забытая смена');
