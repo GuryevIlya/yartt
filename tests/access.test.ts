@@ -72,7 +72,7 @@ describe('access matrix', () => {
     await (await client(requester.id)).Observer.request({ taskId });
     const fileId = await Attachments.upload(owner.id, Buffer.from(`matrix-${randomUUID()}`), 'text/plain');
     await ownerApi.Comment.create({ taskId, html: '<p>The numbers</p>', replyToId: null, files: [{ id: fileId, name: 'numbers.txt' }], mentionIds: [], taskIds: [] });
-    await ownerApi.Time.set({ taskId, shiftId: await shiftOn(owner.id, (await sql<{ d: string }[]>`SELECT local_today(${owner.id})::text AS d`)[0]!.d), minutes: 30 });
+    await ownerApi.Time.set({ taskId, shiftId: await shiftOn(owner.id, (await sql<{ d: string }[]>`SELECT (local_today(${owner.id}) - 1)::text AS d`)[0]!.d), minutes: 30 });
 
     const expected = { top: true, boss: true, owner: true, pm: true, participant: true, former: false, requester: false, outsider: false, peer: false };
     for (const [name, person] of Object.entries(people)) {

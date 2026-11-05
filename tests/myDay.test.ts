@@ -474,8 +474,8 @@ describe('history', () => {
     const me = await createEmployee();
     const api = await client(me.id);
     const hour = 3_600_000;
-    // Yesterday in UTC, the employee's time zone.
-    const midnight = new Date(Math.floor(Date.now() / 86_400_000) * 86_400_000 - 86_400_000);
+    // Two days ago in UTC, the employee's time zone: a shift past midnight must be over at any hour of today.
+    const midnight = new Date(Math.floor(Date.now() / 86_400_000) * 86_400_000 - 2 * 86_400_000);
     const at = (h: number, m = 0) => new Date(midnight.getTime() + h * hour + m * 60_000);
 
     await api.Work.add({ startedAt: at(10), endedAt: at(12, 30), about: null });

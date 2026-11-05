@@ -7,13 +7,18 @@ test('"My open" and a deadline explain what they mean', async ({ page }) => {
   // Away from the task lines first: their hints would cover the tab.
   await page.mouse.move(0, 0);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
-  await page.getByRole('tab', { name: /Мои открытые/ }).hover();
-  await expect(page.getByRole('tooltip').filter({ hasText: /за которые отвечаете вы/ })).toBeVisible();
+  // What loads around it may move the tab from under the mouse: hovered again until it holds.
+  await expect(async () => {
+    await page.getByRole('tab', { name: /Мои открытые/ }).hover();
+    await expect(page.getByRole('tooltip').filter({ hasText: /за которые отвечаете вы/ })).toBeVisible({ timeout: 1_000 });
+  }).toPass();
 
   await page.goto(`/tasks/${await taskId('сайт', 'новая главная к осенней кампании')}`);
-  await page.getByLabel('Дедлайн').hover();
   // Hints of the task lines under the pointer on the way may show too: the deadline's is the one looked for.
-  await expect(page.getByRole('tooltip').filter({ hasText: /закрывает задачу только владелец/ })).toBeVisible();
+  await expect(async () => {
+    await page.getByLabel('Дедлайн').hover();
+    await expect(page.getByRole('tooltip').filter({ hasText: /закрывает задачу только владелец/ })).toBeVisible({ timeout: 1_000 });
+  }).toPass();
 });
 
 test('a task whose plan does not fit the deadline is marked at risk, and says whose plan', async ({ page }) => {
