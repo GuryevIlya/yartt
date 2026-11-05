@@ -207,6 +207,7 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
               handle={editor}
               initial={contextDraft}
               placeholder={t('task.contextPlaceholder')}
+              taskPicker={{ exclude: task.id }}
               onSubmit={saveContext}
               onChange={setContextDraft}
               autoFocus

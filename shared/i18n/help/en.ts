@@ -258,6 +258,7 @@ export const helpEn: Help = {
           title: 'Discuss in a task',
           steps: [
             'A comment is formatted text with images and files. # attaches a task, @ mentions a participant, and #12 in the text becomes a link.',
+            'Text from a language model goes in by "Insert Markdown" in the editor and turns into formatted text at once. Pictures from outside are not kept: upload them.',
             'After "Send" a comment can be pulled back into editing for a few seconds. Then it is never changed or deleted.',
             '"Reply" starts a thread under a comment; the feed keeps a mark at the moment of the reply.',
             'Forgot to mention someone? The @ under your comment adds them. A mention can be taken back until the person has '

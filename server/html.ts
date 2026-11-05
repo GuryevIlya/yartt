@@ -6,17 +6,26 @@ import { TASK_REF } from '#shared/taskRefs.ts';
 // comment cannot load anything from outside (no tracking pixels).
 const IMAGE_SRC = /^\/api\/attachments\/(\d+)$/;
 
+const ALIGN = { 'text-align': [/^(left|center|right)$/] };
+
 const OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: [
     'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'code', 'pre', 'blockquote',
     'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'hr', 'a', 'img',
+    'table', 'colgroup', 'col', 'thead', 'tbody', 'tr', 'th', 'td',
   ],
   allowedAttributes: {
     a: ['href', 'target', 'rel'],
     img: ['src', 'alt', 'width', 'style'],
+    p: ['style'], h1: ['style'], h2: ['style'], h3: ['style'],
+    th: ['colspan', 'rowspan'], td: ['colspan', 'rowspan'],
   },
   // An image keeps the width it was resized to and its aspect ratio; nothing else.
-  allowedStyles: { img: { 'aspect-ratio': [/^\d+(\.\d+)?( \/ \d+(\.\d+)?)?$/] } },
+  // A text is aligned; nothing else about how it looks is kept.
+  allowedStyles: {
+    img: { 'aspect-ratio': [/^\d+(\.\d+)?( \/ \d+(\.\d+)?)?$/] },
+    p: ALIGN, h1: ALIGN, h2: ALIGN, h3: ALIGN,
+  },
   allowedSchemes: ['http', 'https', 'mailto'],
   allowedSchemesAppliedToAttributes: ['href'],
   allowProtocolRelative: false,
@@ -52,7 +61,7 @@ export function cleanHtml(dirty: string): CleanHtml {
 
 /** Plain text of the HTML: for quotes and search. */
 export function plainText(html: string): string {
-  return sanitizeHtml(html.replace(/<\/(p|li|h[1-3]|blockquote|pre)>/g, '$& '), {
+  return sanitizeHtml(html.replace(/<\/(p|li|h[1-3]|blockquote|pre|td|th)>/g, '$& '), {
     allowedTags: [],
     allowedAttributes: {},
   }).replace(/\s+/g, ' ').trim();

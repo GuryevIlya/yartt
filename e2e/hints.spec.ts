@@ -101,6 +101,19 @@ test('a link is removed from "Waited on by" too', async ({ page }) => {
   await expect(page.getByRole('link', { name: new RegExp(`^#${waiting}`) })).toHaveCount(0);
 });
 
+test('Markdown goes into the context as formatted text, a table too', async ({ page }) => {
+  await signIn(page, 'olga@example.com');
+  await createTask(page, [unique('справка')]);
+  await page.locator('#context').getByRole('button', { name: 'Изменить' }).click();
+  await page.locator('#context').getByRole('button', { name: 'Вставить Markdown' }).click();
+  await page.getByLabel('Текст в формате Markdown').fill('## План\n\n| Шаг | Срок |\n|---|---|\n| Выгрузка | среда |\n');
+  await page.getByRole('button', { name: 'Вставить', exact: true }).click();
+  await page.locator('#context').getByRole('button', { name: 'Сохранить' }).click();
+  const shown = page.locator('#context');
+  await expect(shown.getByRole('heading', { name: 'План' })).toBeVisible();
+  await expect(shown.getByRole('cell', { name: 'Выгрузка' })).toBeVisible();
+});
+
 test('a participant makes a task of their own, which the task waits for, told when they need one', async ({ page }) => {
   await signIn(page, 'pavel@example.com');
   const site = await taskId('сайт', 'новая главная к осенней кампании');

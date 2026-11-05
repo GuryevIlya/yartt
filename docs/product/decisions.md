@@ -2185,3 +2185,27 @@ stays the owner (decision 76). One text for everyone: a different request for
 each is a comment of its own.
 
 *Implemented:* `request` in `Task.create`, `Comment.createIn`, `NewTaskPage`.
+
+### 109. The editor gives a text structure, not looks
+
+Comments and contexts now hold long texts, often written by a language model
+in Markdown, and the editor could not make a heading, a link in words, a code
+block or a table. Headings, links, code blocks, tables and alignment are
+added; the buttons speak the reader's language.
+
+Colors and sizes are not. A chosen color breaks in the dark theme, and a text
+that shouts goes against "quiet by default"; a heading does what a bigger size
+was wanted for, with structure and the same look everywhere. The server keeps
+to the same list (`server/html.ts`), so nothing else reaches other people even
+if it is pasted.
+
+Markdown goes in through a dialog and becomes formatted text where the cursor
+is. Telling it apart by itself on paste would misread plain text. Pictures from
+outside are still not kept, so nothing can be tracked by loading them, and the
+dialog says so rather than losing them quietly.
+
+The context gets a button that finds a task by tags and writes its number
+(decision 107). A comment keeps its own way of attaching tasks.
+
+*Implemented:* `richText.ts`, `RichEditor.tsx`, `server/html.ts`; `marked`,
+`@tiptap/extension-text-align`.

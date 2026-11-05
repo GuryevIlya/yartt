@@ -10,9 +10,6 @@ it is decided. Proposals wait for a decision in their own section.
 Decided after the first team's meeting about moving in (2026-11-03), all
 in one version, before stage 6 goes on.
 
-- [ ] **The editor.** Headings, links, code blocks, tables and alignment;
-  no colours or sizes. A task is picked by `#` in the context too. A
-  Markdown mode, since that is what language models write.
 - [ ] **Webhooks of a person's own.** Anyone adds a URL (a Telegram bot
   gives one) and chooses for each event what goes there: nothing, the event
   with a link, the title, the whole text. Email is always sent. The

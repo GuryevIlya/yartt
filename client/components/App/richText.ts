@@ -1,14 +1,17 @@
 import { Extension } from '@tiptap/core';
 import { Plugin } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
+import TextAlign from '@tiptap/extension-text-align';
 import { Placeholder } from '@tiptap/extensions';
 import StarterKit from '@tiptap/starter-kit';
-import { ResizableImage } from 'mui-tiptap';
+import { ResizableImage, TableImproved } from 'mui-tiptap';
 import { url } from '#client/hooks/base.ts';
 import { TASK_REF } from '#shared/taskRefs.ts';
 
 // One set of extensions for editing and for showing comments and contexts,
-// matching what the server keeps (server/html.ts): no tables, no colors.
+// matching what the server keeps (server/html.ts): structure, not looks, so
+// no colors or sizes (decision 109).
 // Images are resized by dragging their corner; the width is kept.
 
 /** Only our own attachments may be images (the server enforces it too). */
@@ -54,6 +57,11 @@ export function richTextExtensions(placeholder?: string) {
       link: { openOnClick: false, autolink: true, protocols: ['http', 'https', 'mailto'] },
     }),
     Image.configure({ inline: false, isAllowedImgSrc: (src) => OWN_IMAGE.test(stored(src ?? '')) }),
+    TableImproved.configure({ resizable: false }),
+    TableRow,
+    TableHeader,
+    TableCell,
+    TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right'] }),
     ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
   ];
 }
