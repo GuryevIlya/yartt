@@ -5,18 +5,7 @@ What is ahead — and only that. What the product already does is in
 task leaves this file when it is done and verified; a new one comes in when
 it is decided. Proposals wait for a decision in their own section.
 
-## Now — version 0.7.0
-
-Decided after the first team's meeting about moving in (2026-11-03), all
-in one version, before stage 6 goes on.
-
-- [ ] **The guide.** How a task is run when one owner holds it and others
-  do the work: what the doer answers for, whose problem it is, the
-  reviewer, rework, a big task, the context as notes on the state, one on
-  one with the manager. Answers about what was rejected and why. Webhooks,
-  bots and keys as three separate how-tos.
-
-## Then — stage 6: ready for 1.0
+## Now — stage 6: ready for 1.0
 
 - [ ] **Contributions with a signed assignment.** Once the repository is
   on GitHub: install CLA Assistant, give it [legal/CAA-individual.md](../../legal/CAA-individual.md)

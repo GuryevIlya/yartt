@@ -242,6 +242,37 @@ export const helpEn: Help = {
           ],
         },
         {
+          title: 'Ask for a review',
+          steps: [
+            'The owner or a participant brings the reviewer in and mentions them in a comment with @, saying what to look at.',
+            'The reviewer answers in a comment and presses "Done". The owner still closes the task, when they consider it done. An owner who thinks no review is needed does not ask for one.',
+          ],
+        },
+        {
+          title: 'Do rework',
+          steps: [
+            'Small rework: mention the doer again in the same task. The history, the context and the hours stay together, while a new task would send people looking for them in the old one.',
+            'Big rework that needs a deadline of its own: make a task with "New task" under "Waits for". It gets the tags of the original, and its hours show apart.',
+            'Closed already? Move the deadline and it opens again.',
+          ],
+        },
+        {
+          title: 'Run a big task',
+          steps: [
+            'Make one task for the whole result and bring people in. Split it only as far as you need to see yourself: leave the level below to those doing the work.',
+            'If someone can be trusted with a whole part, they make a task of their own for it and decide when it is ready. Yours waits for it, and you see who closed it and when under "Waits for" and later under "Related".',
+            'If you want to accept a part yourself, make it yours and bring the doer in as a participant. You keep control, but they do not learn to split the work, so give away more with time.',
+            'Closing the whole task stays with you. Closed parts do not close it.',
+          ],
+        },
+        {
+          title: 'Keep the context up to date',
+          steps: [
+            'The context is not only the statement of the task but your notes on where it stands: where you stopped and what is next.',
+            'Notices of new comments and links remind you to correct it. If you keep it all in your head, the context can stay as it is.',
+          ],
+        },
+        {
           title: 'Describe a tag',
           steps: [
             'A description holds what all tasks with this tag have in common: where they come from, what to watch for, a link to a regulation. Nothing has to be linked to tasks by hand.',
@@ -367,6 +398,15 @@ export const helpEn: Help = {
           ],
         },
         {
+          title: 'Talk one on one',
+          steps: [
+            'Make a task of your own for the talk and write down in it what you noticed and what you were told.',
+            'There is no need to score every day. Once a week or two, open a random day together and look at what happened: the tasks, comments and timesheet bring it back.',
+            'Talk a moved deadline over on the spot: sometimes it is bad luck and sometimes it is not. That is why a person gives a score, not a formula.',
+            'The employee may ask for the whole week to be scored instead of one day. If the disagreement stays, go through it with the manager above.',
+          ],
+        },
+        {
           title: 'See how tags are doing',
           steps: [
             'The Tags block: what happened to the tasks of each tag from the day you pick to today. Open, closed, comments, people, '
@@ -450,6 +490,33 @@ export const helpEn: Help = {
           a: 'With two of them responsibility blurs: the task hangs on an assignee who cannot close it. The owner is whose initiative '
             + 'it is: they decide the task is done, move its deadline and answer if it closed undone. So the doer is not made the '
             + 'owner: they could close the task without doing it.',
+        },
+        {
+          q: 'Why can a task not be assigned to someone right away?',
+          a: 'Because the task is what you need, not them. Assigning it gives away the decision on whether it is done and the deadline, while you must remember you are waiting for a result. '
+            + 'Keep the task and write in "What is needed from them" in the new task form: the request goes into their "Waiting for me". If you no longer need the result, hand the task over whole.',
+        },
+        {
+          q: 'What does the doer answer for, then?',
+          a: 'For what they promised: answering a mention, their plan of hours, the date they named in a comment. It all stays in the task, and later it is clear who promised what. '
+            + 'If they want to answer for a part whole, they make a task of their own, run it and decide when it is ready. Assigned a task they may change or move only by agreement, they would answer for it in name only.',
+        },
+        {
+          q: 'Who makes a task that everyone needs?',
+          a: 'Whoever has the problem. A developer needs a parser fixed to make an export: they make the task, if they want to keep an eye on it. If they only said they are stuck on the parser, the problem stays with whoever needs the export, and that person makes the task. '
+            + 'There is no shared task: when everyone answers for it, nobody does.',
+        },
+        {
+          q: 'Why not forbid closing a task until everyone has answered?',
+          a: 'Closing would then depend on someone else, and one forgotten answer would hold the task open. The owner decides, and sees each answer in "Waiting for others". Only hours still planned refuse closing, since planned work is not done yet.',
+        },
+        {
+          q: 'What if I was mentioned by mistake?',
+          a: 'Say whom to ask, or press "No reply needed": the author sees it and the mention leaves "Waiting for me". If your team takes requests through a channel of its own, say so in your answer. yartt does not replace agreements about such channels.',
+        },
+        {
+          q: 'Why is there no service desk in yartt?',
+          a: 'A service desk serves those who do not use yartt, and outside requests. A task appears when someone takes on a commitment: they make it theirs and answer for the result. A request that turned into a task by itself belongs to nobody.',
         },
         {
           q: 'Why does only the owner close a task, not its deadline?',
@@ -580,6 +647,16 @@ export const helpEn: Help = {
           a: 'A budget is a guide: it helps notice in time that the work went off plan. An overrun shows in the plan dialog, before '
             + 'the hours are spent. A ban would not make the work smaller: the time would be logged elsewhere, and the figures would '
             + 'stop being true. What to spend hours on beyond a budget is for people to decide, not a counter.',
+        },
+        {
+          q: 'Why does the tracker not pick the days to score, or require scoring?',
+          a: 'The tracker is neither the employee\'s advocate nor the manager\'s supervisor. Scores are for finding where to grow, and someone who wants that needs no control: they pick random days themselves. Someone who does not will simply not score, whatever is checked. '
+            + 'A dispute over a score is settled by talking, not by a setting.',
+        },
+        {
+          q: 'Why are there no automatic penalties for a moved deadline?',
+          a: 'A formula cannot tell bad luck from a week of nothing with the deadline moved afterwards. A penalty also pushes people to close what is not done to avoid it. So a moved deadline is talked over with the manager, who weighs it in the day\'s score. '
+            + 'Experience counts too: the same work may score differently for a trainee and for a senior.',
         },
         {
           q: 'Why are shifts scored, and by what?',
