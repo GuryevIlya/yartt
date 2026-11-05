@@ -66,6 +66,12 @@ const JOBS: { name: string; every: number; run: (sql: Sql) => Promise<unknown> }
     run: (sql) => Attachments.moveToStorage(sql),
   },
   {
+    // Every file moved: the table of contents goes for good (decision 116).
+    name: 'attachment_content_drop',
+    every: MINUTE,
+    run: (sql) => Attachments.dropContentWhenMoved(sql),
+  },
+  {
     name: 'visit_cleanup',
     every: DAY,
     run: (sql) => sql`DELETE FROM visit WHERE at < NOW() - INTERVAL '1 year'`,

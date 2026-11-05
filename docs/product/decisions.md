@@ -2383,3 +2383,29 @@ a person or for someone else's bot. A Telegram bot stays a bot.
 The English interface keeps "bot", which is not ambiguous there. As with
 decision 63, the code, the API and `db.sql` keep `bot`: a word does not
 change the schema or anyone's integration.
+
+### 116. Files moved to the storage leave nothing behind
+
+With an object storage, the content of a file used to leave the attachment
+row and stay as an empty value, and a flag, in_storage, told where it was;
+a purged file kept the flag until the worker deleted its object. Files
+never come back from the storage, so on such an installation the column
+and the flag described nothing but a step on the way.
+
+Now the content of the files kept in PostgreSQL is a table of its own,
+attachment_content. No row there and not purged means the file is the
+object. The worker moves the rows to the storage and, with none left,
+drops the table: nothing stays, and the space is freed at once, no VACUUM
+needed. Without the table yartt refuses to start without S3_BUCKET.
+
+So that the table can go, nothing in the database refers to it. The
+database no longer deletes content: release_attachment says a file is
+purged, and the application deletes its content, from the table or the
+storage, in the same transaction; a storage that does not answer changes
+nothing, so no object waits to be deleted. The table's comment in db.sql
+says what that means for migrations (IF EXISTS) and for a tool that
+writes into the database directly.
+
+*Implemented:* `attachment_content`, migration `0.7-0.8`;
+`server/services/Attachment.ts` (`moveToStorage`, `dropContentWhenMoved`),
+`checkFileStorage` in `server/migrate.ts`.

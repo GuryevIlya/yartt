@@ -5,7 +5,7 @@ import api from './api.ts';
 import { bootstrap } from './bootstrap.ts';
 import { refreshDemo } from './demo.ts';
 import env from './env.ts';
-import { checkExtensionRights, migrate } from './migrate.ts';
+import { checkExtensionRights, checkFileStorage, migrate } from './migrate.ts';
 import { sql } from './pg.ts';
 import { startWorker } from './worker.ts';
 
@@ -18,6 +18,7 @@ try {
     if (migration.action === 'installed') console.log(`Installed schema ${migration.version}`);
     if (migration.action === 'migrated') console.log(`Migrated schema to ${migration.version}: ${migration.files.join(', ')}`);
     await checkExtensionRights(sql);
+    await checkFileStorage(sql, !!env.S3_BUCKET);
     await bootstrap(sql);
   }
 } catch (error) {

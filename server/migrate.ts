@@ -212,3 +212,18 @@ export async function checkExtensionRights(sql: Sql): Promise<void> {
     );
   }
 }
+
+const Exists = z.object({ exists: z.boolean() });
+
+/**
+ * Whether the files can be read. Once every file moved to the object
+ * storage, attachment_content is dropped (decision 116): from then on the
+ * files are only there, and without S3_BUCKET they would be unreadable.
+ */
+export async function checkFileStorage(sql: Sql, storageConfigured: boolean): Promise<void> {
+  if (storageConfigured) return;
+  const [row] = Exists.array().parse(await sql`SELECT to_regclass('attachment_content') IS NOT NULL AS exists`);
+  if (!row!.exists) {
+    throw new Error('The files are in the object storage (attachment_content was dropped once all of them moved there): set S3_BUCKET and its keys');
+  }
+}

@@ -266,12 +266,14 @@ backups. Then set `S3_BUCKET`: attached files go to the object storage,
 each as `attachments/<id>`, and the database keeps everything else
 (avatars, small, stay in it). Set on a running installation, the worker
 moves the files already in PostgreSQL there, about twenty a minute, and
-they are read from wherever they are meanwhile. A backup is then
+they are read from wherever they are meanwhile. When the last one has
+moved, the worker drops the table that held them (`attachment_content`),
+and the database gives the space back at once. A backup is then
 `pg_dump` together with the bucket (its versioning or replication):
-taken apart, a restore may miss files or keep ones already deleted. The
-way back is not automatic: unsetting `S3_BUCKET` leaves the files that
-are in the storage unreadable. The key needs reading, writing and
-deleting objects in that bucket only.
+taken apart, a restore may miss files or keep ones already deleted.
+There is no way back: once the files are in the storage, yartt does not
+start without `S3_BUCKET`, as they could not be read. The key needs
+reading, writing and deleting objects in that bucket only.
 
 The
 worker removes on its own: sign-in tokens after an hour (email-change

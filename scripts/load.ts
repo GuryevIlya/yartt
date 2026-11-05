@@ -217,9 +217,15 @@ async function generateSteps(): Promise<void> {
   // Comments by those who work on the task over its life, some of them replies; one in
   // fifty with a file. One in four mentions a colleague, who mostly answers.
   await step('files', `
-    INSERT INTO attachment (hash, size, mime, value, uploaded_by, added_at, used_at)
-    SELECT digest(v, 'sha256'), length(v), 'application/pdf', v, ARRAY[40 + i % 250], NOW() - INTERVAL '1 day' * (i % ${DAYS}), NOW()
-      FROM (SELECT i, decode(repeat(md5(i::text), 128), 'hex') || int4send(i) AS v FROM generate_series(1, 4000) i) s;
+    WITH f AS (SELECT i, decode(repeat(md5(i::text), 128), 'hex') || int4send(i) AS v FROM generate_series(1, 4000) i),
+         a AS (
+           INSERT INTO attachment (hash, size, mime, uploaded_by, added_at, used_at)
+           SELECT digest(v, 'sha256'), length(v), 'application/pdf', ARRAY[40 + i % 250], NOW() - INTERVAL '1 day' * (i % ${DAYS}), NOW()
+             FROM f
+           RETURNING id, hash
+         )
+    INSERT INTO attachment_content (attachment_id, value)
+    SELECT a.id, f.v FROM a JOIN f ON digest(f.v, 'sha256') = a.hash;
   `);
   await step('comment plan', `
     CREATE TABLE load_comment AS

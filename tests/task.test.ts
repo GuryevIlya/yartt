@@ -400,7 +400,7 @@ describe('rich text and attachments', () => {
     await expect(Attachments.read(other.id, imageId)).rejects.toMatchObject({ code: 'unknown_attachment' });
 
     // The same bytes uploaded by them: the same row, now readable for them too.
-    const [bytes] = await sql<{ value: Buffer }[]>`SELECT value FROM attachment WHERE id = ${imageId}`;
+    const [bytes] = await sql<{ value: Buffer }[]>`SELECT value FROM attachment_content WHERE attachment_id = ${imageId}`;
     expect(await Attachments.upload(other.id, bytes!.value, 'image/png')).toBe(imageId);
     expect((await Attachments.read(other.id, imageId)).mime).toBe('image/png');
 

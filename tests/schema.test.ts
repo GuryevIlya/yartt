@@ -4,9 +4,11 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import postgres from 'postgres';
 import { describe, expect, inject, test } from 'vitest';
+import env from '../server/env.ts';
 import { connect, sql } from '../server/pg.ts';
+import { dropContentWhenMoved } from '../server/services/Attachment.ts';
 import {
-  DB_SQL_PATH, MIGRATIONS_DIR, checkExtensionRights, checkMigrationSql, migrate, parseMigrations, parseVersion, planMigrations, versionOfDbSql,
+  DB_SQL_PATH, MIGRATIONS_DIR, checkExtensionRights, checkFileStorage, checkMigrationSql, migrate, parseMigrations, parseVersion, planMigrations, versionOfDbSql,
 } from '../server/migrate.ts';
 import { dataOf, dumpData, loadData, pinClock, releaseMoments } from '../scripts/data.ts';
 
@@ -148,6 +150,33 @@ test('a database user without the right to call the extensions is told at startu
       await user.end();
       await db.unsafe(`DROP OWNED BY ${role}`);
       await db.unsafe(`DROP ROLE ${role}`);
+    }
+  });
+});
+
+// Decision 116: once every file is in the object storage, attachment_content
+// goes for good, and the files can then be read only with the storage set.
+test('with every file in the storage, attachment_content is dropped; then yartt needs the storage to start', async () => {
+  await scratch(`yartt_content_${process.pid}`, async (db) => {
+    await db.unsafe(await readFile(DB_SQL_PATH, 'utf8'));
+    const kept = env.S3_BUCKET;
+    try {
+      env.S3_BUCKET = undefined;
+      expect(await db.begin((tx) => dropContentWhenMoved(tx as unknown as typeof db))).toBe(false); // no storage: they stay here
+      await checkFileStorage(db, false);
+
+      env.S3_BUCKET = 'yartt';
+      await db`INSERT INTO attachment (id, hash, size, mime) VALUES (1, '\\x00', 1, 'text/plain')`;
+      await db`INSERT INTO attachment_content (attachment_id, value) VALUES (1, '\\x00')`;
+      expect(await db.begin((tx) => dropContentWhenMoved(tx as unknown as typeof db))).toBe(false); // one still to move
+      await db`DELETE FROM attachment_content`;
+      expect(await db.begin((tx) => dropContentWhenMoved(tx as unknown as typeof db))).toBe(true);
+      expect(await db`SELECT to_regclass('attachment_content') AS t`).toEqual([{ t: null }]);
+
+      await checkFileStorage(db, true);
+      await expect(checkFileStorage(db, false)).rejects.toThrow(/set S3_BUCKET/);
+    } finally {
+      env.S3_BUCKET = kept;
     }
   });
 });

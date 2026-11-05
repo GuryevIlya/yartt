@@ -37,7 +37,7 @@ CREATE TABLE schema_version (
 CREATE UNIQUE INDEX uq_schema_version_active
     ON schema_version((TRUE)) WHERE expired_at IS NULL;
 
-INSERT INTO schema_version (version) VALUES ('0.7');
+INSERT INTO schema_version (version) VALUES ('0.8');
 
 COMMENT ON TABLE schema_version IS
 'History of database schema versions (major.minor). Current = expired_at IS NULL.
@@ -672,9 +672,9 @@ CRON JOBS (outside SQL)
   - every day:    DELETE FROM attachment a
                    WHERE used_at < NOW() - INTERVAL ''1 day''
                      AND NOT attachment_in_use(a.id)
-                   RETURNING id, in_storage; and the objects of those in_storage.
-  - every minute, with an object storage: move files from value there;
-                  delete the objects of purged files.
+                   RETURNING id; and their content, wherever it is.
+  - every minute, with an object storage: move the files of
+                  attachment_content there; with none left, drop the table.
   - every day:    DELETE FROM visit WHERE at < NOW() - INTERVAL ''1 year'';
   - every day:    DELETE FROM sent_change WHERE at < NOW() - INTERVAL ''90 days'';
   - every day:    DELETE FROM bot_usage WHERE day < CURRENT_DATE - 366;
@@ -2183,19 +2183,14 @@ CREATE TABLE attachment (
     hash BYTEA NOT NULL,
     size INT NOT NULL CHECK (size >= 0),
     mime VARCHAR(100) NOT NULL,
-    value BYTEA,
     uploaded_by INT[] NOT NULL DEFAULT '{}',
     added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     held_by INT[] NOT NULL DEFAULT '{}',
     purged_at TIMESTAMPTZ,
-    in_storage BOOLEAN NOT NULL DEFAULT FALSE,
 
-    CONSTRAINT chk_attachment_purged CHECK (CASE WHEN purged_at IS NULL THEN (value IS NOT NULL) <> in_storage
-                                                 ELSE value IS NULL END),
     CONSTRAINT chk_attachment_held CHECK (purged_at IS NULL OR cardinality(held_by) = 0)
 );
-CREATE INDEX idx_attachment_in_storage ON attachment(id) WHERE in_storage AND purged_at IS NOT NULL;
 CREATE INDEX idx_attachment_hash ON attachment(hash);
 CREATE INDEX idx_attachment_used_at ON attachment(used_at);
 CREATE INDEX idx_attachment_uploaded_by ON attachment USING GIN (uploaded_by);
@@ -2213,8 +2208,8 @@ task whose comment or context refers to it (the application checks).
 There is no file name here: the same file may arrive under different
 names; the name is stored in comment.attachment_names.
 Deduplication: on upload the application looks for a row with the same
-hash and size and compares the bytes (or finds one whose content was
-deleted); on a match it returns the existing id, puts the content back if
+hash and size and compares the bytes when they are in attachment_content
+(or finds one whose content was deleted); on a match it returns the existing id, puts the content back if
 it was gone, and the uploader holds it (held_by).
 Cron deletes, once a day, attachments nothing refers to
 (attachment_in_use) that have not been used for more than a day
@@ -2231,15 +2226,15 @@ in a task and kept it (keep_attachment()) — a file handed to the one who
 needs it stays theirs when its author lets it go. Letting a file go
 (release_attachment()) takes it out of one''s quota; when nobody holds it
 any more, its content is deleted. The row stays — who uploaded it, its
-size, the names in comments — and value goes (purged_at): a link to it
-says the file is gone. Anyone uploading the same bytes again (the same
-hash and size) restores it in place, so every link to it works again.
+size, the names in comments — and the content goes (purged_at): a link
+to it says the file is gone. Anyone uploading the same bytes again (the
+same hash and size) restores it in place, so every link to it works again.
 
-Where the content is (decision 104): in value, or — with an object
-storage configured (S3_BUCKET) — in its object attachments/<id>
-(in_storage). The worker moves the files in value there, one at a time,
-deletes the object of a purged file and the objects of the rows it
-cleans up; reading streams it from there.';
+Where the content is (decisions 104, 116): a row of attachment_content,
+or — with an object storage configured (S3_BUCKET) — its object
+attachments/<id>. Nothing in the database knows more than that: the
+application puts, reads and deletes the content, in the same transaction
+as the row, so a failure of the storage changes nothing.';
 
 COMMENT ON COLUMN attachment.id IS
 'Id. Referenced by comment.attachment_ids.';
@@ -2252,18 +2247,6 @@ COMMENT ON COLUMN attachment.size IS
 
 COMMENT ON COLUMN attachment.mime IS
 'MIME type.';
-
-COMMENT ON COLUMN attachment.value IS
-'File content. NULL — in the object storage (in_storage), or deleted when
-nobody held it any more (purged_at); the same bytes uploaded again bring
-it back.';
-
-COMMENT ON COLUMN attachment.in_storage IS
-'The content is the object attachments/<id> in the object storage, not
-value. With purged_at — the object is still to be deleted by the worker.';
-
-COMMENT ON INDEX idx_attachment_in_storage IS
-'For the worker: purged files whose object is still to be deleted.';
 
 COMMENT ON COLUMN attachment.held_by IS
 'Who keeps the file — it counts in each one''s quota: the uploaders, and
@@ -2279,11 +2262,7 @@ COMMENT ON INDEX idx_attachment_held_by IS
 
 COMMENT ON COLUMN attachment.purged_at IS
 'When the content was deleted — the last holder let it go. NULL — the
-content is here.';
-
-COMMENT ON CONSTRAINT chk_attachment_purged ON attachment IS
-'Not purged: the content is in exactly one place, value or the object
-storage. Purged: nothing in value (the object may wait for deletion).';
+content is there: a row of attachment_content, or the object.';
 
 COMMENT ON INDEX idx_attachment_uploaded_by IS
 'A person''s files: their list.';
@@ -2299,6 +2278,33 @@ COMMENT ON COLUMN attachment.added_at IS
 
 COMMENT ON COLUMN attachment.used_at IS
 'When last uploaded again or attached to a comment.';
+
+
+CREATE TABLE attachment_content (
+    attachment_id INT PRIMARY KEY REFERENCES attachment(id) ON DELETE CASCADE,
+    value BYTEA NOT NULL
+);
+
+COMMENT ON TABLE attachment_content IS
+'The content of the files kept in PostgreSQL: a row per file that has
+content and is not in the object storage. No row and not purged — the
+file is the object attachments/<id> (decision 116).
+With an object storage (S3_BUCKET) the worker moves the rows there, one
+at a time, and when none is left it DROPS THIS TABLE: files never come
+back from the storage, and nothing should stay to say they could. So on
+such an installation the table does not exist, and everything that uses
+it must allow for that:
+  - no function, trigger or view of this schema refers to it, only the
+    application, which checks that it exists;
+  - a migration that touches it says IF EXISTS;
+  - a tool that writes into this database directly (an import) puts the
+    content into the object storage when the table is gone, and keeps to
+    the triggers of the tables it writes.
+Without the table the application refuses to start without S3_BUCKET:
+the files would be unreadable.';
+
+COMMENT ON COLUMN attachment_content.value IS
+'The bytes of the file.';
 
 
 -- ============================================================================
@@ -5537,7 +5543,7 @@ it, whoever else lets it go. Kept already — nothing changes.';
 
 
 CREATE OR REPLACE FUNCTION release_attachment(p_attachment_id INT, p_employee_id INT)
-RETURNS VOID AS $$
+RETURNS BOOLEAN AS $$
 BEGIN
     UPDATE attachment SET held_by = array_remove(held_by, p_employee_id)
      WHERE id = p_attachment_id AND held_by @> ARRAY[p_employee_id];
@@ -5545,18 +5551,20 @@ BEGIN
         RAISE EXCEPTION 'employee % does not hold attachment %', p_employee_id, p_attachment_id
             USING HINT = 'not_found';
     END IF;
-    -- Nobody holds it any more: the content goes, the row and the links
-    -- stay; an object in the storage is deleted by the worker.
-    UPDATE attachment SET value = NULL, purged_at = NOW()
+    -- Nobody holds it any more: it is purged, the row and the links stay.
+    UPDATE attachment SET purged_at = NOW()
      WHERE id = p_attachment_id AND cardinality(held_by) = 0;
+    RETURN FOUND;
 END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION release_attachment(INT, INT) IS
 'Someone lets a file they hold go, to free their quota. While anyone
-else holds it, it stays as it is; let go by the last one, its content is
-deleted. The row stays, and so do the comments that refer to it: their
-link says the file is gone; the same bytes uploaded again bring it back.';
+else holds it, it stays as it is; let go by the last one, it is purged
+and TRUE is returned: the application then deletes its content, wherever
+it is (attachment_content, decision 116), in the same transaction. The
+row stays, and so do the comments that refer to it: their link says the
+file is gone; the same bytes uploaded again bring it back.';
 
 
 CREATE OR REPLACE FUNCTION can_see_tag_limit(p_limit_id INT, p_employee_id INT)

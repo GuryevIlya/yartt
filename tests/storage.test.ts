@@ -12,8 +12,11 @@ import { client, createEmployee } from './helpers.ts';
 import { fakeS3 } from './s3.ts';
 
 const bytesOf = async (value: Buffer | Readable) => (Buffer.isBuffer(value) ? value : buffer(value));
-const fileRow = async (id: number) => (await sql<{ inStorage: boolean; hasValue: boolean; purged: boolean }[]>`
-  SELECT in_storage, value IS NOT NULL AS has_value, purged_at IS NOT NULL AS purged FROM attachment WHERE id = ${id}
+/** Whether its content is a row of attachment_content (else the object, unless purged), and whether purged. */
+const fileRow = async (id: number) => (await sql<{ inTable: boolean; purged: boolean }[]>`
+  SELECT EXISTS (SELECT 1 FROM attachment_content c WHERE c.attachment_id = a.id) AS in_table,
+         purged_at IS NOT NULL AS purged
+    FROM attachment a WHERE id = ${id}
 `)[0];
 
 describe('files in an object storage (decision 104)', () => {
@@ -48,7 +51,7 @@ describe('files in an object storage (decision 104)', () => {
     const me = await createEmployee();
     const bytes = Buffer.from(`report-${randomUUID()}`);
     const id = await Attachments.upload(me.id, bytes, 'text/csv');
-    expect(await fileRow(id)).toEqual({ inStorage: true, hasValue: false, purged: false });
+    expect(await fileRow(id)).toEqual({ inTable: false, purged: false });
     expect(s3.objects.get(`/yartt/attachments/${id}`)).toEqual({ body: bytes, type: 'text/csv' });
 
     const file = await Attachments.read(me.id, id);
@@ -77,20 +80,23 @@ describe('files in an object storage (decision 104)', () => {
     expect(await sql`SELECT 1 FROM attachment WHERE size = ${bytes.length} AND uploaded_by @> ARRAY[${me.id}::int]`).toHaveLength(0);
   });
 
-  test('a purged file loses its object; the same bytes bring it back to the storage', async () => {
+  test('a purged file loses its object at once, or stays as it was; the same bytes bring it back', async () => {
     const me = await createEmployee();
     const bytes = Buffer.from(`purged-${randomUUID()}`);
     const id = await Attachments.upload(me.id, bytes, 'text/plain');
-    await (await client(me.id)).Attachment.release({ id });
-    expect(await fileRow(id)).toEqual({ inStorage: true, hasValue: false, purged: true });
+    // The storage down: letting it go fails, and nothing changes.
+    s3.state.failing = true;
+    await expect((await client(me.id)).Attachment.release({ id })).rejects.toThrow();
+    expect(await fileRow(id)).toEqual({ inTable: false, purged: false });
+    s3.state.failing = false;
 
-    await moveAll();
-    expect(await fileRow(id)).toEqual({ inStorage: false, hasValue: false, purged: true });
+    await (await client(me.id)).Attachment.release({ id });
+    expect(await fileRow(id)).toEqual({ inTable: false, purged: true });
     expect(s3.objects.has(`/yartt/attachments/${id}`)).toBe(false);
     await expect(Attachments.read(me.id, id)).rejects.toMatchObject({ code: 'file_purged' });
 
     expect(await Attachments.upload(me.id, bytes, 'text/plain')).toBe(id);
-    expect(await fileRow(id)).toEqual({ inStorage: true, hasValue: false, purged: false });
+    expect(await fileRow(id)).toEqual({ inTable: false, purged: false });
     expect(await bytesOf((await Attachments.read(me.id, id)).value)).toEqual(bytes);
   });
 
@@ -99,12 +105,12 @@ describe('files in an object storage (decision 104)', () => {
     disable();
     const bytes = Buffer.from(`old-${randomUUID()}`);
     const id = await Attachments.upload(me.id, bytes, 'text/plain');
-    expect(await fileRow(id)).toEqual({ inStorage: false, hasValue: true, purged: false });
+    expect(await fileRow(id)).toEqual({ inTable: true, purged: false });
     expect((await Attachments.read(me.id, id)).value).toEqual(bytes);
 
     enable();
     await moveAll();
-    expect(await fileRow(id)).toEqual({ inStorage: true, hasValue: false, purged: false });
+    expect(await fileRow(id)).toEqual({ inTable: false, purged: false });
     expect(s3.objects.get(`/yartt/attachments/${id}`)?.body).toEqual(bytes);
     expect(await bytesOf((await Attachments.read(me.id, id)).value)).toEqual(bytes);
   });
