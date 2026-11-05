@@ -1,6 +1,7 @@
 # Brand
 
-The mark is a tag with a check that takes off like a rocket: tasks are named
+The mark is a tag with a check, made a rocket — a sharp nose, two fins,
+flames behind — taking off: tasks are named
 by tags, each has one owner who sees it done, and done tasks are how a
 product gets built and shipped (decision 30). Next to the mark goes the
 product name in the reader's language: **yartt** in English, **яртт** in
@@ -26,14 +27,19 @@ font.
 - [favicon.ico](favicon.ico) — 16, 32 and 48 px for old browsers.
 
 The app uses its own copies: `client/public/favicon.svg`, `favicon.ico`,
-`apple-touch-icon.png` and the `Mark` component in
-`client/components/App/Logo.tsx`. Change the mark there and here together.
+`apple-touch-icon.png` (on white: iOS fills transparency with black),
+`icon-192.png`, `icon-512.png`, `icon-maskable-512.png` (on white, the
+rocket within the middle 80% a launcher may crop to) and the `Mark`
+component in `client/components/App/Logo.tsx`. Change the mark there and
+here together, and the service worker's cache name (`client/public/sw.js`),
+or installed apps keep the old icons.
 
 ## Colors
 
 | | |
 |---|---|
 | Blue, the tag | `#1976d2` (the primary color of the interface) |
+| Dark blue, the fins | `#1565c0` (the interface's dark primary) |
 | Orange, the flames | `#f57c00` |
 | Text on light | `#212121` |
 
@@ -41,8 +47,8 @@ The app uses its own copies: `client/public/favicon.svg`, `favicon.ico`,
 
 - Leave free space around the mark of at least a quarter of its height.
 - One-color versions are for places where color is impossible: a stamp,
-  an engraving, a fax, a single-color print. In the white mark the check
-  and the hole are cut out and show the background.
+  an engraving, a fax, a single-color print. In them the check is cut
+  out and shows the background.
 - Do not recolor the mark, stretch it, turn it or add effects.
 
 The name and the mark are not covered by the code license (LICENSE.md,

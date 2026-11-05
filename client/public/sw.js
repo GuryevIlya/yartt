@@ -7,8 +7,8 @@
 // installation under another path: its name carries this one's scope, and
 // only this one's caches are touched (a name without "|": an older version).
 const SCOPE = self.registration.scope;
-const CACHE = `yartt-shell-v2|${SCOPE}`;
-const SHELL = ['./', 'manifest.webmanifest', 'favicon.svg', 'icon-192.png', 'icon-512.png'];
+const CACHE = `yartt-shell-v3|${SCOPE}`;
+const SHELL = ['./', 'manifest.webmanifest', 'favicon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
