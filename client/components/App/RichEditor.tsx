@@ -93,7 +93,7 @@ export default function (p: {
       extensions={extensions}
       content={p.initial}
       autofocus={p.autoFocus ? 'end' : false}
-      immediatelyRender
+      immediatelyRender={false}
       onUpdate={({ editor }) => onChange.current?.(editor.isEmpty ? '' : editor.getHTML())}
       editorProps={{
         handlePaste: (_view, event) => takeFiles(Array.from(event.clipboardData?.files ?? [])),

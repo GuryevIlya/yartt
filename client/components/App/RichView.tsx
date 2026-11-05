@@ -26,7 +26,7 @@ export default function (p: { html: string }) {
       }}
       sx={{ ...imageSx, '& img': { ...imageSx['& img'], cursor: 'zoom-in' }, '& p:first-of-type': { mt: 0 }, '& p:last-of-type': { mb: 0 } }}
     >
-      <RichTextReadOnly content={p.html} extensions={extensions} immediatelyRender />
+      <RichTextReadOnly content={p.html} extensions={extensions} immediatelyRender={false} />
     </Box>
   );
 }

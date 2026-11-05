@@ -6,6 +6,19 @@ test.describe('new task', () => {
     await signIn(page);
   });
 
+  test('the editor opens without React having to render the page again', async ({ page }) => {
+    // Tiptap destroyed an editor made during a render that took longer than a tick; it shows only sometimes.
+    const errors: Error[] = [];
+    page.on('pageerror', (error) => errors.push(error));
+    for (let i = 0; i < 5; i++) {
+      await page.goto('/');
+      await page.getByRole('button', { name: 'Новая задача' }).click();
+      await expect(page).toHaveURL(/\/tasks\/new$/);
+      await expect(page.locator('.ProseMirror[contenteditable="true"]').first()).toBeVisible();
+    }
+    expect(errors).toEqual([]);
+  });
+
   test('"New task" over the search opens a new task: tags as the title, priority, then the task opens', async ({ page }) => {
     const tag = unique('форма');
     await page.getByRole('button', { name: 'Новая задача' }).click();
