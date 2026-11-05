@@ -7,7 +7,7 @@ import * as Attachments from './services/Attachment.ts';
 import * as Bots from './services/Bot.ts';
 import * as Webhooks from './services/Webhook.ts';
 import { checkPeople } from './sso.ts';
-import { deliver } from './delivery.ts';
+import { botBody, deliver } from './delivery.ts';
 import env from './env.ts';
 import type { Sql } from './pg.ts';
 
@@ -17,6 +17,11 @@ const DAY = 24 * HOUR;
 
 // Cron jobs from db.sql (CRON section).
 const JOBS: { name: string; every: number; run: (sql: Sql) => Promise<unknown> }[] = [
+  {
+    name: 'webhook_retries',
+    every: 60_000,
+    run: (sql) => Webhooks.retryDue(sql),
+  },
   {
     name: 'send_due_reminds',
     every: MINUTE,
@@ -143,8 +148,8 @@ const BATCH_SIZE = 20;
 // notification. A person's notification that fails waits aside for its
 // next attempt (notification_failure, fail_notification() in db.sql) and
 // the queue goes on: one broken address never holds the others. A webhook
-// is someone's program and may be down for days: it gets one attempt, a
-// failure is noted where its owner sees it and passed over. A payload that does not
+// is someone's program and may be down: a failure is noted where its owner
+// sees it and tried again a few times apart from the queue (Webhook.retryDue). A payload that does not
 // parse is logged and skipped, so it cannot block the queue. A deadline
 // change is held until the deadline settles (deadline_settles() in db.sql).
 // The demo's people are made up: there nothing goes out, the queue is only
@@ -207,7 +212,10 @@ export async function deliverNotifications(sql: Sql): Promise<number> {
             continue;
           }
           console.error(`[worker] notification ${row.id} delivery failed:`, error);
-          if (webhook) await Bots.countDelivery(tx as unknown as Sql, row.employeeId, true);
+          if (webhook) {
+            await Bots.countDelivery(tx as unknown as Sql, row.employeeId, true);
+            await Webhooks.retryLater(tx as unknown as Sql, { botId: row.employeeId }, botBody({ to, taskId: row.taskId, payload: payload.data }));
+          }
         }
       }
       await tx`UPDATE notification SET sent_at = NOW() WHERE id = ${row.id}`;

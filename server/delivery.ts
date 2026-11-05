@@ -35,6 +35,13 @@ export type Message = {
   payload: Payload;
 };
 
+/** What a bot's webhook gets. */
+export function botBody(message: Message): string {
+  const { kind, ...data } = message.payload;
+  const { webhook: _webhook, ...to } = message.to;
+  return JSON.stringify({ version: WEBHOOK_VERSION, kind, to, taskId: message.taskId, data });
+}
+
 // An email in the recipient's language (SMTP_URL); with none configured the
 // message is logged (development mode). A bot gets JSON on its own webhook
 // only. A link that proves a mailbox or signs someone in goes nowhere else:
@@ -43,11 +50,7 @@ export async function deliver(message: Message, options: { mail?: boolean } = {}
   const { kind, ...data } = message.payload;
   const { webhook, ...recipient } = message.to;
   if (recipient.kind === 'bot') {
-    if (webhook && recipient.employeeId !== null) {
-      await sendWebhook(JSON.stringify({
-        version: WEBHOOK_VERSION, kind, to: { ...recipient, employeeId: recipient.employeeId }, taskId: message.taskId, data,
-      }), webhook);
-    }
+    if (webhook) await sendWebhook(botBody(message), webhook);
     return;
   }
   if (mailEnabled && message.to.email !== null && options.mail !== false) {

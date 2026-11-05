@@ -2226,10 +2226,13 @@ No yartt bot and no key are involved (a bot is a virtual employee, decision 49;
 it keeps its one webhook, which gets everything). A new webhook sends events
 with a link: nothing of a task leaves until the person asks for it.
 
-Email is always sent: a message in Telegram does not replace it. A webhook gets
-one attempt, like a bot's, and how it went is shown next to it; only the email
-is tried again (decision 102 is narrowed), so `notification_failure.mailed` is
-gone. Sign-in links go by email only: a webhook must not be a way into an
+Email is always sent: a message in Telegram does not replace it. A webhook that
+did not take a message gets it again after 1, 5 and 15 minutes and an hour, a
+bot's too, apart from the queue so one broken receiver holds nobody; how it went
+is shown next to it. Then it is dropped: a message hours old only gets in the
+way, unlike an email, which is tried for three days (decision 102 is narrowed to
+email), and its body may hold the text of a task. So
+`notification_failure.mailed` is gone. Sign-in links go by email only: a webhook must not be a way into an
 account.
 
 The administrator sets nothing up, and may limit where webhooks go:
@@ -2241,7 +2244,7 @@ server would otherwise make requests inside for anyone who pastes an address.
 With no list set, a person can send the text of tasks they see outside: they
 could copy it anyway.
 
-*Implemented:* `webhook`, `fail_notification()`, migration `0.6-0.7`;
+*Implemented:* `webhook`, `webhook_retry`, `fail_notification()`, migration `0.6-0.7`;
 `shared/webhook.ts`, `server/services/Webhook.ts`, `server/webhook.ts`,
 `client/components/App/Webhooks.tsx`.
 

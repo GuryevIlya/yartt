@@ -83,8 +83,8 @@ const ok = signature.length === expected.length && timingSafeEqual(Buffer.from(s
 
 `kind` and `data` are the notification and its payload
 (`shared/notification.ts`); `version` changes when the envelope does. A bot's
-webhook gets one attempt per notification: if it is down, the notification
-stays only in the bot's bell. Where webhooks may go: `WEBHOOK_ALLOWED_URLS`
+webhook that does not take a message gets it again after 1, 5 and 15 minutes and
+an hour, then it stays only in the bell. Where webhooks may go: `WEBHOOK_ALLOWED_URLS`
 ([install](install.md)).
 
 ## A person's webhooks
@@ -93,7 +93,8 @@ Anyone adds webhooks under **Profile → Webhooks**, no bot and no key needed:
 a receiver gives a person an address with their id in it, they paste it and
 choose for each group of events how much goes there. Signed like a bot's, with
 the secret shown next to it; a receiver may rely on the address being secret
-instead. One attempt per notification; how the last one went is shown there.
+instead. A failure is tried again after 1, 5 and 15 minutes and an hour; how the
+last attempt went is shown there.
 
 ```json
 {

@@ -155,8 +155,8 @@ COMMENT ON TABLE webhook IS
 'A place a person sends their notifications to, besides the email and the
 bell: a receiver for Telegram gives them an address, they paste it (decision
 110). Each sees only what its owner is notified of. Sign-in and confirmation
-links never come here. One attempt per notification: it is someone''s program,
-and may be down for days. Where they may go is the administrator''s
+links never come here. It is someone''s program and may be down: a failure is
+tried again a few times, apart from the queue (webhook_retry). Where they may go is the administrator''s
 (WEBHOOK_ALLOWED_URLS); by default only outside the company''s network, so
 nobody can make the server call inside it. A bot has its own (bot.webhook_url).';
 
@@ -231,8 +231,8 @@ address never holds the others. Attempts after 1, 5 and 15 minutes, then
 every hour, for three days (fail_notification()); then it is given up
 and stays for the administrator to see (node server/admin.ts
 deliveries). Delivered at last, the row goes. A webhook is not here: it
-gets one attempt, a failure is noted for its owner (webhook.last_error,
-bot_usage).';
+has its own attempts (webhook_retry), and a failure is noted for its owner
+(webhook.last_error, bot_usage).';
 
 ALTER TABLE notification_failure DROP COLUMN mailed;
 
@@ -267,6 +267,43 @@ COMMENT ON FUNCTION fail_notification(BIGINT, TEXT) IS
 'Records a failed attempt to deliver a person''s notification and
 returns when to try again: after 1, 5 and 15 minutes, then every hour;
 NULL — three days have passed since the first failure, it is given up.';
+
+-- A message a webhook did not take is tried again, apart from the queue.
+
+CREATE TABLE webhook_retry (
+    id BIGSERIAL PRIMARY KEY,
+    webhook_id INT REFERENCES webhook(id) ON DELETE CASCADE,
+    bot_id INT REFERENCES bot(employee_id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    attempts INT NOT NULL DEFAULT 1,
+    next_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT chk_webhook_retry_target CHECK ((webhook_id IS NULL) <> (bot_id IS NULL))
+);
+CREATE INDEX idx_webhook_retry_next ON webhook_retry(next_at);
+
+COMMENT ON TABLE webhook_retry IS
+'A message a webhook did not take, waiting for another attempt apart from the
+queue: one broken receiver never holds the others (decision 110). Attempts after
+1, 5 and 15 minutes and an hour, then it is dropped and the error stays where the
+owner sees it: a message hours old only gets in the way, and the email and the
+bell have told the person anyway. The row goes as soon as it is delivered or
+dropped, since the body may hold the text of a task.';
+
+COMMENT ON COLUMN webhook_retry.webhook_id IS
+'A person''s webhook. Removed, the message goes with it.';
+
+COMMENT ON COLUMN webhook_retry.bot_id IS
+'Or a bot, to its current webhook.';
+
+COMMENT ON COLUMN webhook_retry.body IS
+'What to send, as first built; it is signed anew at each attempt.';
+
+COMMENT ON COLUMN webhook_retry.attempts IS
+'How many attempts failed.';
+
+COMMENT ON COLUMN webhook_retry.next_at IS
+'When to try again.';
 
 -- A person's keys to the public API (decision 111).
 

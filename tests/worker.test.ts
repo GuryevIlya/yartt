@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Message } from '../server/delivery.ts';
 import env from '../server/env.ts';
 import { sql } from '../server/pg.ts';
+import { retryDue } from '../server/services/Webhook.ts';
 import { deliverNotifications } from '../server/worker.ts';
 import { client, createEmployee } from './helpers.ts';
 
@@ -134,7 +135,7 @@ describe('notification delivery', () => {
     expect((await sql<{ attempts: number }[]>`SELECT attempts FROM notification_failure`)[0]!.attempts).toBe(6);
   });
 
-  test('a person\'s webhook gets as much as they chose, one attempt, and sign-in links never', async () => {
+  test('a person\'s webhook gets as much as they chose, a failure is tried again a few times', async () => {
     const received: Record<string, unknown>[] = [];
     let answer = 200;
     const hook = createServer((req, res) => {
@@ -170,6 +171,21 @@ describe('notification delivery', () => {
       await deliverNotifications(sql);
       expect(await unsent()).toBe(0);
       expect((await api.Webhook.list()).find((w: { id: number }) => w.id === webhook.id)?.lastError).toContain('500');
+      // Tried again apart from the queue; once taken, it is gone and the error with it.
+      const [waiting] = await sql<{ id: string }[]>`SELECT id FROM webhook_retry WHERE webhook_id = ${webhook.id}`;
+      expect(waiting).toBeTruthy();
+      answer = 200;
+      await sql`UPDATE webhook_retry SET next_at = NOW() WHERE webhook_id = ${webhook.id}`;
+      received.length = 0;
+      await retryDue(sql);
+      expect(received).toHaveLength(1);
+      expect((await sql`SELECT 1 FROM webhook_retry WHERE webhook_id = ${webhook.id}`).length).toBe(0);
+      expect((await api.Webhook.list()).find((w: { id: number }) => w.id === webhook.id)?.lastError).toBeNull();
+      // After the last attempt it is dropped.
+      answer = 500;
+      await sql`INSERT INTO webhook_retry (webhook_id, body, attempts, next_at) VALUES (${webhook.id}, '{}', 4, NOW())`;
+      await retryDue(sql);
+      expect((await sql`SELECT 1 FROM webhook_retry WHERE webhook_id = ${webhook.id}`).length).toBe(0);
       // Someone else's webhook is out of reach.
       await expect(otherApi.Webhook.remove({ id: webhook.id })).rejects.toMatchObject({ message: 'not_found' });
     } finally {
