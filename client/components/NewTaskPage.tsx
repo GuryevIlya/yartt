@@ -4,6 +4,7 @@ import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
+import { FIRST_DAY, LAST_DAY } from '#shared/employee.ts';
 import type { TagPart } from '#shared/tags.ts';
 import { PRIORITIES, type Priority } from '#shared/task.ts';
 import { useDraft } from '#client/hooks/drafts.ts';
@@ -151,7 +152,7 @@ export default function () {
           label={t('task.deadline')}
           value={deadline}
           onChange={(e) => change({ deadline: e.target.value })}
-          slotProps={{ inputLabel: { shrink: true } }}
+          slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: `${FIRST_DAY}T00:00`, max: `${LAST_DAY}T23:59` } }}
         />
       </Stack>
 

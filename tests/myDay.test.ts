@@ -129,6 +129,10 @@ describe('todo', () => {
     expect(await overdue()).toHaveLength(1);
     expect(await done()).toEqual([]);
 
+    // A year typed digit by digit passes through 0002: a slip, never a plan.
+    await expect(api.Task.setDeadline({ id: task, deadline: new Date('0002-03-15T10:00:00Z') })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.Task.setDeadline({ id: task, deadline: new Date('2100-01-01T00:00:00Z') })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
     // Moved ahead: open, not overdue.
     await api.Task.setDeadline({ id: task, deadline: new Date(Date.now() + 86_400_000 * 3) });
     expect(await overdue()).toEqual([]);

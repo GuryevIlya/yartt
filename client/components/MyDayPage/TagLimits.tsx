@@ -6,6 +6,7 @@ import { useTheme } from '@mui/material/styles';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FIRST_DAY, LAST_DAY, typedDay } from '#shared/employee.ts';
 import type { TagPart } from '#shared/tags.ts';
 import type { TagLimit, TagLimitVersion } from '#shared/tagLimit.ts';
 import type { Tag } from '#shared/task.ts';
@@ -79,7 +80,7 @@ export default function (p: { fold?: ReactNode }) {
       }
     : { replaces: null, tags: [], input: '', startsOn: today(), endsOn: minusDays(today(), -182), hours: '' });
   const hours = draft ? Number(draft.hours.replace(',', '.')) : NaN;
-  const valid = !!draft && draft.tags.length > 0 && draft.startsOn !== '' && draft.endsOn >= draft.startsOn
+  const valid = !!draft && draft.tags.length > 0 && typedDay(draft.startsOn) && typedDay(draft.endsOn) && draft.endsOn >= draft.startsOn
     && Number.isFinite(hours) && hours > 0;
   const save = () => valid && set.mutate({
     replaces: draft!.replaces, tagIds: draft!.tags.map((tag) => tag.id), startsOn: draft!.startsOn, endsOn: draft!.endsOn,
@@ -111,13 +112,13 @@ export default function (p: { fold?: ReactNode }) {
           <Stack direction="row" sx={{ gap: 1.5, flexWrap: 'wrap' }}>
             <TextField
               type="date" size="small" label={t('tagLimits.startsOn')} value={draft.startsOn}
-              onChange={(e) => setDraft({ ...draft, startsOn: e.target.value })}
-              slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 170 }}
+              onChange={(e) => setDraft({ ...draft, startsOn: e.target.value })} error={!typedDay(draft.startsOn)}
+              slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: FIRST_DAY, max: LAST_DAY } }} sx={{ width: 170 }}
             />
             <TextField
               type="date" size="small" label={t('tagLimits.endsOn')} value={draft.endsOn}
-              onChange={(e) => setDraft({ ...draft, endsOn: e.target.value })} error={draft.endsOn < draft.startsOn}
-              slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: draft.startsOn } }} sx={{ width: 170 }}
+              onChange={(e) => setDraft({ ...draft, endsOn: e.target.value })} error={draft.endsOn < draft.startsOn || !typedDay(draft.endsOn)}
+              slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: draft.startsOn, max: LAST_DAY } }} sx={{ width: 170 }}
             />
             <TextField
               size="small" label={t('tagLimits.hours')} value={draft.hours}

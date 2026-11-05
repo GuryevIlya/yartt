@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { FIRST_DAY, LAST_DAY, typedMoment } from '#shared/employee.ts';
 import type { TagPart } from '#shared/tags.ts';
 import type { Dependency, TaskDetails, TaskHeader, TaskPage } from '#shared/task.ts';
 import { fromLocalInput, toLocalInput, useFormat } from '#client/hooks/format.ts';
@@ -97,7 +98,8 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
   const editedGone = draft?.editing != null && !task.details.waitsFor.some((dep) => dep.id === draft.editing);
   useEffect(() => { if (editedGone) setDraft(null); }, [editedGone, setDraft]);
 
-  const latest = draft?.limited && canLimit(draft) ? fromLocalInput(draft.latest) : null;
+  const typed = draft?.limited && canLimit(draft) ? fromLocalInput(draft.latest) : null;
+  const latest = typed && typedMoment(typed) ? typed : null;
   const limited = !!draft?.limited && canLimit(draft);
   const valid = !!draft?.picked && draft.picked.id !== task.id && (!limited || latest !== null);
   const save = () => valid && set.mutate(draft!.waits
@@ -138,7 +140,7 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
           onKeyDown={(e) => { if (e.key === 'Enter') save(); }}
           error={latest === null}
           autoFocus={d.editing !== null}
-          slotProps={{ inputLabel: { shrink: true } }}
+          slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: `${FIRST_DAY}T00:00`, max: `${LAST_DAY}T23:59` } }}
           sx={{ width: 240 }}
         />
       )}

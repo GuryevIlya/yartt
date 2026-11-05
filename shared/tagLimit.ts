@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Day, Id } from './employee.ts';
+import { Day, Id, TypedDay } from './employee.ts';
 import { Tag } from './task.ts';
 
 // Limits of hours on a combination of tags for a fixed period (decision 69; db.sql, tag_limit).
@@ -12,8 +12,8 @@ export const TagLimitInput = z.object({
   replaces: Id.nullable(),
   /** The combination: a task counts when it carries all of them. */
   tagIds: Id.array().min(1).max(20),
-  startsOn: Day,
-  endsOn: Day,
+  startsOn: TypedDay,
+  endsOn: TypedDay,
   minutes: z.number().int().min(1).max(100_000_000),
 }).refine((x) => x.startsOn <= x.endsOn, { path: ['endsOn'] })
   .refine((x) => (Date.parse(x.endsOn) - Date.parse(x.startsOn)) / 86_400_000 <= MAX_LIMIT_DAYS, { path: ['endsOn'] });

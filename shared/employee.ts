@@ -19,6 +19,21 @@ export const TimeZone = z.string().min(1).max(64);
 /** Calendar day, YYYY-MM-DD. */
 export const Day = z.iso.date();
 
+/**
+ * A date a person types is in the years 2000-2099. A browser's date field
+ * takes a year of up to six digits, and a year typed digit by digit passes
+ * through 0002 and 0020 on its way: such a date is a slip, never a plan.
+ * Fields that save as they change skip it (`typedDay`, `typedMoment`).
+ */
+export const FIRST_DAY = '2000-01-01';
+export const LAST_DAY = '2099-12-31';
+export const typedDay = (day: string) => day >= FIRST_DAY && day <= LAST_DAY;
+export const typedMoment = (at: Date) => typedDay(at.toISOString().slice(0, 10));
+/** A day a person typed: `Day` within the years above. */
+export const TypedDay = Day.refine(typedDay);
+/** A moment a person typed: within the years above. */
+export const TypedMoment = z.date().refine(typedMoment);
+
 /** A person or a program acting through the API (db.sql, employee_kind). */
 export const EmployeeKind = z.enum(['human', 'bot']);
 export type EmployeeKind = z.infer<typeof EmployeeKind>;
@@ -81,7 +96,7 @@ export type EmailChangeInput = z.infer<typeof EmailChangeInput>;
 /** Settings applied as soon as they are picked; only the given fields change. */
 export const SettingsInput = z
   .object({
-    nextDay: Day.nullable(),
+    nextDay: TypedDay.nullable(),
     timeZone: TimeZone,
     locale: Locale,
     pronoun: Pronoun.nullable(),

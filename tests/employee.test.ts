@@ -261,5 +261,6 @@ describe('pronoun', () => {
     expect(await api.Employee.updateSettings({ pronoun: null })).toMatchObject({ pronoun: null });
     // @ts-expect-error — not a pronoun
     await expect(api.Employee.updateSettings({ pronoun: 'it' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.Employee.updateSettings({ nextDay: '0002-01-05' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 });

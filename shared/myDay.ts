@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { As, Day, Id } from './employee.ts';
+import { As, Day, Id, TypedMoment } from './employee.ts';
 import { MentionReply } from './comment.ts';
 import { TaskHeader, TaskHours } from './task.ts';
 
@@ -264,11 +264,11 @@ export const About = z.string().trim().max(2000).nullable();
 export const OpenShift = z.object({ startedAt: z.date() }).nullable();
 export type OpenShift = z.infer<typeof OpenShift>;
 
-export const StartShiftInput = z.object({ startedAt: z.date() });
+export const StartShiftInput = z.object({ startedAt: TypedMoment });
 export type StartShiftInput = z.infer<typeof StartShiftInput>;
 
 /** Closing the open shift; its start may be corrected at the same time. */
-export const CloseShiftInput = z.object({ startedAt: z.date(), endedAt: z.date(), about: About });
+export const CloseShiftInput = z.object({ startedAt: TypedMoment, endedAt: TypedMoment, about: About });
 export type CloseShiftInput = z.infer<typeof CloseShiftInput>;
 
 /** A closed shift added at once, e.g. a suggestion for a past day confirmed. */
@@ -276,7 +276,7 @@ export const AddShiftInput = CloseShiftInput;
 export type AddShiftInput = z.infer<typeof AddShiftInput>;
 
 /** A closed shift corrected: found by its start, given a new start, end and what was done. */
-export const UpdateShiftInput = z.object({ startedAt: z.date(), newStartedAt: z.date(), endedAt: z.date(), about: About });
+export const UpdateShiftInput = z.object({ startedAt: z.date(), newStartedAt: TypedMoment, endedAt: TypedMoment, about: About });
 export type UpdateShiftInput = z.infer<typeof UpdateShiftInput>;
 
 /** A shift, open or closed, by its start. */

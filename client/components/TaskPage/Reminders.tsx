@@ -6,6 +6,7 @@ import {
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LAST_DAY } from '#shared/employee.ts';
 import { clockOf, fromDay, fromLocalInput, today, toLocalInput, useFormat, zoned } from '#client/hooks/format.ts';
 import { useTaskRefresh } from '#client/hooks/task.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
@@ -62,7 +63,7 @@ export function PutOff(p: { taskId: number; at: Date; deadline: Date | null }) {
             label={t('task.remind.at')}
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: toLocalInput(new Date()) } }}
+            slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: toLocalInput(new Date()), max: `${LAST_DAY}T23:59` } }}
           />
         </DialogContent>
         <DialogActions>
@@ -142,7 +143,7 @@ export default function (p: { taskId: number; deadline: Date | null }) {
             label={t('task.remind.at')}
             value={at}
             onChange={(e) => setAt(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: toLocalInput(new Date()) } }}
+            slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: toLocalInput(new Date()), max: `${LAST_DAY}T23:59` } }}
           />
           <TextField
             autoFocus

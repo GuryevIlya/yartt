@@ -3,6 +3,7 @@ import { Button, Chip, IconButton, Popover, Stack, TextField, Tooltip, Typograph
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LAST_DAY, typedDay } from '#shared/employee.ts';
 import { fromDay, today, useFormat } from '#client/hooks/format.ts';
 import { useMe } from '#client/hooks/me.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
@@ -80,10 +81,11 @@ export default function () {
             type="date"
             label={t('profile.nextDay')}
             value={me.nextDay ?? ''}
-            onChange={(e) => e.target.value && set(e.target.value)}
+            // Applied as it changes, so a year typed digit by digit (0002, 0020) is skipped.
+            onChange={(e) => typedDay(e.target.value) && set(e.target.value)}
             error={!!errors.nextDay}
             helperText={errors.nextDay ?? t('profile.nextDayHint')}
-            slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: plus(now, 1) } }}
+            slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: plus(now, 1), max: LAST_DAY } }}
           />
           {away && (
             <Button variant="outlined" onClick={() => set(null)} disabled={settings.isPending}>{t('away.back')}</Button>

@@ -6,6 +6,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TagPart } from '#shared/tags.ts';
+import { FIRST_DAY, LAST_DAY, typedMoment } from '#shared/employee.ts';
 import { PRIORITIES, type Priority, type TaskDetails, type TaskPage } from '#shared/task.ts';
 import { fromLocalInput, toLocalInput, useFormat } from '#client/hooks/format.ts';
 import { useDraft } from '#client/hooks/drafts.ts';
@@ -150,9 +151,13 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
                   <TextField
                     type="datetime-local"
                     variant="standard"
-                    slotProps={{ htmlInput: { 'aria-label': t('task.deadline') } }}
+                    slotProps={{ htmlInput: { 'aria-label': t('task.deadline'), min: `${FIRST_DAY}T00:00`, max: `${LAST_DAY}T23:59` } }}
                     value={task.deadline ? toLocalInput(task.deadline) : ''}
-                    onChange={(e) => { const deadline = fromLocalInput(e.target.value); if (deadline) setDeadline.mutate({ id: task.id, deadline }); }}
+                    // Saved as it changes, so a year typed digit by digit (0002, 0020) is skipped.
+                    onChange={(e) => {
+                      const deadline = fromLocalInput(e.target.value);
+                      if (deadline && typedMoment(deadline)) setDeadline.mutate({ id: task.id, deadline });
+                    }}
                   />
                   {task.deadline && (
                     <Button size="small" color="inherit" onClick={() => setDeadline.mutate({ id: task.id, deadline: null })}>

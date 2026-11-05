@@ -5,7 +5,7 @@ import { useColorScheme } from '@mui/material/styles';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LOCALES, PRONOUNS, type Locale, type Pronoun, type SettingsInput } from '#shared/employee.ts';
+import { FIRST_DAY, LAST_DAY, LOCALES, PRONOUNS, typedDay, type Locale, type Pronoun, type SettingsInput } from '#shared/employee.ts';
 import { defaultKeyboards, KEYBOARDS } from '#shared/keyboards.ts';
 import { deleteAvatar, uploadAvatar } from '#client/hooks/avatar.ts';
 import { useSignedOut } from '#client/hooks/session.ts';
@@ -143,10 +143,11 @@ export default function (p: { onClose: () => void }) {
             label={t('profile.nextDay')}
             type="date"
             value={me.nextDay ?? ''}
-            onChange={(e) => apply({ nextDay: e.target.value || null })}
+            // Applied as it changes, so a year typed digit by digit (0002, 0020) is skipped.
+            onChange={(e) => (!e.target.value || typedDay(e.target.value)) && apply({ nextDay: e.target.value || null })}
             error={!!settingErrors.nextDay}
             helperText={settingErrors.nextDay ?? t('profile.nextDayHint')}
-            slotProps={{ inputLabel: { shrink: true } }}
+            slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: FIRST_DAY, max: LAST_DAY } }}
           />
           <Autocomplete
             options={TIME_ZONES}

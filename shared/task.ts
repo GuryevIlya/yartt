@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Id } from './employee.ts';
+import { Id, TypedMoment } from './employee.ts';
 import { TagDescription } from './tagDescription.ts';
 
 // Tasks: the header everyone sees, the page of someone who sees the task,
@@ -170,7 +170,7 @@ export const CreateInput = z.object({
   tags: TagName.array().min(1).max(20),
   priority: Priority.optional(),
   /** NULL or left out — no deadline. */
-  deadline: z.date().nullable().optional(),
+  deadline: TypedMoment.nullable().optional(),
   context: Html.nullable().optional(),
   /** The new task waits for this one (no latest deadline); the creator must see it. */
   waitsFor: Id.optional(),

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Id } from '#shared/employee.ts';
+import { Id, TypedMoment } from '#shared/employee.ts';
 import { CreateInput, Expert, SearchInput, SearchResult, TaskHeader, TaskPage, TaskPreview, TitleInput, TitleTaken, TransferInput, UpdateInput } from '#shared/task.ts';
 import { AppError } from '../errors.ts';
 import * as Tasks from '../services/Task.ts';
@@ -111,7 +111,7 @@ export default router({
    */
   setDeadline: authedProcedure
     .meta({ bot: 'task' })
-    .input(z.object({ id: Id, deadline: z.date().nullable() }))
+    .input(z.object({ id: Id, deadline: TypedMoment.nullable() }))
     .output(z.void())
     .mutation(({ input, ctx }) => Tasks.setDeadline(ctx.employeeId, input.id, input.deadline)),
 
