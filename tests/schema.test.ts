@@ -6,7 +6,7 @@ import postgres from 'postgres';
 import { describe, expect, inject, test } from 'vitest';
 import { connect, sql } from '../server/pg.ts';
 import {
-  DB_SQL_PATH, MIGRATIONS_DIR, checkMigrationSql, migrate, parseMigrations, parseVersion, planMigrations, versionOfDbSql,
+  DB_SQL_PATH, MIGRATIONS_DIR, checkExtensionRights, checkMigrationSql, migrate, parseMigrations, parseVersion, planMigrations, versionOfDbSql,
 } from '../server/migrate.ts';
 import { dataOf, dumpData, loadData, pinClock, releaseMoments } from '../scripts/data.ts';
 
@@ -123,6 +123,34 @@ async function scratch(name: string, use: (db: ReturnType<typeof connect>) => Pr
     await admin.end();
   }
 }
+
+// A company's PostgreSQL may close the extensions' functions to PUBLIC: neither
+// installing nor migrating notices, requests would fail one by one.
+test('a database user without the right to call the extensions is told at startup', async () => {
+  const role = `yartt_rights_${process.pid}`;
+  await scratch(`yartt_rights_${process.pid}`, async (db) => {
+    await db.unsafe(await readFile(DB_SQL_PATH, 'utf8'));
+    await db.unsafe(`DROP ROLE IF EXISTS ${role}`);
+    await db.unsafe(`CREATE ROLE ${role} LOGIN PASSWORD 'p'`);
+    const url = new URL(inject('adminUrl'));
+    url.pathname = `/${role}`; // the database has the same name
+    url.username = role;
+    url.password = 'p';
+    const user = connect(url.toString());
+    try {
+      await checkExtensionRights(user);
+      await db.unsafe('REVOKE EXECUTE ON FUNCTION digest(text, text) FROM PUBLIC');
+      await expect(checkExtensionRights(user))
+        .rejects.toThrow(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${role};`);
+      await db.unsafe(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${role}`);
+      await checkExtensionRights(user);
+    } finally {
+      await user.end();
+      await db.unsafe(`DROP OWNED BY ${role}`);
+      await db.unsafe(`DROP ROLE ${role}`);
+    }
+  });
+});
 
 // The test data of this version (npm run fixture) fits this schema and comes
 // back exactly as it went in.

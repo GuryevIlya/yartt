@@ -27,9 +27,10 @@ entries and scores of the day make work transparent, and are optional.
 
 ## Installation
 
-You need Docker and PostgreSQL 15+ (external). The database user must own
+You need Docker and PostgreSQL 16+ (external). The database user must own
 the database: the first start creates the extensions `citext`, `pgcrypto`,
-`btree_gist`, `pg_trgm`.
+`btree_gist`, `pg_trgm`, `fuzzystrmatch`, and the user must be allowed to call
+their functions.
 
 The image is on Docker Hub: `yartt/public:<version>`. A working
 installation and a trial take different settings, each from its own file:

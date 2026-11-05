@@ -184,3 +184,31 @@ export async function migrate(sql: Sql): Promise<MigrateResult> {
     return { action: 'migrated', version: formatVersion(target), files: plan.map((m) => m.file) };
   });
 }
+
+const CurrentUser = z.object({ currentUser: z.string() });
+
+/**
+ * Whether this database user may call what yartt calls from the extensions.
+ * PUBLIC may by default, but a company's PostgreSQL can be stricter (say, a
+ * revoking ALTER DEFAULT PRIVILEGES when the extensions are created), and
+ * neither installing nor migrating the schema notices: every request would
+ * fail later, on the first function it needs. So it is said at startup, with
+ * what to do. Only what is really called is tried, not all that the
+ * extensions have: an administrator may well close the rest.
+ */
+export async function checkExtensionRights(sql: Sql): Promise<void> {
+  try {
+    await sql`
+      SELECT digest('', 'sha256'), gen_random_bytes(1), 'a'::citext = 'A'::citext,
+             similarity('a', 'b'), levenshtein('a', 'b')
+    `;
+  } catch (error) {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== '42501') throw error;
+    const [row] = CurrentUser.array().length(1).parse(await sql`SELECT quote_ident(current_user) AS current_user`);
+    throw new Error(
+      `The database user may not call the functions of the extensions (${error.message}). `
+      + `As their owner or a superuser, run: GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${row!.currentUser}; `
+      + '(with the schema of the extensions, if it is not public)',
+    );
+  }
+}
