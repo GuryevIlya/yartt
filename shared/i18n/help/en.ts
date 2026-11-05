@@ -242,6 +242,15 @@ export const helpEn: Help = {
           ],
         },
         {
+          title: 'Describe a tag',
+          steps: [
+            'A description holds what all tasks with this tag have in common: where they come from, what to watch for, a link to a regulation. Nothing has to be linked to tasks by hand.',
+            'Profile, "Tags", "Description". Everyone in your tasks and your people\'s sees it.',
+            'One tag may mean different things in different departments, so a task shows the line of its owner: from the top down, with each author\'s name. Everyone in the task sees the same.',
+            'A manager writes for all their people, and anyone may add for themselves. A description forbids nothing. If you disagree, ask your manager to correct it or make a tag of your own.',
+          ],
+        },
+        {
           title: 'Close a task',
           steps: [
             'Only the owner closes a task, with "Finish" on its page or in Waiting for me. It never closes by itself at its deadline.',
@@ -434,7 +443,7 @@ export const helpEn: Help = {
           a: 'In three ways. Shared tags group tasks by meaning: a click on a tag finds every task with it. A task attached to a '
             + 'comment with # is linked with the reason why: its feed says "Mentioned in" and the task. "Waits for" links by a commitment: '
             + 'a task needs the result of another, and the deadlines are checked. A wordless "related to" constrains nothing and '
-            + 'explains nothing: in half a year nobody remembers why it was set.',
+            + 'explains nothing: in half a year nobody remembers why it was set. "Related" gathers itself from these links, and nothing is added to it by hand.',
         },
         {
           q: 'Why no reporter and assignee?',

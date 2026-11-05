@@ -39,6 +39,8 @@ export default function (p: {
   autoFocus?: boolean;
   /** A button that writes a task's number, found by tags: for the context (a comment attaches tasks its own way). */
   taskPicker?: { exclude: number };
+  /** Pictures are not kept here: no button for them. */
+  noImages?: boolean;
 }) {
   const { t } = useTranslation();
   const rte = useRef<RichTextEditorRef>(null);
@@ -143,7 +145,7 @@ export default function (p: {
           <MenuButtonCodeBlock tooltipLabel={t('editor.codeBlock')} />
           <MenuButtonAddTable tooltipLabel={t('editor.table')} />
           <MenuDivider />
-          <MenuButtonImageUpload tooltipLabel={t('task.composer.addImage')} onUploadFiles={uploadImages} />
+          {!p.noImages && <MenuButtonImageUpload tooltipLabel={t('task.composer.addImage')} onUploadFiles={uploadImages} />}
           {p.taskPicker && (
             <MenuButton tooltipLabel={t('editor.task')} IconComponent={Numbers} onClick={(e) => setPicking(e.currentTarget)} />
           )}

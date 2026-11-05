@@ -18,6 +18,7 @@ import PriorityChip from './TaskPage/PriorityChip.tsx';
 import TaskLine from './TaskPage/TaskLine.tsx';
 import TakenLink from './App/TakenLink.tsx';
 import Experts from './App/Experts.tsx';
+import TagDescriptions from './App/TagDescriptions.tsx';
 
 type Draft = { tags: TagPart[]; input: string; priority: Priority; deadline: string; context: string; participants: number[]; request?: string };
 const EMPTY: Draft = { tags: [], input: '', priority: 'NORMAL', deadline: '', context: '', participants: [] };
@@ -83,6 +84,9 @@ export default function () {
   const names = title.names;
   // What already exists under the picked tags, so the new task is written next to it.
   const picked = tags.flatMap((part) => ('tag' in part ? [part.tag.name] : []));
+  // What they mean along my own chain: the task will be mine (decision 112).
+  const pickedTags = tags.flatMap((part) => ('tag' in part ? [part.tag] : []));
+  const descriptions = useQuery(trpc.Tags.descriptions.queryOptions({ tagIds: pickedTags.map((tag) => tag.id) }, { enabled: pickedTags.length > 0 }));
   const similar = useQuery(trpc.Task.similar.queryOptions({ tags: picked }, { enabled: picked.length > 0, placeholderData: keepPreviousData }));
 
   const create = useMutation(trpc.Task.create.mutationOptions({
@@ -193,6 +197,8 @@ export default function () {
         exclude={participants}
         onPick={(id) => change({ participants: [...participants, id] })}
       />
+
+      <TagDescriptions items={descriptions.data ?? []} tags={pickedTags} />
 
       {relatedId !== undefined && (
         <Stack spacing={0.75}>

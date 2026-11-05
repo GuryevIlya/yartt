@@ -479,6 +479,8 @@ export async function seedDemo(lang: DemoLanguage): Promise<void> {
 
   // My tag colors and weights: the site and the report first and colored, support sinks.
   const tagId = async (name: string) => Row.array().parse(await sql`SELECT id FROM tag WHERE name = ${name}`)[0]!.id;
+  // What the site's tag means: a line the whole chain below sees in its tasks (decision 112).
+  await I.Tags.setDescription({ tagId: await tagId(tags.site[0]!), html: t.tagDescription });
   await I.Tags.set({ tagId: await tagId(tags.site[0]!), color: '#1e88e5', weight: 3 });
   await I.Tags.set({ tagId: await tagId(tags.report[0]!), color: '#43a047', weight: 2 });
   await I.Tags.set({ tagId: await tagId(tags.stock[0]!), color: '#fb8c00', weight: 0 });

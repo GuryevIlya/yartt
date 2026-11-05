@@ -7,6 +7,7 @@ import { AppError } from '../errors.ts';
 import { cleanHtml, taskRefs } from '../html.ts';
 import { sql, type Sql } from '../pg.ts';
 import { createIn as createComment } from './Comment.ts';
+import { descriptions } from './Tags.ts';
 import * as Dependencies from './Dependency.ts';
 
 export const PAGE_SIZE = 20;
@@ -482,6 +483,12 @@ const AccessRow = z.object({
   requested: z.boolean(),
 });
 
+/** What the task's tags mean along its owner's chain (decision 112): whose task it is, in that sense it was made. */
+async function describedTags(ownerId: number | null, taskId: number) {
+  const [row] = z.object({ tagIds: z.number().array() }).array().parse(await sql`SELECT tag_ids FROM task WHERE id = ${taskId}`);
+  return descriptions(ownerId, row?.tagIds ?? []);
+}
+
 /** The task page: the header for everyone, the rest for whoever sees the task. */
 export async function get(viewerId: number, taskId: number): Promise<TaskPage> {
   const [header] = await headers(viewerId, [taskId]);
@@ -550,6 +557,7 @@ export async function get(viewerId: number, taskId: number): Promise<TaskPage> {
     waitsFor: await dependencies(viewerId, waitsFor),
     waitedOnBy: await dependencies(viewerId, waitedOnBy),
     related: (await headers(viewerId, [...related.keys()])).map((h) => ({ ...h, ...related.get(h.id)! })),
+    tagDescriptions: await describedTags(header.ownerId, taskId),
   };
   return { ...header, access, details };
 }

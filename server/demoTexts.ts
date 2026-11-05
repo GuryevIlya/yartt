@@ -17,6 +17,7 @@ const ru = {
     anna: { email: 'anna@example.com', name: 'Анна Петрова' },
     bot: { name: 'CI-бот', about: 'Сборки сайта в GitHub Actions: пишет в задачу, когда сборка упала. Вопросы — Алексею.' },
   },
+  tagDescription: '<p>Задачи о сайте компании. Перед выкладкой проверьте, как страница выглядит на телефоне. Тексты согласуем с маркетингом.</p>',
   tags: {
     site: ['сайт', 'новая главная к осенней кампании'],
     report: ['финансы', 'квартальный отчёт для совета директоров'],
@@ -95,6 +96,7 @@ const en: typeof ru = {
     anna: { email: 'anna@example.com', name: 'Anna Clark' },
     bot: { name: 'CI bot', about: 'Website builds in GitHub Actions: writes to the task when a build fails. Questions — to Alex.' },
   },
+  tagDescription: '<p>Tasks about the company website. Before it goes live, check how the page looks on a phone. Texts are agreed with marketing.</p>',
   tags: {
     site: ['website', 'new homepage for the autumn campaign'],
     report: ['finance', 'quarterly report for the board'],

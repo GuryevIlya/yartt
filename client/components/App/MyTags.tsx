@@ -1,6 +1,6 @@
 import { Add, Clear, Remove, Search as SearchIcon } from '@mui/icons-material';
 import {
-  Box, ButtonBase, IconButton, InputAdornment, Pagination, Stack, TextField, Tooltip, Typography,
+  Box, Button, ButtonBase, IconButton, InputAdornment, Pagination, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -9,6 +9,7 @@ import type { MyTag } from '#shared/tags.ts';
 import { searchByTags } from '#client/hooks/store.ts';
 import { useTRPC } from '#client/hooks/trpc.ts';
 import TagChip, { TAG_COLORS } from './TagChip.tsx';
+import TagDescriptionDialog from './TagDescriptionDialog.tsx';
 
 const PAGE_SIZE = 50;
 
@@ -53,6 +54,7 @@ function Row(p: { tag: MyTag; onOpen: () => void }) {
     onSuccess: () => queryClient.invalidateQueries(),
   }));
   const { tag } = p;
+  const [describing, setDescribing] = useState(false);
   const save = (change: { color?: string | null; weight?: number }) =>
     set.mutate({ tagId: tag.id, color: change.color === undefined ? tag.color : change.color, weight: change.weight ?? tag.weight });
 
@@ -66,6 +68,8 @@ function Row(p: { tag: MyTag; onOpen: () => void }) {
           {t('tags.counts', { tasks: tag.tasks, open: tag.open })}
         </Typography>
       </Stack>
+      <Button size="small" onClick={() => setDescribing(true)}>{t('tags.description')}</Button>
+      {describing && <TagDescriptionDialog tag={tag} onClose={() => setDescribing(false)} />}
       <Stack direction="row" sx={{ gap: 0.5, alignItems: 'center' }}>
         {TAG_COLORS.map((color) => (
           <ButtonBase

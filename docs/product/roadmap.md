@@ -10,10 +10,6 @@ it is decided. Proposals wait for a decision in their own section.
 Decided after the first team's meeting about moving in (2026-11-03), all
 in one version, before stage 6 goes on.
 
-- [ ] **Descriptions of tags.** Anyone describes a tag for themselves and
-  the people below them. A task shows the descriptions of its tags along
-  its owner's chain, from the top down, the same for everyone in it. One
-  tag each; replacing a tag across tasks is left out.
 - [ ] **The guide.** How a task is run when one owner holds it and others
   do the work: what the doer answers for, whose problem it is, the
   reviewer, rework, a big task, the context as notes on the state, one on

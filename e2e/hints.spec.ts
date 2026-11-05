@@ -114,6 +114,28 @@ test('Markdown goes into the context as formatted text, a table too', async ({ p
   await expect(shown.getByRole('cell', { name: 'Выгрузка' })).toBeVisible();
 });
 
+test('a tag is described in the profile and shown in tasks with it', async ({ page }) => {
+  await signIn(page, 'olga@example.com');
+  const tag = unique('регламент');
+  await createTask(page, [tag]);
+  const task = page.url();
+  await page.getByRole('button', { name: /Ольга Белова/ }).click();
+  await page.getByRole('menuitem', { name: 'Профиль' }).click();
+  await page.getByRole('dialog').getByRole('tab', { name: 'Теги' }).click();
+  await page.getByRole('dialog').getByRole('textbox').first().fill(tag);
+  const describe = page.getByRole('dialog').getByRole('button', { name: 'Описание', exact: true });
+  await expect(describe).toHaveCount(1);
+  await describe.click();
+  const dialog = page.getByRole('dialog', { name: /Описание тега/ });
+  await dialog.locator('.ProseMirror').fill('Сверяем с бухгалтерией');
+  await dialog.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(dialog).toHaveCount(0);
+
+  await page.goto(task);
+  await page.getByRole('button', { name: 'Описания тегов: 1' }).click();
+  await expect(page.getByText('Сверяем с бухгалтерией')).toBeVisible();
+});
+
 test('a participant makes a task of their own, which the task waits for, told when they need one', async ({ page }) => {
   await signIn(page, 'pavel@example.com');
   const site = await taskId('сайт', 'новая главная к осенней кампании');

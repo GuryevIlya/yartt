@@ -6,6 +6,8 @@ import { Tag } from '#shared/task.ts';
 import * as Tags from '../services/Tags.ts';
 import { viewAs } from '../services/Team.ts';
 import { authedProcedure, router } from '../trpc.ts';
+import { Id } from '#shared/employee.ts';
+import { SetTagDescriptionInput, TagDescription } from '#shared/tagDescription.ts';
 
 export default router({
   /**
@@ -71,4 +73,20 @@ export default router({
     .input(SetTagInput)
     .output(z.void())
     .mutation(({ input, ctx }) => Tags.set(ctx.employeeId, input)),
+
+  /** What these tags mean along the caller's own chain, from the top down: their words and their managers'. */
+  descriptions: authedProcedure
+    .input(z.object({ tagIds: Id.array().max(50) }))
+    .output(TagDescription.array())
+    .query(({ input, ctx }) => Tags.descriptions(ctx.employeeId, input.tagIds)),
+
+  /**
+   * One's own words about a tag, seen in tasks of oneself and the people below;
+   * NULL removes them. Anyone may; nothing is resolved, a description forbids nothing.
+   * @throws not_found — unknown tag.
+   */
+  setDescription: authedProcedure
+    .input(SetTagDescriptionInput)
+    .output(z.void())
+    .mutation(({ input, ctx }) => Tags.setDescription(ctx.employeeId, input)),
 });

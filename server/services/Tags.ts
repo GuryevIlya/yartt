@@ -1,5 +1,7 @@
 import type { MyTags, SetTagInput, Suggestions, TagDetail, TagDetailInput, TagGroup, TagPart, TagSort, TagStatsInput } from '#shared/tags.ts';
 import { MyTag, TagPerson, TagStats as TagStatsSummary, TagStatsRow } from '#shared/tags.ts';
+import { TagDescription, type SetTagDescriptionInput } from '#shared/tagDescription.ts';
+import { cleanHtml } from '../html.ts';
 import { defaultKeyboards, Keyboard, retype } from '#shared/keyboards.ts';
 import { Locale } from '#shared/employee.ts';
 import { Tag, TagName } from '#shared/task.ts';
@@ -541,4 +543,37 @@ export async function detail(viewerId: number, input: TagDetailInput): Promise<T
       plannedTasks: byDay(tasks, person.employeeId),
     })),
   };
+}
+
+const DescriptionRow = TagDescription;
+
+/** What these tags mean along someone's chain, from the top down (decision 112). */
+export async function descriptions(employeeId: number | null, tagIds: number[]): Promise<TagDescription[]> {
+  if (employeeId === null || tagIds.length === 0) return [];
+  return DescriptionRow.array().parse(await sql`
+    SELECT d.tag_id, d.employee_id AS author_id, d.value AS html, d.updated_at
+      FROM employee_chain(${employeeId}) c
+      JOIN tag_description d ON d.employee_id = c.id
+     WHERE d.tag_id = ANY(${tagIds})
+     ORDER BY d.tag_id, c.depth DESC
+  `);
+}
+
+/** One's own words about a tag, for oneself and the people below; NULL or nothing left removes them. */
+export async function setDescription(employeeId: number, input: SetTagDescriptionInput): Promise<void> {
+  // Without images: more people see it than its author could give access to.
+  const clean = input.html === null ? null : cleanHtml(input.html.replace(/<img\b[^>]*>/gi, '')).html;
+  if (clean === null) {
+    await sql`DELETE FROM tag_description WHERE employee_id = ${employeeId} AND tag_id = ${input.tagId}`;
+    return;
+  }
+  const [exists] = z.object({ value: z.boolean() }).array().parse(await sql`
+    SELECT EXISTS (SELECT 1 FROM tag WHERE id = ${input.tagId}) AS value
+  `);
+  if (!exists?.value) throw new AppError('not_found');
+  await sql`
+    INSERT INTO tag_description (employee_id, tag_id, value)
+    VALUES (${employeeId}, ${input.tagId}, ${clean})
+    ON CONFLICT (employee_id, tag_id) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+  `;
 }

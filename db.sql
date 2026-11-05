@@ -685,7 +685,8 @@ CRON JOBS (outside SQL)
   - every day:    DELETE FROM tag t
                    WHERE created_at < NOW() - INTERVAL ''1 day''
                      AND NOT EXISTS (SELECT 1 FROM task WHERE tag_ids @> ARRAY[t.id])
-                     AND NOT EXISTS (SELECT 1 FROM user_tag WHERE tag_id = t.id);
+                     AND NOT EXISTS (SELECT 1 FROM user_tag WHERE tag_id = t.id)
+                     AND NOT EXISTS (SELECT 1 FROM tag_description WHERE tag_id = t.id);
   - every day:    UPDATE human SET next_day = NULL
                    WHERE next_day <= local_today(employee_id);
 ';
@@ -2772,6 +2773,60 @@ its owner is dismissed or refused by the identity provider.';
 
 
 -- ============================================================================
+-- tag_description — what a tag means, along the reporting line
+-- ============================================================================
+CREATE TABLE tag_description (
+    employee_id INT NOT NULL REFERENCES human(employee_id),
+    tag_id INT NOT NULL REFERENCES tag(id),
+    value TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (employee_id, tag_id)
+);
+CREATE INDEX idx_tag_description_tag ON tag_description(tag_id);
+
+COMMENT ON TABLE tag_description IS
+'What a tag means, in someone''s words: what a group of tasks has in common,
+the rules for it, a link to the regulation (decision 112). The same tag may
+mean different things in different departments, and a tag has no owner, so a
+description belongs to a person and applies along the reporting line. A task
+shows the descriptions of its tags along its OWNER''s chain, from the top down
+and each with its author, the same for everyone who sees the task: whose task
+it is, in that sense it was made. Nobody below can hide what is above, and
+nothing has to be resolved, since a description forbids nothing. A dismissed
+author''s go to their manager, unless the manager has one for that tag.';
+
+COMMENT ON COLUMN tag_description.employee_id IS
+'Whose words these are.';
+
+COMMENT ON COLUMN tag_description.tag_id IS
+'Which tag. One tag each: a combination is described by a tag of its own.';
+
+COMMENT ON COLUMN tag_description.value IS
+'Sanitized HTML, without images: a description is seen by more people than its
+author could give access to.';
+
+COMMENT ON COLUMN tag_description.updated_at IS
+'When it last changed.';
+
+
+CREATE OR REPLACE FUNCTION employee_chain(p_employee_id INT)
+RETURNS TABLE (id INT, depth INT) AS $$
+    WITH RECURSIVE chain(id, depth, seen) AS (
+        SELECT p_employee_id, 0, ARRAY[p_employee_id]
+        UNION ALL
+        SELECT e.manager_id, c.depth + 1, c.seen || e.manager_id
+          FROM chain c JOIN employee e ON e.id = c.id
+         WHERE e.manager_id IS NOT NULL AND NOT e.manager_id = ANY(c.seen)
+    )
+    SELECT id, depth FROM chain
+$$ LANGUAGE sql STABLE;
+
+COMMENT ON FUNCTION employee_chain(INT) IS
+'The employee and their managers up the chain, 0 — themselves; once round a
+ring of managers at most (decision 90).';
+
+
+-- ============================================================================
 -- 15. score — the work score of a shift
 -- ============================================================================
 CREATE TABLE score (
@@ -4618,6 +4673,12 @@ BEGIN
         PERFORM notify(v_manager_id, v_task_id, jsonb_build_object(
             'kind', 'owner_change', 'from', p_employee_id));
     END LOOP;
+
+    -- What they wrote about tags stays with whoever takes their people.
+    INSERT INTO tag_description (employee_id, tag_id, value, updated_at)
+    SELECT v_manager_id, tag_id, value, updated_at FROM tag_description WHERE employee_id = p_employee_id
+    ON CONFLICT (employee_id, tag_id) DO NOTHING;
+    DELETE FROM tag_description WHERE employee_id = p_employee_id;
 
     -- The leaver knew their bots' keys: the bots move on with keys nobody knows.
     UPDATE bot SET key_hash = digest(new_bot_key(), 'sha256'), key_issued_at = NOW()

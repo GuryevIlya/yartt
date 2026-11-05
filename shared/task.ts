@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Id } from './employee.ts';
+import { TagDescription } from './tagDescription.ts';
 
 // Tasks: the header everyone sees, the page of someone who sees the task,
 // search and the owner's changes. A schema and its type share a name.
@@ -88,6 +89,8 @@ export const TaskDetails = z.object({
   waitsFor: Dependency.array(),
   waitedOnBy: Dependency.array(),
   related: Related.array(),
+  /** What its tags mean along its owner's chain, from the top down (decision 112). */
+  tagDescriptions: TagDescription.array(),
 });
 export type TaskDetails = z.infer<typeof TaskDetails>;
 

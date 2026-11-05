@@ -19,6 +19,7 @@ import RichView from '../App/RichView.tsx';
 import PriorityChip from './PriorityChip.tsx';
 import { taskTitle } from './TaskLine.tsx';
 import RiskChip from './RiskChip.tsx';
+import TagDescriptions from '../App/TagDescriptions.tsx';
 import Dependencies from './Dependencies.tsx';
 import TransferDialog from './TransferDialog.tsx';
 import TakenLink from '../App/TakenLink.tsx';
@@ -224,6 +225,7 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
         )}
       </Stack>
 
+      <TagDescriptions items={d.tagDescriptions} tags={task.tags} />
       <Dependencies task={task} />
       {transferring && task.ownerId !== null && (
         <TransferDialog taskId={task.id} ownerId={task.ownerId} onClose={() => setTransferring(false)} />

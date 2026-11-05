@@ -227,4 +227,44 @@ describe('tag summary', () => {
     }]);
     expect((await api.Tags.stats({ since: yesterday, tagIds: ids, page: 1 })).rows[0]).toMatchObject({ planners: 1, leftMinutes: 120 });
   });
+
+  test('a task shows what its tags mean along its owner\'s chain, the same for everyone; a dismissed author\'s pass up', async () => {
+    const top = await createEmployee();
+    const lead = await createEmployee({ managerId: top.id });
+    const dev = await createEmployee({ managerId: lead.id });
+    const stranger = await createEmployee();
+    const tag = `d-${randomUUID().slice(0, 8)}`;
+    const api = await client(dev.id);
+    const id = await api.Task.create({ tags: [tag] });
+    const tagId = (await api.Task.get({ id })).tags[0]!.id;
+    await (await client(top.id)).Tags.setDescription({ tagId, html: '<p>Сверху</p>' });
+    await (await client(lead.id)).Tags.setDescription({ tagId, html: '<p>У нас</p><img src="/api/attachments/1">' });
+    await api.Tags.setDescription({ tagId, html: '<p>Заметка</p>' });
+    await (await client(stranger.id)).Tags.setDescription({ tagId, html: '<p>В другом отделе иначе</p>' });
+
+    const expected = [{ authorId: top.id, html: '<p>Сверху</p>' }, { authorId: lead.id, html: '<p>У нас</p>' }, { authorId: dev.id, html: '<p>Заметка</p>' }];
+    expect((await api.Task.get({ id })).details?.tagDescriptions).toMatchObject(expected);
+    // Someone from another department sees the same, not their own: whose task, that meaning.
+    await api.Observer.add({ taskId: id, employeeId: stranger.id });
+    expect((await (await client(stranger.id)).Task.get({ id })).details?.tagDescriptions).toMatchObject(expected);
+    // Their own chain, for a task of their own.
+    expect(await (await client(stranger.id)).Tags.descriptions({ tagIds: [tagId] })).toMatchObject([{ authorId: stranger.id }]);
+
+    // Dismissed, the words stay with the manager; what the manager wrote wins.
+    await (await client(lead.id)).Employee.dismiss({ id: dev.id });
+    expect((await (await client(lead.id)).Tags.descriptions({ tagIds: [tagId] }))).toMatchObject([{ authorId: top.id }, { authorId: lead.id, html: '<p>У нас</p>' }]);
+    await (await client(lead.id)).Tags.setDescription({ tagId, html: null });
+    expect((await (await client(lead.id)).Tags.descriptions({ tagIds: [tagId] }))).toMatchObject([{ authorId: top.id }]);
+  });
+
+  test('a ring of managers does not loop', async () => {
+    const a = await createEmployee();
+    const b = await createEmployee({ managerId: a.id });
+    await sql`UPDATE employee SET manager_id = ${b.id} WHERE id = ${a.id}`;
+    const api = await client(a.id);
+    const id = await api.Task.create({ tags: [`r-${randomUUID().slice(0, 8)}`] });
+    const tagId = (await api.Task.get({ id })).tags[0]!.id;
+    await (await client(b.id)).Tags.setDescription({ tagId, html: '<p>Слово</p>' });
+    expect((await api.Task.get({ id })).details?.tagDescriptions).toMatchObject([{ authorId: b.id }]);
+  });
 });

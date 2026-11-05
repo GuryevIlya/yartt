@@ -78,6 +78,7 @@ const JOBS: { name: string; every: number; run: (sql: Sql) => Promise<unknown> }
        WHERE created_at < NOW() - INTERVAL '1 day'
          AND NOT EXISTS (SELECT 1 FROM task WHERE tag_ids @> ARRAY[t.id])
          AND NOT EXISTS (SELECT 1 FROM user_tag WHERE tag_id = t.id)
+         AND NOT EXISTS (SELECT 1 FROM tag_description WHERE tag_id = t.id)
     `,
   },
   {

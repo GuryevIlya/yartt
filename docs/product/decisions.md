@@ -2277,3 +2277,32 @@ and a score is a person's judgement. A person's key does not upload files yet.
 *Implemented:* `api_key`, `create_api_key()`, `authenticate_api_key()`, migration
 `0.6-0.7`; `server/publicApi.ts`, `server/services/ApiKey.ts`, `shared/apiKey.ts`,
 `client/components/App/ApiKeys.tsx`; `docs/admin/api.md`.
+
+### 112. A tag is described along the reporting line
+
+A team moving in asked where to keep what all tasks of a kind have in common:
+why they come up, what to watch for, the regulation. A tag has only a name, and
+the same tag may mean different things in different departments; with no
+administrators, nobody could answer for its description.
+
+So a description belongs to a person, and the reporting line settles it. Anyone
+writes one for themselves and the people below. A task shows the descriptions
+of its tags along its owner's chain, from the top down, each with its author,
+and the same for everyone in it: whoever works in someone else's task sees that
+task's meaning. It reaches every task by itself, with nothing to link by hand.
+
+All of the line is shown rather than one chosen as being in force. A description
+forbids nothing, so "in force" would differ only in what is shown, and a
+director's one line about "report" would otherwise cancel every department's.
+The manager's words come first and are marked as theirs, so their word stands.
+Someone who disagrees asks them to change it, or makes a tag of their own.
+
+Left out: a description of a combination of tags (a tag of its own does it), and
+replacing a tag across tasks. That would change a subordinate's titles without a
+trace, may collide with an existing title and splits the figures. No images,
+since more people see it than its author could give access to. A dismissed
+author's descriptions go to their manager, unless the manager has one.
+
+*Implemented:* `tag_description`, `employee_chain()`, `dismiss_employee()`,
+migration `0.6-0.7`; `Tags.descriptions`, `Tags.setDescription`,
+`TaskDetails.tagDescriptions`; `TagDescriptions.tsx`, `TagDescriptionDialog.tsx`.

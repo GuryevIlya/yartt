@@ -761,6 +761,13 @@ export const en: Translation = {
     email: 'Email',
   },
   tags: {
+    description: 'Description',
+    descriptionHint: 'What this tag means for you: what such tasks have in common, the rules, a link to a regulation. Everyone in your tasks and your people\'s sees it. It forbids nothing.',
+    descriptionTitle: 'Description of the tag "{{name}}"',
+    descriptionAbove: 'Descriptions up the line, shown first:',
+    descriptionMine: 'Your description',
+    descriptionPlaceholder: 'Why such tasks come up and what to watch for',
+    descriptionsShow: 'Descriptions of tags: {{count}}',
     title: 'Tags',
     hint: 'The tags of the tasks you see. Colors and weights are only yours: the weight orders the tags of a task title (heavier first), the color helps to spot tasks in lists.',
     filter: 'Find a tag',
