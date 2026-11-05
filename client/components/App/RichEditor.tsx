@@ -1,4 +1,4 @@
-import { Code, FormatAlignCenter, FormatAlignLeft, FormatAlignRight, Numbers } from '@mui/icons-material';
+import { ContentPasteGo, FormatAlignCenter, FormatAlignLeft, FormatAlignRight, Numbers } from '@mui/icons-material';
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Popover, TextField } from '@mui/material';
 import { marked } from 'marked';
 import {
@@ -149,7 +149,7 @@ export default function (p: {
           {p.taskPicker && (
             <MenuButton tooltipLabel={t('editor.task')} IconComponent={Numbers} onClick={(e) => setPicking(e.currentTarget)} />
           )}
-          <MenuButton tooltipLabel={t('editor.markdown')} IconComponent={Code} onClick={() => setMarkdown('')} />
+          <MenuButton tooltipLabel={t('editor.markdown')} IconComponent={ContentPasteGo} onClick={() => setMarkdown('')} />
         </MenuControlsContainer>
       )}
       RichTextFieldProps={{ variant: 'outlined' }}
