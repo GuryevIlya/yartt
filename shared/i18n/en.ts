@@ -286,7 +286,7 @@ export const en: Translation = {
   newTask: {
     title: 'New task',
     tags: 'Tags',
-    tagsHint: 'The title is a set of tags: pick the ones that fit from the suggestions; text left unpicked becomes a new tag.',
+    tagsHint: 'The title is a set of tags: rubrics from the suggestions and a phrase of what is to be done, like "website · homepage · change the banner". Text left unpicked becomes a new tag.',
     priority: 'Priority',
     waitsFor: 'Will wait for',
     waitedOnBy: 'Will be waited on by',
