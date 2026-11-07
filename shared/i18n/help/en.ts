@@ -8,7 +8,7 @@ export const helpEn: Help = {
   contents: 'Contents',
   principlesTitle: 'Four principles',
   api: apiEn,
-  intro: 'yartt is built on four principles. Under each: what it gives up and what it offers instead.',
+  intro: 'yartt rests on four principles. Under each, how the same thing is done in the usual trackers and how in yartt.',
   principles: [
     {
       title: 'A result has one owner',
@@ -34,7 +34,8 @@ export const helpEn: Help = {
       title: 'Links, not a hierarchy',
       text: 'Work does not fit a tree: one task belongs to several directions at once, and several other tasks may wait for its result.',
       instead: [
-        { usual: 'A title', yartt: 'A set of tags', text: '"website · homepage · banner". The set is unique and the suggestions offer existing tags, so the same thing gets the same name.' },
+        { usual: 'A title', yartt: 'A set of tags', text: '"website · homepage · change the banner": rubrics shared by many tasks and a phrase saying what is to be done. '
+          + 'The set is unique: no two tasks share a title. The suggestions offer existing tags, so the same thing gets the same name.' },
         { usual: 'A project', yartt: 'A shared tag', text: 'A task can be in several "projects" at once. A new tag appears when it is needed.' },
         { usual: 'A subtask', yartt: 'A "Waits for" link', text: 'A task waits for those it cannot be finished without, and may itself be needed by several. Each link may say by when '
           + 'the result is needed (a latest deadline), so a delay shows early.' },
@@ -44,11 +45,11 @@ export const helpEn: Help = {
       title: 'The figures tell the truth',
       text: 'The tracker forbids nothing, so there is no reason to fool it. The timesheet and scores are optional, and when kept, they show the work, not zeal.',
       instead: [
-        { usual: 'Percent done', yartt: '"5h → 3h"', text: 'How much everyone has logged and still plans. An experienced '
-          + 'person\'s hour costs more, so the simple part of the work goes to a junior. Shared out that way, the total depends '
-          + 'on the task, not on who did it.' },
-        { usual: 'Scoring results', yartt: 'Scoring the day\'s decisions', text: 'A task\'s result also depends on plans and chance, so it does not always tell much. The day\'s decisions depend on '
-          + 'the person: were the priorities right, was help asked for in time.' },
+        { usual: 'Percent done', yartt: '"5h → 3h"', text: 'How many hours everyone together has spent on the task and still plans. '
+          + 'A percent is usually a guess; the hours come from the timesheet and the plans. Hours add up per task, but people are not compared by them: '
+          + 'the simple part of the work goes to a junior, the hard part to someone experienced, and the total tells how big the task is, not who tried harder.' },
+        { usual: 'Scoring results', yartt: 'Scoring the work of a shift', text: 'A manager scores not how the task ended but how the person worked: '
+          + 'did they pick the right thing to do, did they ask for help in time. How a task ends also depends on others\' plans and on chance; these choices depend on the person alone.' },
       ],
     },
   ],
