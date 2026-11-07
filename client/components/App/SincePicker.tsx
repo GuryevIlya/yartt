@@ -38,7 +38,8 @@ export default function (p: { since: string; onChange: (since: string) => void }
         value={p.since}
         onChange={(e) => e.target.value && e.target.value <= today() && p.onChange(e.target.value)}
         slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: today() } }}
-        sx={{ width: 150 }}
+        // Apart from the quick starts, so it does not read as one more of them.
+        sx={{ width: 150, ml: 1 }}
       />
     </Stack>
   );
