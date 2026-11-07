@@ -108,8 +108,9 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
                 allowNew
                 autoFocus
                 label={t('task.tags')}
-                helperText={title.taken ? <TakenLink id={title.taken.id} />
+                helperText={title.taken ? <TakenLink id={title.taken.id} blocking />
                   : title.pickFirst ? t('title.pickFirst', { name: title.pickFirst }) : undefined}
+                error={title.taken !== null}
                 sx={{ flexGrow: 1 }}
               />
               <Button

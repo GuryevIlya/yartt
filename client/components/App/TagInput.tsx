@@ -41,6 +41,8 @@ export default function (p: {
   label?: string;
   placeholder?: string;
   helperText?: ReactNode;
+  /** The helper text says what is wrong: the title cannot be saved so. */
+  error?: boolean;
   autoFocus?: boolean;
   inputRef?: Ref<HTMLInputElement>;
   startAdornment?: ReactNode;
@@ -168,6 +170,7 @@ export default function (p: {
           autoFocus={p.autoFocus}
           label={p.label}
           helperText={p.helperText}
+          error={p.error}
           placeholder={p.value.length ? '' : p.placeholder}
           slotProps={{
             input: {

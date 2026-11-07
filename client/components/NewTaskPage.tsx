@@ -125,8 +125,9 @@ export default function () {
         onInputChange={(next) => change({ input: next })}
         allowNew
         label={t('newTask.tags')}
-        helperText={title.taken ? <TakenLink id={title.taken.id} />
+        helperText={title.taken ? <TakenLink id={title.taken.id} blocking />
           : title.pickFirst ? t('title.pickFirst', { name: title.pickFirst }) : t('newTask.tagsHint')}
+        error={title.taken !== null}
         autoFocus
       />
 

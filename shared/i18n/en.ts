@@ -404,6 +404,7 @@ export const en: Translation = {
   },
   title: {
     taken: 'A task with this title exists: #{{id}}',
+    takenBlocks: 'No two tasks share a title: add a tag to tell them apart.',
     pickFirst: 'The tag “{{name}}” exists — pick it from the suggestions',
     create: 'Create the task “{{title}}”',
   },
