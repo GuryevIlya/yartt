@@ -29,9 +29,21 @@ async function send(method: 'PUT' | 'DELETE', body?: Blob): Promise<void> {
   throw new Error(message);
 }
 
-/** Sets my avatar from any picture the browser can read. */
+/**
+ * Sets my avatar from any picture the browser can read. One it cannot (HEIC
+ * from a phone, a file that only looks like a picture) is said so: the
+ * dialog keeps quiet about errors, expecting them shown here.
+ */
 export async function uploadAvatar(file: File): Promise<void> {
-  await send('PUT', await square(file));
+  let picture: Blob;
+  try {
+    picture = await square(file);
+  } catch (e) {
+    const message = i18n.t('profile.avatarUnreadable');
+    useStore.setState({ error: message });
+    throw e;
+  }
+  await send('PUT', picture);
 }
 
 export async function deleteAvatar(): Promise<void> {

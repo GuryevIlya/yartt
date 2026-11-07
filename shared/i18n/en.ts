@@ -962,6 +962,7 @@ export const en: Translation = {
     avatarUpload: 'Upload a photo',
     avatarChange: 'Change the photo',
     avatarDelete: 'Remove',
+    avatarUnreadable: 'This picture could not be read. A photo in JPEG, PNG or WebP will do.',
     pronoun: 'Pronoun',
     pronounHint: 'Picks verb forms in languages that have them. Leave it empty for a team bot.',
     theme: 'Appearance',
