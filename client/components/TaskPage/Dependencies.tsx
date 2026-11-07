@@ -59,9 +59,12 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
   // Only the owner of the waiting task sets its latest deadline.
   const canLimit = (d: Draft) => (d.waits ? isOwner : d.picked?.ownerId === me.id);
   const [draft, setDraft] = useDraft<Draft | null>(`link:${task.id}`, null);
-  // A latest deadline to start from: the deadline of the task waited for, else the waiting one's, else a week ahead.
-  const suggest = (dependency: Date | null, dependent: Date | null) =>
-    toLocalInput(dependency ?? dependent ?? new Date(Date.now() + 7 * 86_400_000));
+  // A latest deadline to start from: the earlier of the two deadlines — the task waited for is due by
+  // then and the waiting one can still make it — else the one there is, else a week ahead.
+  const suggest = (dependency: Date | null, dependent: Date | null) => toLocalInput(
+    dependency && dependent ? (dependency < dependent ? dependency : dependent)
+      : dependency ?? dependent ?? new Date(Date.now() + 7 * 86_400_000),
+  );
   const start = (waits: boolean) => setDraft({ waits, picked: null, parts: [], input: '', limited: false, latest: '', editing: null });
   const set = useMutation(trpc.Dependency.set.mutationOptions({ onSuccess: () => { refresh(); setDraft(null); } }));
   const remove = useMutation(trpc.Dependency.remove.mutationOptions({ onSuccess: refresh }));
@@ -102,6 +105,10 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
   const latest = typed && typedMoment(typed) ? typed : null;
   const limited = !!draft?.limited && canLimit(draft);
   const valid = !!draft?.picked && draft.picked.id !== task.id && (!limited || latest !== null);
+  // A latest deadline after the waiting task's own deadline is allowed (decision 66), but said:
+  // met just in time, it already leaves the waiting task late.
+  const ownDeadline = draft?.picked ? (draft.waits ? task.deadline : draft.picked.deadline) : null;
+  const afterOwn = limited && latest !== null && ownDeadline !== null && latest > ownDeadline;
   const save = () => valid && set.mutate(draft!.waits
     ? { taskId: task.id, value: draft!.picked!.id, latestAt: limited ? latest : null }
     : { taskId: draft!.picked!.id, value: task.id, latestAt: limited ? latest : null });
@@ -146,6 +153,15 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
       )}
       <Button variant="contained" disabled={!valid || set.isPending} onClick={save}>{t('common.save')}</Button>
       <Button color="inherit" onClick={() => setDraft(null)}>{t('common.cancel')}</Button>
+      {afterOwn && (
+        <Typography variant="caption" sx={{ color: 'warning.dark', fontWeight: 600, flexBasis: '100%' }}>
+          {t('task.dependency.afterOwn', {
+            dependent: d.waits ? task.id : d.picked!.id,
+            dependency: d.waits ? d.picked!.id : task.id,
+            deadline: format.dateTime(ownDeadline!),
+          })}
+        </Typography>
+      )}
       <Typography variant="caption" sx={{ color: 'text.secondary', flexBasis: '100%' }}>
         {(() => {
           // Spelled out with the numbers: which task is waited for, and which one would not make it.

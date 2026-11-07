@@ -591,6 +591,7 @@ export const en: Translation = {
       limit: 'Set a latest deadline',
       latest: 'Latest deadline of #{{dependency}}',
       freeHelp: 'Without a latest deadline it only shows that #{{dependent}} waits for #{{dependency}}. The owner of #{{dependency}} is notified.',
+      afterOwn: 'This is later than the deadline of #{{dependent}} itself ({{deadline}}): if #{{dependency}} is done by then, #{{dependent}} is already late.',
       limitHelp: '#{{dependency}} must not finish later than this, or #{{dependent}} will not make it. If the deadline of #{{dependency}} is later or not set, both tasks are at risk. Moving deadlines is not forbidden: the owner of #{{dependent}} is told of every move.',
     },
     transfer: {
