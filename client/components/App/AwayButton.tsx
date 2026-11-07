@@ -35,6 +35,9 @@ export default function () {
   const away = me.nextDay !== null && me.nextDay > today();
   const now = fromDay(today());
   const set = (nextDay: string | null) => settings.mutate({ nextDay });
+  // An absence starts now and ends the day before the return: said in days, so the
+  // chips and the field read as the day I'm back, not the day I leave.
+  const lastDay = away ? plus(fromDay(me.nextDay!), -1) : null;
   const quick = [
     { label: t('away.tomorrow'), day: plus(now, 1) },
     { label: t('away.monday'), day: plus(now, (8 - now.getUTCDay()) % 7 || 7) },
@@ -71,6 +74,7 @@ export default function () {
       >
         <Stack spacing={1.5} sx={{ p: 2, width: 300 }}>
           <Typography variant="subtitle2">{t('away.title')}</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: '0 !important' }}>{t('away.starts')}</Typography>
           <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
             {quick.map((q) => (
               <Chip key={q.label} label={q.label} variant={me.nextDay === q.day ? 'filled' : 'outlined'} onClick={() => set(q.day)} disabled={settings.isPending} />
@@ -79,7 +83,7 @@ export default function () {
           <TextField
             size="small"
             type="date"
-            label={t('profile.nextDay')}
+            label={t('away.other')}
             value={me.nextDay ?? ''}
             // Applied as it changes, so a year typed digit by digit (0002, 0020) is skipped.
             onChange={(e) => typedDay(e.target.value) && set(e.target.value)}
@@ -87,6 +91,13 @@ export default function () {
             helperText={errors.nextDay ?? t('profile.nextDayHint')}
             slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: plus(now, 1), max: LAST_DAY } }}
           />
+          {away && (
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {lastDay === today()
+                ? t('away.spanToday', { day: format.dayDate(me.nextDay!) })
+                : t('away.span', { last: format.dayDate(lastDay!), day: format.dayDate(me.nextDay!) })}
+            </Typography>
+          )}
           {away && (
             <Button variant="outlined" onClick={() => set(null)} disabled={settings.isPending}>{t('away.back')}</Button>
           )}

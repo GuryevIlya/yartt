@@ -39,7 +39,11 @@ export const en: Translation = {
   },
   away: {
     set: 'I’ll be away…',
-    title: 'I’m away — back at work on:',
+    title: 'I’ll be away. Back at work:',
+    starts: 'The absence starts at once, today.',
+    other: 'Or another day',
+    span: 'Away through {{last}}, back at work on {{day}}.',
+    spanToday: 'Away today only, back at work on {{day}}.',
     until: 'Back {{day}}',
     hint: 'While you are away, notifications are copied to your manager. Click to change',
     tomorrow: 'Tomorrow',
