@@ -31,9 +31,26 @@ export async function open(employeeId: number): Promise<OpenShift> {
   return rows[0] ?? null;
 }
 
-/** Opens a shift; there is at most one open shift (EXCLUDE: shift_overlap). */
+/**
+ * Opens a shift; there is at most one open shift (EXCLUDE: shift_overlap).
+ * Started again in the minute a shift was closed, that shift goes on: closing
+ * rounded its end up to the end of this minute, so a new shift from now would
+ * overlap it, and a person who changed their mind could not go back to work
+ * until the next minute.
+ */
 export async function start(employeeId: number, startedAt: Date): Promise<void> {
-  await sql`INSERT INTO work (employee_id, started_at) VALUES (${employeeId}, ${at(sql, startedAt)})`;
+  await sql.begin(async (tx) => {
+    const db = tx as unknown as Sql;
+    const resumed = await db`
+      UPDATE work SET spent_minutes = NULL
+       WHERE employee_id = ${employeeId} AND spent_minutes IS NOT NULL
+         AND ${at(db, startedAt)} = date_trunc('minute', NOW())
+         AND started_at <= date_trunc('minute', NOW())
+         AND started_at + spent_minutes * INTERVAL '1 minute' = date_trunc('minute', NOW()) + INTERVAL '1 minute'
+      RETURNING id
+    `;
+    if (resumed.length === 0) await db`INSERT INTO work (employee_id, started_at) VALUES (${employeeId}, ${at(db, startedAt)})`;
+  });
 }
 
 /** Closes the open shift with what was done; its start may be corrected. */

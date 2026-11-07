@@ -428,6 +428,27 @@ describe('history', () => {
     `;
   });
 
+  test('started again in the minute it was closed, a shift goes on instead of overlapping', async () => {
+    const me = await createEmployee();
+    const api = await client(me.id);
+    await api.Work.start({ startedAt: new Date() });
+    const open = (await api.Work.open())!;
+    const endedAt = new Date(Math.floor(Date.now() / 60_000) * 60_000 + 60_000);
+    await api.Work.close({ startedAt: open.startedAt, endedAt, about: 'Done' });
+    // Closing rounded the end up to the next minute: a new shift from now would overlap it.
+    await api.Work.start({ startedAt: new Date() });
+    const again = (await api.Work.open())!;
+    const shifts = (await api.MyDay.history({ page: 1 })).days[0]!.shifts;
+    if (again.startedAt.getTime() === open.startedAt.getTime()) {
+      // The same minute: the closed shift is open again, with what was written about it.
+      expect(shifts.map((s) => [s.spentMinutes, s.about])).toEqual([[null, 'Done']]);
+    } else {
+      // The minute had passed: a shift of its own, right after the closed one.
+      expect(again.startedAt.getTime()).toBeGreaterThanOrEqual(endedAt.getTime());
+      expect(shifts).toHaveLength(2);
+    }
+  });
+
   test('days without activity are skipped; earlier days are on further pages', async () => {
     const me = await createEmployee();
     const api = await client(me.id);
