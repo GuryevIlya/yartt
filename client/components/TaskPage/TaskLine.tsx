@@ -6,7 +6,7 @@ import type { Tag, TaskHeader } from '#shared/task.ts';
 import { useFormat } from '#client/hooks/format.ts';
 import { useEmployees } from '#client/hooks/task.ts';
 import EmployeeAvatar from '../App/EmployeeAvatar.tsx';
-import TaskHint from '../App/TaskHint.tsx';
+import TaskHint, { OWN_HINT } from '../App/TaskHint.tsx';
 import TagChip from '../App/TagChip.tsx';
 import PriorityChip from './PriorityChip.tsx';
 import RiskChip from './RiskChip.tsx';
@@ -56,6 +56,7 @@ export default function (p: {
               <TagChip
                 size="small"
                 tag={tag}
+                {...OWN_HINT}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); p.onTag!(tag); }}
               />
             </Tooltip>
@@ -75,6 +76,7 @@ export default function (p: {
         <Tooltip title={p.noteHint ?? ''} describeChild>
           <Typography
             variant="caption"
+            {...(p.noteHint ? OWN_HINT : {})}
             {...(p.onNote && {
               role: 'button',
               tabIndex: 0,

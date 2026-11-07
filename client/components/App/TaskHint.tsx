@@ -1,6 +1,6 @@
 import { Box, Stack, Tooltip, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import type { ReactElement } from 'react';
+import { cloneElement, useState, type MouseEvent, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFormat } from '#client/hooks/format.ts';
 import { useMe } from '#client/hooks/me.ts';
@@ -61,15 +61,38 @@ function Preview(p: { taskId: number }) {
   );
 }
 
+/** Marks a part of a task's line that has a hint of its own: over it, the task's hint gives way. */
+export const OWN_HINT = { 'data-own-hint': true } as const;
+
+const overOwnHint = (target: EventTarget | null) => target instanceof Element && target.closest('[data-own-hint]') !== null;
+
 /**
  * The hint over a task in any list: its context and each person's time
  * logged and left on it — one's own and everyone else's — and, for two or
  * more, everyone's together (decision 68). Fetched when it opens, after a moment's hover.
+ * Over a part with a hint of its own (OWN_HINT) it stays closed, so two
+ * hints never show at once.
  */
-export default function (p: { taskId: number; children: ReactElement }) {
+export default function (p: { taskId: number; children: ReactElement<{ onMouseOver?: (e: MouseEvent) => void }> }) {
+  const [open, setOpen] = useState(false);
+  const child = cloneElement(p.children, {
+    onMouseOver: (e: MouseEvent) => {
+      p.children.props.onMouseOver?.(e);
+      if (overOwnHint(e.target)) setOpen(false);
+    },
+  });
   return (
-    <Tooltip title={<Preview taskId={p.taskId} />} enterDelay={500} enterNextDelay={300} placement="bottom-start" describeChild>
-      {p.children}
+    <Tooltip
+      title={<Preview taskId={p.taskId} />}
+      open={open}
+      onOpen={(e) => { if (!overOwnHint(e.target)) setOpen(true); }}
+      onClose={() => setOpen(false)}
+      enterDelay={500}
+      enterNextDelay={300}
+      placement="bottom-start"
+      describeChild
+    >
+      {child}
     </Tooltip>
   );
 }
