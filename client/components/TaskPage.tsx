@@ -27,7 +27,7 @@ export default function (p: { id: number }) {
         <Feed taskId={p.id} />
       </Stack>
       <Stack spacing={2} sx={{ flex: '1 1 340px', minWidth: 0 }}>
-        <MyTime taskId={p.id} />
+        <MyTime taskId={p.id} closed={task.data.closed} />
         <Reminders taskId={p.id} deadline={task.data.deadline} />
         <People task={task.data} />
       </Stack>

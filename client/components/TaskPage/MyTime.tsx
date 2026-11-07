@@ -20,8 +20,10 @@ import { LimitFigures } from '../MyDayPage/TagLimits.tsx';
  * (decision 100) — and my plan of time left. Under
  * them, the hour budgets the task falls under (decision 69): seen while
  * planning, and in the plan dialog with the forecast my new plan makes.
+ * On a closed task a plan is only cleared: time may still be logged there
+ * afterwards, but work ahead belongs to an open task (decision 87).
  */
-export default function (p: { taskId: number }) {
+export default function (p: { taskId: number; closed: boolean }) {
   const { t } = useTranslation();
   const trpc = useTRPC();
   const format = useFormat();
@@ -69,7 +71,9 @@ export default function (p: { taskId: number }) {
       )}
       <Stack direction="row" spacing={1}>
         <Button variant="outlined" onClick={() => setDialog('log')}>{t('task.myTime.log')}</Button>
-        <Button color="inherit" variant="outlined" onClick={openPlan}>{t('task.myTime.setPlan')}</Button>
+        {(!p.closed || (mine.data?.leftMinutes ?? null) !== null) && (
+          <Button color="inherit" variant="outlined" onClick={openPlan}>{t('task.myTime.setPlan')}</Button>
+        )}
       </Stack>
       {(limits.data?.length ?? 0) > 0 && (
         <Stack spacing={0.75} sx={{ mt: 0.5 }}>
