@@ -3,7 +3,8 @@ import {
   Alert, Box, Button, Chip, IconButton, MenuItem, Paper, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import type { TagPart } from '#shared/tags.ts';
 import { FIRST_DAY, LAST_DAY, typedMoment } from '#shared/employee.ts';
@@ -65,6 +66,22 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
   const [contextDraft, setContextDraft] = useDraft<string | null>(`context:${task.id}`, null);
   const editingContext = contextDraft !== null;
   const editor = useRef<RichEditorHandle>(null);
+
+  // "Move the deadline" leads here with #deadline: the field gets the focus and opens its picker,
+  // also when the link is pressed on this very page, where it changes nothing else.
+  const location = useLocation();
+  const deadlineInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const input = deadlineInput.current;
+    if (location.hash !== '#deadline' || !input) return;
+    input.scrollIntoView({ block: 'center' });
+    input.focus();
+    try {
+      input.showPicker();
+    } catch {
+      // No picker without a fresh click (or in this browser): the focused field is enough.
+    }
+  }, [location.key, location.hash, isOwner]);
 
   const saveContext = () => {
     const html = editor.current?.isEmpty() ? null : (editor.current?.getHtml() ?? null);
@@ -153,6 +170,7 @@ export default function (p: { task: TaskPage & { details: TaskDetails } }) {
                   <TextField
                     type="datetime-local"
                     variant="standard"
+                    inputRef={deadlineInput}
                     slotProps={{ htmlInput: { 'aria-label': t('task.deadline'), min: `${FIRST_DAY}T00:00`, max: `${LAST_DAY}T23:59` } }}
                     value={task.deadline ? toLocalInput(task.deadline) : ''}
                     // Saved as it changes, so a year typed digit by digit (0002, 0020) is skipped.

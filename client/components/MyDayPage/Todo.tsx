@@ -160,7 +160,8 @@ function Review(p: { item: TodoReview; readOnly?: boolean }) {
     deadline && !overdue && t('task.review.closing'),
   ].filter(Boolean).join(', ');
   const moveDeadline = (
-    <Button size="small" component={Link} to={`/tasks/${item.task.id}`}>{t('myDay.todo.moveDeadline')}</Button>
+    // To the deadline field of the task's page: on that page itself the link only opens the field.
+    <Button size="small" component={Link} to={{ pathname: `/tasks/${item.task.id}`, hash: 'deadline' }}>{t('myDay.todo.moveDeadline')}</Button>
   );
 
   // Handed to me and not accepted yet: the handover alone; what came before it is not mine to review.
